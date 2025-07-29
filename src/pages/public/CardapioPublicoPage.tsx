@@ -1916,9 +1916,20 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   // Filtrar bairros com base na pesquisa
-  const bairrosFiltrados = bairrosDisponiveis.filter(item =>
-    item.bairro.toLowerCase().includes(termoPesquisaBairro.toLowerCase())
-  );
+  const bairrosFiltrados = bairrosDisponiveis.filter(item => {
+    // Verificar se o bairro existe e não é null/undefined
+    if (!item.bairro || typeof item.bairro !== 'string') {
+      return false;
+    }
+
+    // Se não há termo de pesquisa, mostrar todos os bairros válidos
+    if (!termoPesquisaBairro || termoPesquisaBairro.trim() === '') {
+      return true;
+    }
+
+    // Filtrar por termo de pesquisa
+    return item.bairro.toLowerCase().includes(termoPesquisaBairro.toLowerCase());
+  });
 
 
 
@@ -2369,11 +2380,18 @@ const CardapioPublicoPage: React.FC = () => {
             .from('taxa_entrega')
             .select('id, bairro, valor, tempo_entrega')
             .eq('empresa_id', empresaComLogo.id)
+            .not('bairro', 'is', null) // Filtrar apenas registros com bairro não nulo
+            .neq('bairro', '') // Filtrar apenas registros com bairro não vazio
             .order('bairro');
 
-
-          if (bairrosData) {
-            setBairrosDisponiveis(bairrosData);
+          if (bairrosData && bairrosData.length > 0) {
+            // Filtrar novamente no frontend para garantir que todos os bairros são válidos
+            const bairrosValidos = bairrosData.filter(item =>
+              item.bairro && typeof item.bairro === 'string' && item.bairro.trim() !== ''
+            );
+            setBairrosDisponiveis(bairrosValidos);
+          } else {
+            setBairrosDisponiveis([]);
           }
         }
 
@@ -5317,7 +5335,7 @@ const CardapioPublicoPage: React.FC = () => {
         if (tipoEntregaSelecionado === 'entrega' && taxaEntrega > 0 && areaValidada) {
           mensagem += `Taxa de entrega: ${formatarPreco(taxaEntrega)}\n`;
           if (enderecoEncontrado) {
-            mensagem += `Endereço: ${enderecoEncontrado.logradouro ? enderecoEncontrado.logradouro + ', ' : ''}${enderecoEncontrado.bairro}, ${enderecoEncontrado.localidade} - ${enderecoEncontrado.uf} (${cepCliente})\n`;
+            mensagem += `Endereço: ${enderecoEncontrado.logradouro ? enderecoEncontrado.logradouro + ', ' : ''}${enderecoEncontrado.bairro || ''}, ${enderecoEncontrado.localidade} - ${enderecoEncontrado.uf} (${cepCliente})\n`;
           } else if (bairroSelecionado) {
             mensagem += `Bairro: ${bairroSelecionado}\n`;
           }
@@ -10647,7 +10665,7 @@ const CardapioPublicoPage: React.FC = () => {
                                 <br />
                               </>
                             )}
-                            {enderecoEncontrado.bairro}<br />
+                            {enderecoEncontrado.bairro || ''}<br />
                             {enderecoEncontrado.localidade} - {enderecoEncontrado.uf}<br />
                             <strong>CEP:</strong> {cepCliente}
 
@@ -11850,7 +11868,7 @@ const CardapioPublicoPage: React.FC = () => {
                     config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
                   }`}>
                     {enderecoSalvo.endereco.logradouro && `${enderecoSalvo.endereco.logradouro}, `}
-                    {enderecoSalvo.endereco.bairro}<br />
+                    {enderecoSalvo.endereco.bairro || ''}<br />
                     {enderecoSalvo.endereco.localidade} - {enderecoSalvo.endereco.uf}<br />
                     <strong>CEP:</strong> {enderecoSalvo.cep}
                   </p>
@@ -12033,7 +12051,7 @@ const CardapioPublicoPage: React.FC = () => {
                         config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
                       }`}>
                         {enderecoEncontrado.logradouro && `${enderecoEncontrado.logradouro}, `}
-                        {enderecoEncontrado.bairro}<br />
+                        {enderecoEncontrado.bairro || ''}<br />
                         {enderecoEncontrado.localidade} - {enderecoEncontrado.uf}
                       </p>
 

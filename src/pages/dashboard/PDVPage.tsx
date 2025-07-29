@@ -45,7 +45,8 @@ import {
   Copy,
   Phone,
   Truck,
-  MapPin
+  MapPin,
+  Edit
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -229,6 +230,9 @@ const PDVPage: React.FC = () => {
   const [validandoAreaEntrega, setValidandoAreaEntrega] = useState(false);
   const [areaEntregaValida, setAreaEntregaValida] = useState<boolean | null>(null);
   const [mensagemAreaEntrega, setMensagemAreaEntrega] = useState('');
+
+  // Estados para edição de cliente
+  const [clienteParaEdicao, setClienteParaEdicao] = useState<Cliente | null>(null);
 
   // ✅ NOVO: Função para formatar telefone com máscara
   const formatarTelefone = (numero: string, tipo: string) => {
@@ -3073,7 +3077,7 @@ const PDVPage: React.FC = () => {
 
     const { data, error } = await supabase
       .from('clientes')
-      .select('id, nome, telefone, telefones, documento') // ✅ INCLUIR: campo telefones para múltiplos telefones
+      .select('id, nome, telefone, telefones, documento, endereco, numero, complemento, bairro, cidade, estado, cep') // ✅ INCLUIR: campos de endereço para delivery
       .eq('empresa_id', usuarioData.empresa_id)
       .order('nome')
       .limit(50);
@@ -9004,30 +9008,52 @@ const PDVPage: React.FC = () => {
         endereco: cadastroClienteData.endereco.trim() || null,
         numero: cadastroClienteData.numero.trim() || null,
         complemento: cadastroClienteData.complemento.trim() || null,
-        bairro: cadastroClienteData.bairro.trim() || null,
+        bairro: bairroSelecionado || cadastroClienteData.bairro.trim() || null,
         cidade: cadastroClienteData.cidade.trim() || null,
         estado: cadastroClienteData.estado.trim() || null,
         empresa_id: usuarioData.empresa_id
       };
 
-      // Salvar cliente
-      const { data: novoCliente, error } = await supabase
-        .from('clientes')
-        .insert([clienteData])
-        .select()
-        .single();
+      let clienteResultado;
 
-      if (error) {
-        console.error('Erro ao salvar cliente:', error);
-        toast.error('Erro ao salvar cliente');
-        return;
+      if (clienteParaEdicao) {
+        // Editar cliente existente
+        const { data: clienteEditado, error } = await supabase
+          .from('clientes')
+          .update(clienteData)
+          .eq('id', clienteParaEdicao.id)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Erro ao editar cliente:', error);
+          toast.error('Erro ao editar cliente');
+          return;
+        }
+
+        clienteResultado = clienteEditado;
+        toast.success('Cliente editado com sucesso!');
+      } else {
+        // Criar novo cliente
+        const { data: novoCliente, error } = await supabase
+          .from('clientes')
+          .insert([clienteData])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Erro ao salvar cliente:', error);
+          toast.error('Erro ao salvar cliente');
+          return;
+        }
+
+        clienteResultado = novoCliente;
+        toast.success('Cliente cadastrado com sucesso!');
       }
 
-      // Sucesso
-      toast.success('Cliente cadastrado com sucesso!');
-
-      // Selecionar o cliente recém-criado
-      setClienteSelecionado(novoCliente);
+      // Selecionar o cliente (novo ou editado)
+      setClienteSelecionado(clienteResultado);
 
       // Recarregar lista de clientes
       await carregarClientes();
@@ -9037,6 +9063,7 @@ const PDVPage: React.FC = () => {
       setShowClienteModal(false);
 
       // Limpar formulário
+      setClienteParaEdicao(null);
       setCadastroClienteData({
         nome: '',
         telefones: [],
@@ -9064,6 +9091,7 @@ const PDVPage: React.FC = () => {
 
   const cancelarCadastroCliente = () => {
     setShowCadastroClienteModal(false);
+    setClienteParaEdicao(null); // Limpar cliente em edição
     // Limpar formulário
     setCadastroClienteData({
       nome: '',
@@ -9088,6 +9116,82 @@ const PDVPage: React.FC = () => {
     setShowBairrosDropdown(false);
     setSearchBairro('');
     setBairrosFiltrados([]);
+  };
+
+  // Abrir modal para editar cliente
+  const editarCliente = (cliente: Cliente) => {
+    setClienteParaEdicao(cliente);
+
+    // Preencher formulário com dados do cliente
+    setCadastroClienteData({
+      nome: cliente.nome || '',
+      telefones: cliente.telefones || [],
+      cep: cliente.cep || '',
+      endereco: cliente.endereco || '',
+      numero: cliente.numero || '',
+      complemento: cliente.complemento || '',
+      bairro: cliente.bairro || '',
+      cidade: cliente.cidade || '',
+      estado: cliente.estado || ''
+    });
+
+    // Se tem bairro e está configurado para validação por bairro, validar
+    if (cliente.bairro && taxaEntregaConfig?.tipo === 'bairro') {
+      const bairroEncontrado = bairrosDisponiveis.find(
+        b => b.bairro.toLowerCase() === cliente.bairro.toLowerCase()
+      );
+      if (bairroEncontrado) {
+        setBairroSelecionado(bairroEncontrado.bairro);
+        setAreaEntregaValida(true);
+        setMensagemAreaEntrega(`Entrega disponível para ${bairroEncontrado.bairro} - R$ ${bairroEncontrado.valor.toFixed(2)}`);
+      }
+    }
+
+    setShowCadastroClienteModal(true);
+  };
+
+  // Calcular taxa de entrega para um cliente
+  const calcularTaxaEntregaCliente = async (cliente: Cliente) => {
+    if (!taxaEntregaConfig) return null;
+
+    try {
+      if (taxaEntregaConfig.tipo === 'bairro' && cliente.bairro) {
+        const bairroEncontrado = bairrosDisponiveis.find(
+          b => b.bairro.toLowerCase() === cliente.bairro.toLowerCase()
+        );
+        return bairroEncontrado ? {
+          valor: bairroEncontrado.valor,
+          tipo: 'bairro',
+          descricao: bairroEncontrado.bairro,
+          tempo: bairroEncontrado.tempo_entrega
+        } : null;
+      } else if (taxaEntregaConfig.tipo === 'distancia' && cliente.cep) {
+        const { taxaEntregaService } = await import('../../services/taxaEntregaService');
+
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return null;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return null;
+
+        const resultado = await taxaEntregaService.calcularTaxa(usuarioData.empresa_id, cliente.cep);
+        return resultado ? {
+          valor: resultado.valor,
+          tipo: 'distancia',
+          descricao: `${resultado.distancia_km.toFixed(1)}km`,
+          tempo: null
+        } : null;
+      }
+    } catch (error) {
+      console.error('Erro ao calcular taxa de entrega:', error);
+    }
+
+    return null;
   };
 
   // Carregar configuração de taxa de entrega
@@ -18224,78 +18328,187 @@ const PDVPage: React.FC = () => {
                     </div>
                   ) : (
                     filteredClientes.map(cliente => (
-                  <button
+                  <div
                     key={cliente.id}
-                    onClick={() => {
-                      setClienteSelecionado(cliente);
-                      setShowClienteModal(false);
-                      setSearchClienteTerm(''); // Limpar busca
-                      // Carregar descontos do cliente selecionado
-                      carregarDescontosCliente(cliente.id);
-
-                      // ✅ NOVO: Preencher automaticamente CPF/CNPJ na Nota Fiscal Paulista
-                      if (cliente.documento && cliente.documento.trim()) {
-                        const documentoLimpo = cliente.documento.replace(/\D/g, '');
-                        if (documentoLimpo.length === 11) {
-                          // CPF
-                          setTipoDocumento('cpf');
-                          setCpfCnpjNota(formatCpf(documentoLimpo));
-                          setClienteEncontrado(cliente);
-                          // CPF preenchido automaticamente
-                        } else if (documentoLimpo.length === 14) {
-                          // CNPJ
-                          setTipoDocumento('cnpj');
-                          setCpfCnpjNota(formatCnpj(documentoLimpo));
-                          setClienteEncontrado(cliente);
-                          // CNPJ preenchido automaticamente
-                        }
-                        setErroValidacao(''); // Limpar qualquer erro anterior
-                      }
-                    }}
-                    className="w-full text-left p-4 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors border border-gray-700/50 hover:border-gray-600"
+                    className="relative bg-gray-800/50 hover:bg-gray-700/50 transition-colors border border-gray-700/50 hover:border-gray-600 rounded"
                   >
-                    <div className="space-y-2">
-                      {/* Nome do cliente */}
-                      <div className="text-white text-base font-medium">{cliente.nome}</div>
+                    <button
+                      onClick={async () => {
+                        setClienteSelecionado(cliente);
+                        setShowClienteModal(false);
+                        setSearchClienteTerm(''); // Limpar busca
+                        // Carregar descontos do cliente selecionado
+                        carregarDescontosCliente(cliente.id);
 
-                      {/* Informações de contato */}
+                        // ✅ NOVO: Calcular taxa de entrega por distância se necessário
+                        if (pdvConfig?.delivery && taxaEntregaConfig?.tipo === 'distancia' && cliente.cep) {
+                          try {
+                            const taxaCalculada = await calcularTaxaEntregaCliente(cliente);
+                            if (taxaCalculada) {
+                              toast.success(`Taxa de entrega: R$ ${taxaCalculada.valor.toFixed(2)} (${taxaCalculada.descricao})`);
+                            } else {
+                              toast.warning('CEP fora da área de entrega');
+                            }
+                          } catch (error) {
+                            console.error('Erro ao calcular taxa de entrega:', error);
+                            toast.error('Erro ao calcular taxa de entrega');
+                          }
+                        }
+
+                        // ✅ NOVO: Preencher automaticamente CPF/CNPJ na Nota Fiscal Paulista
+                        if (cliente.documento && cliente.documento.trim()) {
+                          const documentoLimpo = cliente.documento.replace(/\D/g, '');
+                          if (documentoLimpo.length === 11) {
+                            // CPF
+                            setTipoDocumento('cpf');
+                            setCpfCnpjNota(formatCpf(documentoLimpo));
+                            setClienteEncontrado(cliente);
+                            // CPF preenchido automaticamente
+                          } else if (documentoLimpo.length === 14) {
+                            // CNPJ
+                            setTipoDocumento('cnpj');
+                            setCpfCnpjNota(formatCnpj(documentoLimpo));
+                            setClienteEncontrado(cliente);
+                            // CNPJ preenchido automaticamente
+                          }
+                          setErroValidacao(''); // Limpar qualquer erro anterior
+                        }
+                      }}
+                      className="w-full text-left p-4"
+                    >
                       <div className="space-y-2">
-                        {/* Telefones */}
-                        {(cliente.telefones && cliente.telefones.length > 0) ? (
-                          <div className="flex flex-wrap gap-2">
-                            {cliente.telefones.map((telefone, index) => (
-                              <div key={index} className="flex items-center gap-1 text-gray-400 bg-gray-800/30 px-2 py-1 rounded text-sm">
-                                <Phone size={12} />
-                                <span>{formatarTelefone(telefone.numero, telefone.tipo)}</span>
-                                {telefone.whatsapp && (
-                                  <span className="text-green-400 text-xs">WhatsApp</span>
+                        {/* Nome do cliente */}
+                        <div className="text-white text-base font-medium">{cliente.nome}</div>
+
+                        {/* Informações de contato */}
+                        <div className="space-y-2">
+                          {/* Telefones */}
+                          {(cliente.telefones && cliente.telefones.length > 0) ? (
+                            <div className="flex flex-wrap gap-2">
+                              {cliente.telefones.map((telefone, index) => (
+                                <div key={index} className="flex items-center gap-1 text-gray-400 bg-gray-800/30 px-2 py-1 rounded text-sm">
+                                  <Phone size={12} />
+                                  <span>{formatarTelefone(telefone.numero, telefone.tipo)}</span>
+                                  {telefone.whatsapp && (
+                                    <span className="text-green-400 text-xs">WhatsApp</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : cliente.telefone && (
+                            <div className="flex items-center gap-1 text-gray-400">
+                              <Phone size={14} />
+                              <span>{formatarTelefone(cliente.telefone, cliente.telefone.replace(/\D/g, '').length === 11 ? 'Celular' : 'Fixo')}</span>
+                            </div>
+                          )}
+
+                          {/* Documento */}
+                          {cliente.documento && (
+                            <div className="flex items-center gap-1 text-gray-400">
+                              <FileText size={14} />
+                              <span>
+                                {cliente.documento.length === 11 ? 'CPF' : 'CNPJ'}:
+                                {cliente.documento.length === 11
+                                  ? cliente.documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+                                  : cliente.documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+                                }
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Endereço - Só aparece se delivery local estiver ativo */}
+                          {pdvConfig?.delivery && (cliente.endereco || cliente.bairro || cliente.cidade) && (() => {
+                            console.log('🏠 [DEBUG] Delivery ativo:', pdvConfig?.delivery);
+                            console.log('🏠 [DEBUG] Cliente endereço:', cliente.endereco);
+                            console.log('🏠 [DEBUG] Cliente bairro:', cliente.bairro);
+                            console.log('🏠 [DEBUG] Cliente cidade:', cliente.cidade);
+                            return true;
+                          })() && (
+                            <div className="mt-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded">
+                              <div className="flex items-center gap-1 mb-2">
+                                <MapPin size={14} className="text-orange-400" />
+                                <span className="text-orange-400 text-sm font-medium">Endereço de Entrega</span>
+                              </div>
+                              <div className="space-y-1 text-sm">
+                                {cliente.endereco && (
+                                  <div className="text-gray-300">
+                                    {cliente.endereco}
+                                    {cliente.numero && `, ${cliente.numero}`}
+                                    {cliente.complemento && `, ${cliente.complemento}`}
+                                  </div>
+                                )}
+                                {cliente.bairro && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-orange-300 font-medium bg-orange-500/20 px-2 py-1 rounded">
+                                      {cliente.bairro}
+                                    </span>
+                                    {cliente.cidade && cliente.estado && (
+                                      <span className="text-gray-400">
+                                        {cliente.cidade}/{cliente.estado}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {cliente.cep && (
+                                  <div className="text-gray-400">
+                                    CEP: {cliente.cep.replace(/(\d{5})(\d{3})/, '$1-$2')}
+                                  </div>
                                 )}
                               </div>
-                            ))}
-                          </div>
-                        ) : cliente.telefone && (
-                          <div className="flex items-center gap-1 text-gray-400">
-                            <Phone size={14} />
-                            <span>{formatarTelefone(cliente.telefone, cliente.telefone.replace(/\D/g, '').length === 11 ? 'Celular' : 'Fixo')}</span>
-                          </div>
-                        )}
 
-                        {/* Documento */}
-                        {cliente.documento && (
-                          <div className="flex items-center gap-1 text-gray-400">
-                            <FileText size={14} />
-                            <span>
-                              {cliente.documento.length === 11 ? 'CPF' : 'CNPJ'}:
-                              {cliente.documento.length === 11
-                                ? cliente.documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-                                : cliente.documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
-                              }
-                            </span>
-                          </div>
-                        )}
+                              {/* Taxa de entrega - Só para bairros */}
+                              {taxaEntregaConfig?.tipo === 'bairro' && cliente.bairro && (() => {
+                                const bairroEncontrado = bairrosDisponiveis.find(
+                                  b => b.bairro.toLowerCase() === cliente.bairro.toLowerCase()
+                                );
+                                return bairroEncontrado ? (
+                                  <div className="mt-2 flex items-center justify-between">
+                                    <span className="text-green-400 text-sm font-medium">
+                                      Taxa de entrega: R$ {bairroEncontrado.valor.toFixed(2)}
+                                    </span>
+                                    {bairroEncontrado.tempo_entrega && (
+                                      <span className="text-gray-400 text-xs">
+                                        {bairroEncontrado.tempo_entrega} min
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2">
+                                    <span className="text-red-400 text-sm">
+                                      Bairro não atendido
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Aviso para cálculo por distância */}
+                              {taxaEntregaConfig?.tipo === 'distancia' && cliente.cep && (
+                                <div className="mt-2">
+                                  <span className="text-blue-400 text-sm">
+                                    Taxa calculada na seleção
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+
+                    {/* Botão de editar - Só aparece se delivery local estiver ativo */}
+                    {pdvConfig?.delivery && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          editarCliente(cliente);
+                        }}
+                        className="absolute top-3 right-3 p-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded transition-colors"
+                        title="Editar cliente"
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+                  </div>
                     ))
                   )}
                 </div>
@@ -24234,7 +24447,9 @@ const PDVPage: React.FC = () => {
             >
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-800">
-                <h3 className="text-lg font-semibold text-white">Cadastrar Novo Cliente</h3>
+                <h3 className="text-lg font-semibold text-white">
+                  {clienteParaEdicao ? 'Editar Cliente' : 'Cadastrar Novo Cliente'}
+                </h3>
                 <button
                   onClick={cancelarCadastroCliente}
                   className="text-gray-400 hover:text-white transition-colors"
@@ -24665,12 +24880,12 @@ const PDVPage: React.FC = () => {
                   {salvandoCliente ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Salvando...
+                      {clienteParaEdicao ? 'Salvando...' : 'Salvando...'}
                     </>
                   ) : (
                     <>
                       <Check size={16} />
-                      Salvar Cliente
+                      {clienteParaEdicao ? 'Salvar Alterações' : 'Salvar Cliente'}
                     </>
                   )}
                 </button>
