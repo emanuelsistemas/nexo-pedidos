@@ -9519,6 +9519,141 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA FUNÇÃO: Adicionar taxa de entrega ao carrinho (igual ao faturamento do cardápio)
+  const adicionarTaxaEntregaAoCarrinho = async (valorTaxa: number, descricaoTaxa: string) => {
+    try {
+      // Verificar se já existe taxa de entrega no carrinho
+      const taxaExistente = carrinho.find(item => item.taxaEntregaCardapio === true);
+      if (taxaExistente) {
+        // Remover taxa existente antes de adicionar nova
+        setCarrinho(prev => prev.filter(item => item.taxaEntregaCardapio !== true));
+      }
+
+      // Encontrar item de maior valor no carrinho para duplicar configurações fiscais
+      let itemMaiorValor = null;
+      let maiorValor = 0;
+
+      carrinho.forEach(item => {
+        const valorItem = item.quantidade * (item.produto?.preco || 0);
+        if (valorItem > maiorValor) {
+          maiorValor = valorItem;
+          itemMaiorValor = item;
+        }
+      });
+
+      // Se não há itens no carrinho, buscar um produto padrão para configurações fiscais
+      if (!itemMaiorValor) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        // Buscar primeiro produto ativo da empresa para usar como base fiscal
+        const { data: produtoBase } = await supabase
+          .from('produtos')
+          .select(`
+            id, nome, preco, codigo, descricao, grupo_id, unidade_medida_id,
+            ncm, cfop, origem_produto, situacao_tributaria, cst_icms, csosn_icms,
+            cst_pis, cst_cofins, cst_ipi, aliquota_icms, aliquota_pis, aliquota_cofins,
+            aliquota_ipi, valor_ipi, cest, margem_st, peso_liquido,
+            unidade_medida:unidade_medida_id (id, sigla, nome)
+          `)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('ativo', true)
+          .limit(1)
+          .single();
+
+        if (!produtoBase) {
+          toast.error('Nenhum produto encontrado para configurar taxa de entrega');
+          return;
+        }
+
+        itemMaiorValor = {
+          produto: produtoBase,
+          quantidade: 1,
+          subtotal: produtoBase.preco
+        };
+      }
+
+      if (itemMaiorValor && itemMaiorValor.produto) {
+        // Criar produto para taxa de entrega baseado no item de maior valor
+        const produtoTaxaEntrega = {
+          id: `taxa-entrega-${Date.now()}`,
+          nome: 'Taxa de Entrega',
+          preco: valorTaxa,
+          codigo: itemMaiorValor.produto.codigo,
+          descricao: `Taxa de entrega - ${descricaoTaxa}`,
+          categoria: itemMaiorValor.produto.categoria,
+          ativo: itemMaiorValor.produto.ativo,
+          promocao: false,
+          grupo_id: itemMaiorValor.produto.grupo_id,
+          unidade_medida_id: itemMaiorValor.produto.unidade_medida_id,
+          unidade_medida: itemMaiorValor.produto.unidade_medida,
+          produto_fotos: [],
+          foto_url: null,
+          // Manter dados fiscais do produto base
+          codigo_barras: itemMaiorValor.produto.codigo_barras,
+          ncm: itemMaiorValor.produto.ncm,
+          cfop: itemMaiorValor.produto.cfop,
+          origem_produto: itemMaiorValor.produto.origem_produto,
+          situacao_tributaria: itemMaiorValor.produto.situacao_tributaria,
+          cst_icms: itemMaiorValor.produto.cst_icms,
+          csosn_icms: itemMaiorValor.produto.csosn_icms,
+          cst_pis: itemMaiorValor.produto.cst_pis,
+          cst_cofins: itemMaiorValor.produto.cst_cofins,
+          cst_ipi: itemMaiorValor.produto.cst_ipi,
+          aliquota_icms: itemMaiorValor.produto.aliquota_icms,
+          aliquota_pis: itemMaiorValor.produto.aliquota_pis,
+          aliquota_cofins: itemMaiorValor.produto.aliquota_cofins,
+          aliquota_ipi: itemMaiorValor.produto.aliquota_ipi,
+          valor_ipi: itemMaiorValor.produto.valor_ipi,
+          cest: itemMaiorValor.produto.cest,
+          margem_st: itemMaiorValor.produto.margem_st,
+          peso_liquido: itemMaiorValor.produto.peso_liquido,
+          tipo_desconto: null,
+          valor_desconto: null,
+          estoque_inicial: null,
+          desconto_quantidade: false,
+          quantidade_minima: null,
+          tipo_desconto_quantidade: null,
+          valor_desconto_quantidade: null,
+          percentual_desconto_quantidade: null
+        };
+
+        const itemTaxaEntrega: ItemCarrinho = {
+          id: `taxa-entrega-${Date.now()}`,
+          produto: produtoTaxaEntrega,
+          quantidade: 1,
+          subtotal: valorTaxa,
+          vendaSemProduto: true,
+          nome: 'Taxa de Entrega',
+          preco: valorTaxa,
+          observacao: null,
+          sabores: [],
+          descricaoSabores: null,
+          adicionais: [],
+          tabela_preco_id: null,
+          tabela_preco_nome: null,
+          taxaEntregaCardapio: true // Marcar como taxa de entrega
+        };
+
+        // Adicionar ao carrinho
+        setCarrinho(prev => [...prev, itemTaxaEntrega]);
+
+        console.log('✅ Taxa de entrega adicionada ao carrinho:', valorTaxa, descricaoTaxa);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao adicionar taxa de entrega ao carrinho:', error);
+      toast.error('Erro ao adicionar taxa de entrega');
+    }
+  };
+
   // Abrir dropdown de bairros
   const abrirDropdownBairros = () => {
     setShowBairrosDropdown(true);
@@ -18654,14 +18789,28 @@ const PDVPage: React.FC = () => {
                         // Carregar descontos do cliente selecionado
                         carregarDescontosCliente(cliente.id);
 
-                        // ✅ NOVO: Calcular taxa de entrega por distância se necessário
-                        if (pdvConfig?.delivery && taxaEntregaConfig?.tipo === 'distancia' && cliente.cep) {
+                        // ✅ NOVO: Calcular taxa de entrega e adicionar ao carrinho se necessário
+                        if (pdvConfig?.delivery && taxaEntregaConfig) {
                           try {
-                            const taxaCalculada = await calcularTaxaEntregaCliente(cliente);
-                            if (taxaCalculada) {
+                            let taxaCalculada = null;
+
+                            // Calcular taxa baseada no tipo de configuração
+                            if (taxaEntregaConfig.tipo === 'distancia' && cliente.cep) {
+                              taxaCalculada = await calcularTaxaEntregaCliente(cliente);
+                            } else if (taxaEntregaConfig.tipo === 'bairro' && cliente.bairro) {
+                              taxaCalculada = await calcularTaxaEntregaCliente(cliente);
+                            }
+
+                            if (taxaCalculada && taxaCalculada.valor > 0) {
+                              // Mostrar notificação da taxa calculada
                               toast.success(`Taxa de entrega: R$ ${taxaCalculada.valor.toFixed(2)} (${taxaCalculada.descricao})`);
-                            } else {
+
+                              // ✅ ADICIONAR TAXA DE ENTREGA AO CARRINHO (igual ao faturamento do cardápio)
+                              await adicionarTaxaEntregaAoCarrinho(taxaCalculada.valor, taxaCalculada.descricao);
+                            } else if (taxaEntregaConfig.tipo === 'distancia' && cliente.cep) {
                               toast.warning('CEP fora da área de entrega');
+                            } else if (taxaEntregaConfig.tipo === 'bairro' && cliente.bairro) {
+                              toast.warning('Bairro não atendido');
                             }
                           } catch (error) {
                             console.error('Erro ao calcular taxa de entrega:', error);
@@ -18744,13 +18893,7 @@ const PDVPage: React.FC = () => {
                           )}
 
                           {/* Endereço - Só aparece se delivery local estiver ativo */}
-                          {pdvConfig?.delivery && (cliente.endereco || cliente.bairro || cliente.cidade) && (() => {
-                            console.log('🏠 [DEBUG] Delivery ativo:', pdvConfig?.delivery);
-                            console.log('🏠 [DEBUG] Cliente endereço:', cliente.endereco);
-                            console.log('🏠 [DEBUG] Cliente bairro:', cliente.bairro);
-                            console.log('🏠 [DEBUG] Cliente cidade:', cliente.cidade);
-                            return true;
-                          })() && (
+                          {pdvConfig?.delivery && (cliente.endereco || cliente.bairro || cliente.cidade) && (
                             <div className="mt-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded">
                               <div className="flex items-center gap-1 mb-2">
                                 <MapPin size={14} className="text-orange-400" />
