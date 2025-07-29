@@ -3077,7 +3077,7 @@ const PDVPage: React.FC = () => {
 
     const { data, error } = await supabase
       .from('clientes')
-      .select('id, nome, telefone, telefones, documento, endereco, numero, complemento, bairro, cidade, estado, cep') // ✅ INCLUIR: campos de endereço para delivery
+      .select('id, nome, telefone, telefones, documento, endereco, numero, complemento, bairro, cidade, estado, cep, origem') // ✅ INCLUIR: campo origem
       .eq('empresa_id', usuarioData.empresa_id)
       .or('deletado.is.null,deletado.eq.false') // ✅ FILTRAR: Excluir clientes deletados
       .order('nome')
@@ -6472,7 +6472,66 @@ const PDVPage: React.FC = () => {
               documento: pedido.cpf_cnpj_cliente,
               error: error?.message
             });
-            console.log('ℹ️ Pedido será processado sem cliente selecionado');
+
+            // ✅ NOVO: Criar cliente automaticamente quando vem do cardápio digital
+            if (pedido.nome_cliente && pedido.telefone_cliente) {
+              try {
+                console.log('🔄 Criando cliente automaticamente do cardápio digital...');
+
+                const novoClienteData = {
+                  nome: pedido.nome_cliente.trim(),
+                  telefone: pedido.telefone_cliente.replace(/\D/g, ''),
+                  telefones: [{
+                    numero: pedido.telefone_cliente,
+                    tipo: 'Celular' as const,
+                    whatsapp: true
+                  }],
+                  documento: pedido.cpf_cnpj_cliente?.replace(/\D/g, '') || null,
+                  tipo_documento: pedido.cpf_cnpj_cliente?.replace(/\D/g, '').length === 11 ? 'CPF' : 'CNPJ',
+                  endereco: pedido.endereco_entrega || null,
+                  numero: pedido.numero_entrega || null,
+                  complemento: pedido.complemento_entrega || null,
+                  bairro: pedido.bairro_entrega || null,
+                  cidade: pedido.cidade_entrega || null,
+                  estado: pedido.estado_entrega || null,
+                  cep: pedido.cep_entrega?.replace(/\D/g, '') || null,
+                  origem: 'cardapio_digital', // ✅ MARCAR ORIGEM COMO CARDÁPIO DIGITAL
+                  empresa_id: empresaData.id
+                };
+
+                const { data: clienteCriado, error: errorCriar } = await supabase
+                  .from('clientes')
+                  .insert([novoClienteData])
+                  .select('id, nome, telefone, documento, tipo_documento, emails')
+                  .single();
+
+                if (clienteCriado && !errorCriar) {
+                  setClienteSelecionado(clienteCriado);
+                  console.log('✅ Cliente criado automaticamente:', clienteCriado.nome);
+
+                  // Preencher dados da nota fiscal se disponível
+                  if (pedido.cpf_cnpj_cliente && pedido.cpf_cnpj_cliente.trim()) {
+                    const documentoLimpo = pedido.cpf_cnpj_cliente.replace(/\D/g, '');
+                    if (documentoLimpo.length === 11) {
+                      setTipoDocumento('cpf');
+                      setCpfCnpjNota(formatCpf(documentoLimpo));
+                      setClienteEncontrado(clienteCriado);
+                    } else if (documentoLimpo.length === 14) {
+                      setTipoDocumento('cnpj');
+                      setCpfCnpjNota(formatCnpj(documentoLimpo));
+                      setClienteEncontrado(clienteCriado);
+                    }
+                    setErroValidacao('');
+                  }
+                } else {
+                  console.error('❌ Erro ao criar cliente automaticamente:', errorCriar);
+                }
+              } catch (error) {
+                console.error('❌ Erro ao criar cliente do cardápio digital:', error);
+              }
+            } else {
+              console.log('ℹ️ Pedido será processado sem cliente selecionado');
+            }
           }
         } catch (error) {
           console.error('❌ Erro ao buscar cliente real:', error);
@@ -9050,6 +9109,7 @@ const PDVPage: React.FC = () => {
         bairro: bairroSelecionado || cadastroClienteData.bairro.trim() || null,
         cidade: cadastroClienteData.cidade.trim() || null,
         estado: cadastroClienteData.estado.trim() || null,
+        origem: 'delivery_local', // ✅ NOVO: Marcar origem como delivery local
         empresa_id: usuarioData.empresa_id
       };
 
@@ -18500,6 +18560,19 @@ const PDVPage: React.FC = () => {
                       className="w-full text-left p-4"
                     >
                       <div className="space-y-2">
+                        {/* Tag de origem */}
+                        <div className="flex items-center gap-2 mb-2">
+                          {cliente.origem === 'cardapio_digital' ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                              📱 Cardápio Digital
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                              🏪 Delivery Local
+                            </span>
+                          )}
+                        </div>
+
                         {/* Nome do cliente */}
                         <div className="text-white text-base font-medium">{cliente.nome}</div>
 

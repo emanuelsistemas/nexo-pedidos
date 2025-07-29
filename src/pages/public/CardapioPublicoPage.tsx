@@ -1319,6 +1319,9 @@ const CardapioPublicoPage: React.FC = () => {
     bloco?: string;
   }>({});
 
+  // Estados para endereço no modo bairro
+  const [enderecoModoBairro, setEnderecoModoBairro] = useState('');
+
   // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
   const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
@@ -1645,6 +1648,7 @@ const CardapioPublicoPage: React.FC = () => {
         // Limpar dados salvos
         localStorage.removeItem(`cep_cliente_${empresaIdParaUsar}`);
         localStorage.removeItem(`endereco_encontrado_${empresaIdParaUsar}`);
+        localStorage.removeItem(`endereco_modo_bairro_${empresaIdParaUsar}`);
         localStorage.removeItem(`taxa_entrega_${empresaIdParaUsar}`);
         localStorage.removeItem(`area_validada_${empresaIdParaUsar}`);
 
@@ -1711,6 +1715,7 @@ const CardapioPublicoPage: React.FC = () => {
 
       if (taxaEntregaConfig?.tipo === 'bairro') {
         localStorage.setItem(`bairro_selecionado_${empresaId}`, bairroSelecionado);
+        localStorage.setItem(`endereco_modo_bairro_${empresaId}`, enderecoModoBairro);
       } else {
         // Atualizar CEP real com o CEP temporário validado
         setCepCliente(cepClienteTemp);
@@ -1738,6 +1743,7 @@ const CardapioPublicoPage: React.FC = () => {
     if (empresaId) {
       const cepSalvo = localStorage.getItem(`cep_cliente_${empresaId}`);
       const enderecoSalvoStr = localStorage.getItem(`endereco_encontrado_${empresaId}`);
+      const enderecoModoBairroSalvo = localStorage.getItem(`endereco_modo_bairro_${empresaId}`);
       const taxaSalvaStr = localStorage.getItem(`taxa_entrega_${empresaId}`);
 
       if (cepSalvo) setCepCliente(cepSalvo);
@@ -1747,6 +1753,9 @@ const CardapioPublicoPage: React.FC = () => {
         } catch (e) {
           console.error('Erro ao carregar endereço salvo:', e);
         }
+      }
+      if (enderecoModoBairroSalvo) {
+        setEnderecoModoBairro(enderecoModoBairroSalvo);
       }
       if (taxaSalvaStr) {
         try {
@@ -1891,6 +1900,7 @@ const CardapioPublicoPage: React.FC = () => {
       localStorage.removeItem(`area_validada_${empresaId}`);
       localStorage.removeItem(`cep_cliente_${empresaId}`);
       localStorage.removeItem(`endereco_encontrado_${empresaId}`);
+      localStorage.removeItem(`endereco_modo_bairro_${empresaId}`);
       localStorage.removeItem(`taxa_entrega_${empresaId}`);
       localStorage.removeItem(`bairro_selecionado_${empresaId}`);
       localStorage.removeItem(`complemento_endereco_${empresaId}`);
@@ -6221,7 +6231,8 @@ const CardapioPublicoPage: React.FC = () => {
             cidade: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.localidade || null) : null,
             estado: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.uf || null) : null,
             tipo_residencia: tipoEntregaSelecionado === 'entrega' ? (tipoEndereco || null) : null,
-            ponto_referencia: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.proximoA || null) : null
+            ponto_referencia: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.proximoA || null) : null,
+            origem: 'cardapio_digital' // ✅ NOVO: Marcar origem como cardápio digital
           };
 
           const { data: clienteCriado, error: clienteError } = await supabase
@@ -6280,7 +6291,7 @@ const CardapioPublicoPage: React.FC = () => {
         tipo_entrega: tipoEntregaSelecionado || 'entrega',
         tem_entrega: tipoEntregaSelecionado === 'entrega' && !!calculoTaxa,
         cep_entrega: tipoEntregaSelecionado === 'entrega' ? (cepCliente || null) : null,
-        endereco_entrega: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.logradouro || null) : null,
+        endereco_entrega: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.logradouro || enderecoModoBairro || null) : null,
         numero_entrega: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.numero || null) : null,
         complemento_entrega: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.complemento || null) : null,
         bairro_entrega: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.bairro || bairroSelecionado || null) : null,
@@ -10691,7 +10702,50 @@ const CardapioPublicoPage: React.FC = () => {
                             )}
                           </>
                         ) : (
-                          bairroSelecionado || 'Não informado'
+                          // Modo bairro - exibir endereço + bairro
+                          <>
+                            {enderecoModoBairro && (
+                              <>
+                                {enderecoModoBairro}
+                                {dadosComplementoEndereco.numero && (
+                                  <span className={`font-medium ${
+                                    config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                                  }`}>
+                                    , {dadosComplementoEndereco.numero}
+                                  </span>
+                                )}
+                                <br />
+                              </>
+                            )}
+                            {bairroSelecionado && (
+                              <>
+                                Bairro: {bairroSelecionado}<br />
+                              </>
+                            )}
+
+                            {/* Dados complementares para modo bairro */}
+                            {tipoEndereco && (
+                              <div className={`mt-2 text-xs ${
+                                config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                              }`}>
+                                {tipoEndereco === 'casa' ? (
+                                  <>
+                                    {dadosComplementoEndereco.complemento && <div>Complemento: {dadosComplementoEndereco.complemento}</div>}
+                                    {dadosComplementoEndereco.proximoA && <div>Próximo a: {dadosComplementoEndereco.proximoA}</div>}
+                                  </>
+                                ) : (
+                                  <>
+                                    {dadosComplementoEndereco.nomeCondominio && <div>Condomínio: {dadosComplementoEndereco.nomeCondominio}</div>}
+                                    {dadosComplementoEndereco.bloco && <div>Bloco: {dadosComplementoEndereco.bloco}</div>}
+                                    {dadosComplementoEndereco.complemento && <div>Complemento: {dadosComplementoEndereco.complemento}</div>}
+                                    {dadosComplementoEndereco.proximoA && <div>Próximo a: {dadosComplementoEndereco.proximoA}</div>}
+                                  </>
+                                )}
+                              </div>
+                            )}
+
+                            {!enderecoModoBairro && !bairroSelecionado && 'Não informado'}
+                          </>
                         )}
                       </div>
                     </div>
@@ -12098,6 +12152,26 @@ const CardapioPublicoPage: React.FC = () => {
               ) : (
                 // Validação por Bairro
                 <div className="space-y-4">
+                  {/* Campo de Endereço */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Endereço (Rua/Avenida)
+                    </label>
+                    <input
+                      type="text"
+                      value={enderecoModoBairro}
+                      onChange={(e) => setEnderecoModoBairro(e.target.value)}
+                      placeholder="Ex: Rua das Flores, Avenida Central..."
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${
                       config.modo_escuro ? 'text-gray-300' : 'text-gray-700'

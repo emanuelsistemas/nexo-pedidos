@@ -57,6 +57,7 @@ const ClientesPage: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [empresaFilter, setEmpresaFilter] = useState<string>('todas');
   const [tipoClienteFilter, setTipoClienteFilter] = useState<string>('todos');
+  const [origemFilter, setOrigemFilter] = useState<string>('todas'); // ✅ NOVO: Filtro de origem
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
@@ -197,7 +198,7 @@ const ClientesPage: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [clientes, searchTerm, empresaFilter, tipoClienteFilter]);
+  }, [clientes, searchTerm, empresaFilter, tipoClienteFilter, origemFilter]); // ✅ NOVO: Incluir origemFilter
 
   const loadEmpresas = async () => {
     try {
@@ -337,6 +338,21 @@ const ClientesPage: React.FC = () => {
         }
       });
       console.log('Após filtro de tipo de cliente:', filtered.length);
+    }
+
+    // ✅ NOVO: Aplicar filtro de origem
+    if (origemFilter !== 'todas') {
+      filtered = filtered.filter(cliente => {
+        switch (origemFilter) {
+          case 'delivery_local':
+            return !cliente.origem || cliente.origem === 'delivery_local';
+          case 'cardapio_digital':
+            return cliente.origem === 'cardapio_digital';
+          default:
+            return true;
+        }
+      });
+      console.log('Após filtro de origem:', filtered.length);
     }
 
     console.log('Total de clientes filtrados final:', filtered.length);
@@ -1555,6 +1571,40 @@ const ClientesPage: React.FC = () => {
             Transportadora
           </button>
         </div>
+
+        {/* ✅ NOVO: Tags de Filtro por Origem */}
+        <div className="flex flex-wrap gap-2 mt-2">
+          <button
+            onClick={() => setOrigemFilter('todas')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              origemFilter === 'todas'
+                ? 'bg-gray-600 text-white'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+            }`}
+          >
+            🌐 Todas Origens
+          </button>
+          <button
+            onClick={() => setOrigemFilter('delivery_local')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              origemFilter === 'delivery_local'
+                ? 'bg-orange-500 text-white'
+                : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/30'
+            }`}
+          >
+            🏪 Delivery Local
+          </button>
+          <button
+            onClick={() => setOrigemFilter('cardapio_digital')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              origemFilter === 'cardapio_digital'
+                ? 'bg-purple-500 text-white'
+                : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30'
+            }`}
+          >
+            📱 Cardápio Digital
+          </button>
+        </div>
       </div>
 
       {/* Barra de Busca + Filtros Colapsáveis */}
@@ -1662,6 +1712,19 @@ const ClientesPage: React.FC = () => {
               <div className="flex items-start gap-3">
                 {/* Coluna Esquerda - Nome e Contato */}
                 <div className="flex-1 min-w-0">
+                  {/* Tag de origem */}
+                  <div className="mb-1">
+                    {cliente.origem === 'cardapio_digital' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        📱 Cardápio Digital
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                        🏪 Delivery Local
+                      </span>
+                    )}
+                  </div>
+
                   <h3 className="text-white font-medium text-base truncate">{cliente.nome}</h3>
 
                   {/* Telefones - Ultra Compacto */}
