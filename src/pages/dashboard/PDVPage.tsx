@@ -8873,7 +8873,10 @@ const PDVPage: React.FC = () => {
 
   const formatarCEP = (value: string) => {
     const numbers = value.replace(/\D/g, '');
-    return numbers.replace(/(\d{5})(\d)/, '$1-$2');
+    if (numbers.length <= 5) {
+      return numbers;
+    }
+    return numbers.replace(/(\d{5})(\d{1,3})/, '$1-$2');
   };
 
   const handleCEPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
