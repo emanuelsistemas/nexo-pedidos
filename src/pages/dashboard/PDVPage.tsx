@@ -3079,6 +3079,7 @@ const PDVPage: React.FC = () => {
       .from('clientes')
       .select('id, nome, telefone, telefones, documento, endereco, numero, complemento, bairro, cidade, estado, cep') // ✅ INCLUIR: campos de endereço para delivery
       .eq('empresa_id', usuarioData.empresa_id)
+      .or('deletado.is.null,deletado.eq.false') // ✅ FILTRAR: Excluir clientes deletados
       .order('nome')
       .limit(50);
 
@@ -3578,6 +3579,18 @@ const PDVPage: React.FC = () => {
           data_pedido,
           tipo_entrega,
           endereco_entrega,
+          tem_entrega,
+          cep_entrega,
+          endereco_entrega,
+          numero_entrega,
+          complemento_entrega,
+          bairro_entrega,
+          cidade_entrega,
+          estado_entrega,
+          tipo_endereco,
+          nome_condominio,
+          bloco_endereco,
+          proximo_a,
           forma_pagamento_nome,
           forma_pagamento_tipo,
           observacao_pedido,
@@ -3585,6 +3598,8 @@ const PDVPage: React.FC = () => {
           valor_produtos,
           valor_desconto_cupom,
           valor_taxa_entrega,
+          distancia_km,
+          tempo_estimado_minutos,
           itens_pedido,
           cupom_codigo,
           cupom_descricao,
@@ -6406,6 +6421,7 @@ const PDVPage: React.FC = () => {
             .from('clientes')
             .select('id, nome, telefone, documento, tipo_documento, emails')
             .eq('empresa_id', empresaData.id)
+            .or('deletado.is.null,deletado.eq.false') // ✅ FILTRAR: Excluir clientes deletados
             .or(`nome.ilike.%${pedido.nome_cliente}%,telefone.eq.${pedido.telefone_cliente || ''},documento.eq.${pedido.cpf_cnpj_cliente || ''}`)
             .limit(1)
             .single();
@@ -8827,6 +8843,7 @@ const PDVPage: React.FC = () => {
         .from('clientes')
         .select('id, nome, telefone')
         .eq('empresa_id', usuarioData.empresa_id)
+        .or('deletado.is.null,deletado.eq.false') // ✅ FILTRAR: Excluir clientes deletados
         .or(`cpf.eq.${numbers},cnpj.eq.${numbers}`)
         .single();
 
@@ -26854,10 +26871,93 @@ const PDVPage: React.FC = () => {
                             <p className="text-gray-400 text-sm">{pedidoSelecionado.telefone_cliente}</p>
                           </div>
 
-                          {pedidoSelecionado.endereco_entrega && (
+                          {/* Dados de Entrega */}
+                          {pedidoSelecionado.tem_entrega && (
                             <div className="bg-gray-700/50 rounded-lg p-4">
-                              <h3 className="text-sm font-semibold text-gray-300 mb-2">📍 Endereço</h3>
-                              <p className="text-white text-sm">{pedidoSelecionado.endereco_entrega}</p>
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">🚚 Entrega</h3>
+                              <div className="space-y-1 text-sm">
+                                {/* Endereço Principal */}
+                                {pedidoSelecionado.endereco_entrega && (
+                                  <p className="text-white">
+                                    📍 {pedidoSelecionado.endereco_entrega}
+                                    {pedidoSelecionado.numero_entrega && `, ${pedidoSelecionado.numero_entrega}`}
+                                  </p>
+                                )}
+
+                                {/* Bairro e Cidade */}
+                                {(pedidoSelecionado.bairro_entrega || pedidoSelecionado.cidade_entrega) && (
+                                  <p className="text-gray-300">
+                                    {pedidoSelecionado.bairro_entrega && `Bairro: ${pedidoSelecionado.bairro_entrega}`}
+                                    {pedidoSelecionado.bairro_entrega && pedidoSelecionado.cidade_entrega && ', '}
+                                    {pedidoSelecionado.cidade_entrega && `${pedidoSelecionado.cidade_entrega}`}
+                                    {pedidoSelecionado.estado_entrega && ` - ${pedidoSelecionado.estado_entrega}`}
+                                  </p>
+                                )}
+
+                                {/* CEP */}
+                                {pedidoSelecionado.cep_entrega && (
+                                  <p className="text-gray-300">CEP: {pedidoSelecionado.cep_entrega}</p>
+                                )}
+
+                                {/* Complemento */}
+                                {pedidoSelecionado.complemento_entrega && (
+                                  <p className="text-gray-300">Complemento: {pedidoSelecionado.complemento_entrega}</p>
+                                )}
+
+                                {/* Tipo de Endereço */}
+                                {pedidoSelecionado.tipo_endereco && (
+                                  <p className="text-blue-400 text-xs">
+                                    Tipo: {pedidoSelecionado.tipo_endereco === 'casa' ? '🏠 Casa' : '🏢 Condomínio'}
+                                  </p>
+                                )}
+
+                                {/* Dados do Condomínio */}
+                                {pedidoSelecionado.tipo_endereco === 'condominio' && (
+                                  <>
+                                    {pedidoSelecionado.nome_condominio && (
+                                      <p className="text-gray-300 text-xs">Condomínio: {pedidoSelecionado.nome_condominio}</p>
+                                    )}
+                                    {pedidoSelecionado.bloco_endereco && (
+                                      <p className="text-gray-300 text-xs">Bloco: {pedidoSelecionado.bloco_endereco}</p>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Ponto de Referência */}
+                                {pedidoSelecionado.proximo_a && (
+                                  <p className="text-gray-300 text-xs">Próximo a: {pedidoSelecionado.proximo_a}</p>
+                                )}
+
+                                {/* Taxa de Entrega e Tempo */}
+                                {(pedidoSelecionado.valor_taxa_entrega > 0 || pedidoSelecionado.tempo_estimado_minutos) && (
+                                  <div className="mt-2 pt-2 border-t border-gray-600">
+                                    {pedidoSelecionado.valor_taxa_entrega > 0 && (
+                                      <p className="text-green-400 text-xs">
+                                        Taxa: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pedidoSelecionado.valor_taxa_entrega)}
+                                      </p>
+                                    )}
+                                    {pedidoSelecionado.tempo_estimado_minutos && (
+                                      <p className="text-yellow-400 text-xs">
+                                        Tempo estimado: {pedidoSelecionado.tempo_estimado_minutos} min
+                                      </p>
+                                    )}
+                                    {pedidoSelecionado.distancia_km && (
+                                      <p className="text-gray-400 text-xs">
+                                        Distância: {pedidoSelecionado.distancia_km} km
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Retirada no Balcão */}
+                          {!pedidoSelecionado.tem_entrega && (
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">🏪 Retirada</h3>
+                              <p className="text-white text-sm">Retirada no balcão</p>
+                              <p className="text-gray-400 text-xs">Cliente irá retirar no estabelecimento</p>
                             </div>
                           )}
                         </div>
