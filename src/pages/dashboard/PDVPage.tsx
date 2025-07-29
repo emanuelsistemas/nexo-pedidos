@@ -219,6 +219,15 @@ const PDVPage: React.FC = () => {
   });
   const [salvandoCliente, setSalvandoCliente] = useState(false);
 
+  // Estados para validação de taxa de entrega
+  const [taxaEntregaConfig, setTaxaEntregaConfig] = useState<any>(null);
+  const [bairrosDisponiveis, setBairrosDisponiveis] = useState<any[]>([]);
+  const [bairroSelecionado, setBairroSelecionado] = useState('');
+  const [showBairrosDropdown, setShowBairrosDropdown] = useState(false);
+  const [validandoAreaEntrega, setValidandoAreaEntrega] = useState(false);
+  const [areaEntregaValida, setAreaEntregaValida] = useState<boolean | null>(null);
+  const [mensagemAreaEntrega, setMensagemAreaEntrega] = useState('');
+
   // ✅ NOVO: Função para formatar telefone com máscara
   const formatarTelefone = (numero: string, tipo: string) => {
     if (!numero) return '';
@@ -4290,6 +4299,13 @@ const PDVPage: React.FC = () => {
       carregarTodosPedidosCardapio();
     }
   }, [showCardapioDigitalModal, empresaData?.id]);
+
+  // Carregar configuração de taxa de entrega quando modal de cadastro abrir
+  useEffect(() => {
+    if (showCadastroClienteModal) {
+      carregarTaxaEntregaConfig();
+    }
+  }, [showCadastroClienteModal]);
 
   // ✅ USEEFFECT DUPLICADO REMOVIDO - JÁ EXISTE UM ACIMA
 
@@ -8858,13 +8874,20 @@ const PDVPage: React.FC = () => {
       const data = await response.json();
 
       if (!data.erro) {
-        setCadastroClienteData({
+        const novosDados = {
           ...cadastroClienteData,
           endereco: data.logradouro || '',
           bairro: data.bairro || '',
           cidade: data.localidade || '',
           estado: data.uf || ''
-        });
+        };
+
+        setCadastroClienteData(novosDados);
+
+        // Validar área de entrega se configuração estiver carregada
+        if (taxaEntregaConfig) {
+          await validarAreaEntrega(cep, data.bairro || '');
+        }
       }
     } catch (error) {
       console.error('Erro ao buscar CEP:', error);
@@ -8879,17 +8902,22 @@ const PDVPage: React.FC = () => {
     return numbers.replace(/(\d{5})(\d{1,3})/, '$1-$2');
   };
 
-  const handleCEPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCEPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatarCEP(e.target.value);
     setCadastroClienteData({
       ...cadastroClienteData,
       cep: formatted
     });
 
+    // Limpar validação anterior
+    setAreaEntregaValida(null);
+    setMensagemAreaEntrega('');
+    setShowBairrosDropdown(false);
+
     // Buscar automaticamente quando CEP estiver completo
     const cepLimpo = formatted.replace(/\D/g, '');
     if (cepLimpo.length === 8) {
-      buscarCEP(formatted);
+      await buscarCEP(formatted);
     }
   };
 
@@ -9010,6 +9038,142 @@ const PDVPage: React.FC = () => {
       tipo: 'Celular',
       whatsapp: false
     });
+    // Limpar validação de área de entrega
+    setAreaEntregaValida(null);
+    setMensagemAreaEntrega('');
+    setBairroSelecionado('');
+    setShowBairrosDropdown(false);
+  };
+
+  // Carregar configuração de taxa de entrega
+  const carregarTaxaEntregaConfig = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Verificar se cardápio digital está habilitado
+      const { data: pdvConfigData } = await supabase
+        .from('pdv_config')
+        .select('cardapio_digital')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (!pdvConfigData?.cardapio_digital) {
+        setTaxaEntregaConfig(null);
+        return;
+      }
+
+      // Buscar configuração de taxa de entrega
+      const { data: configData } = await supabase
+        .from('taxa_entrega_config')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('habilitado', true)
+        .single();
+
+      if (configData) {
+        setTaxaEntregaConfig(configData);
+
+        // Se for tipo bairro, carregar bairros disponíveis
+        if (configData.tipo === 'bairro') {
+          const { data: bairrosData } = await supabase
+            .from('taxa_entrega')
+            .select('bairro, valor, tempo_entrega')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .order('bairro');
+
+          setBairrosDisponiveis(bairrosData || []);
+        }
+      } else {
+        setTaxaEntregaConfig(null);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração de taxa de entrega:', error);
+      setTaxaEntregaConfig(null);
+    }
+  };
+
+  // Validar área de entrega
+  const validarAreaEntrega = async (cep: string, bairro: string) => {
+    if (!taxaEntregaConfig) return;
+
+    setValidandoAreaEntrega(true);
+    setAreaEntregaValida(null);
+    setMensagemAreaEntrega('');
+
+    try {
+      if (taxaEntregaConfig.tipo === 'bairro') {
+        // Validação por bairro
+        const bairroEncontrado = bairrosDisponiveis.find(
+          b => b.bairro.toLowerCase() === bairro.toLowerCase()
+        );
+
+        if (bairroEncontrado) {
+          setAreaEntregaValida(true);
+          setBairroSelecionado(bairroEncontrado.bairro);
+          setMensagemAreaEntrega(`Entrega disponível para ${bairroEncontrado.bairro} - R$ ${bairroEncontrado.valor.toFixed(2)}`);
+          setShowBairrosDropdown(false);
+        } else {
+          setAreaEntregaValida(false);
+          setMensagemAreaEntrega('Bairro não atendido. Veja os bairros disponíveis abaixo:');
+          setShowBairrosDropdown(true);
+        }
+      } else if (taxaEntregaConfig.tipo === 'distancia') {
+        // Validação por distância usando o serviço existente
+        const { taxaEntregaService } = await import('../../services/taxaEntregaService');
+
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        const resultado = await taxaEntregaService.calcularTaxa(usuarioData.empresa_id, cep);
+
+        if (resultado) {
+          setAreaEntregaValida(true);
+          setMensagemAreaEntrega(`Entrega disponível - R$ ${resultado.valor.toFixed(2)} (${resultado.distancia_km.toFixed(1)}km)`);
+        } else {
+          setAreaEntregaValida(false);
+          setMensagemAreaEntrega('CEP fora da área de entrega');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao validar área de entrega:', error);
+      setAreaEntregaValida(false);
+      setMensagemAreaEntrega('Erro ao validar área de entrega');
+    } finally {
+      setValidandoAreaEntrega(false);
+    }
+  };
+
+  // Selecionar bairro do dropdown
+  const selecionarBairro = (bairro: string) => {
+    setBairroSelecionado(bairro);
+    setCadastroClienteData({
+      ...cadastroClienteData,
+      bairro: bairro
+    });
+    setShowBairrosDropdown(false);
+    setAreaEntregaValida(true);
+
+    const bairroData = bairrosDisponiveis.find(b => b.bairro === bairro);
+    if (bairroData) {
+      setMensagemAreaEntrega(`Entrega disponível para ${bairro} - R$ ${bairroData.valor.toFixed(2)}`);
+    }
   };
 
   const handleCpfCnpjChange = (value: string) => {
@@ -24198,17 +24362,62 @@ const PDVPage: React.FC = () => {
 
                       {/* Bairro */}
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Bairro (opcional)</label>
-                        <input
-                          type="text"
-                          value={cadastroClienteData.bairro}
-                          onChange={(e) => setCadastroClienteData({
-                            ...cadastroClienteData,
-                            bairro: e.target.value
-                          })}
-                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                          placeholder="Bairro"
-                        />
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Bairro (opcional)
+                          {taxaEntregaConfig?.tipo === 'bairro' && (
+                            <span className="text-orange-400 ml-1">• Validação de entrega ativa</span>
+                          )}
+                        </label>
+                        {taxaEntregaConfig?.tipo === 'bairro' ? (
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={bairroSelecionado || cadastroClienteData.bairro}
+                              onChange={(e) => {
+                                setCadastroClienteData({
+                                  ...cadastroClienteData,
+                                  bairro: e.target.value
+                                });
+                                setBairroSelecionado('');
+                                setAreaEntregaValida(null);
+                                setMensagemAreaEntrega('');
+                              }}
+                              className={`w-full border rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:ring-1 ${
+                                areaEntregaValida === true
+                                  ? 'bg-green-900/30 border-green-500 focus:border-green-400 focus:ring-green-500/20'
+                                  : areaEntregaValida === false
+                                  ? 'bg-red-900/30 border-red-500 focus:border-red-400 focus:ring-red-500/20'
+                                  : 'bg-gray-800/50 border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                              }`}
+                              placeholder="Digite ou selecione o bairro"
+                              readOnly={!!bairroSelecionado}
+                            />
+                            {bairroSelecionado && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBairroSelecionado('');
+                                  setAreaEntregaValida(null);
+                                  setMensagemAreaEntrega('');
+                                }}
+                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={cadastroClienteData.bairro}
+                            onChange={(e) => setCadastroClienteData({
+                              ...cadastroClienteData,
+                              bairro: e.target.value
+                            })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Bairro"
+                          />
+                        )}
                       </div>
 
                       {/* Cidade e Estado */}
@@ -24242,6 +24451,75 @@ const PDVPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Validação de Área de Entrega */}
+                    {taxaEntregaConfig && (
+                      <div className="mt-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Truck size={16} className="text-orange-400" />
+                          <span className="text-sm font-medium text-orange-400">
+                            Validação de Área de Entrega
+                          </span>
+                          {validandoAreaEntrega && (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-400"></div>
+                          )}
+                        </div>
+
+                        {/* Mensagem de status */}
+                        {mensagemAreaEntrega && (
+                          <div className={`p-3 rounded-lg mb-3 text-sm ${
+                            areaEntregaValida === true
+                              ? 'bg-green-900/30 border border-green-500/30 text-green-300'
+                              : areaEntregaValida === false
+                              ? 'bg-red-900/30 border border-red-500/30 text-red-300'
+                              : 'bg-blue-900/30 border border-blue-500/30 text-blue-300'
+                          }`}>
+                            {mensagemAreaEntrega}
+                          </div>
+                        )}
+
+                        {/* Dropdown de bairros disponíveis */}
+                        {showBairrosDropdown && bairrosDisponiveis.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-sm text-gray-400 mb-2">
+                              Bairros disponíveis para entrega:
+                            </div>
+                            <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
+                              {bairrosDisponiveis.map((bairro, index) => (
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={() => selecionarBairro(bairro.bairro)}
+                                  className="w-full text-left p-3 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors border border-gray-600 hover:border-gray-500"
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-white font-medium">{bairro.bairro}</span>
+                                    <div className="text-right">
+                                      <div className="text-green-400 font-medium">
+                                        R$ {bairro.valor.toFixed(2)}
+                                      </div>
+                                      {bairro.tempo_entrega && (
+                                        <div className="text-xs text-gray-400">
+                                          {bairro.tempo_entrega} min
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Informações sobre o tipo de validação */}
+                        <div className="text-xs text-gray-500 mt-3">
+                          {taxaEntregaConfig.tipo === 'bairro'
+                            ? 'Validação por bairro: Digite o CEP para verificar se atendemos sua região'
+                            : 'Validação por distância: Digite o CEP para calcular a taxa de entrega'
+                          }
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -24257,7 +24535,12 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={salvarNovoCliente}
-                  disabled={salvandoCliente || !cadastroClienteData.nome.trim() || cadastroClienteData.telefones.length === 0}
+                  disabled={
+                    salvandoCliente ||
+                    !cadastroClienteData.nome.trim() ||
+                    cadastroClienteData.telefones.length === 0 ||
+                    (taxaEntregaConfig && cadastroClienteData.cep && areaEntregaValida === false)
+                  }
                   className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {salvandoCliente ? (
