@@ -1704,6 +1704,11 @@ const CardapioPublicoPage: React.FC = () => {
       return;
     }
 
+    if (taxaEntregaConfig?.tipo === 'bairro' && !enderecoModoBairro.trim()) {
+      showMessage('error', 'Por favor, informe o endereço (rua/avenida).');
+      return;
+    }
+
     if (taxaEntregaConfig?.tipo === 'distancia' && (!cepClienteTemp || !enderecoEncontrado || !calculoTaxa)) {
       showMessage('error', 'Por favor, informe um CEP válido e aguarde o cálculo da taxa.');
       return;
@@ -5619,6 +5624,11 @@ const CardapioPublicoPage: React.FC = () => {
       // Validar bairro
       if (!enderecoEncontrado?.bairro && !bairroSelecionado) {
         erros.push('Bairro deve ser selecionado');
+      }
+
+      // Validar endereço para modo bairro
+      if (taxaEntregaConfig?.tipo === 'bairro' && !enderecoModoBairro.trim()) {
+        erros.push('Endereço (rua/avenida) é obrigatório');
       }
     }
 

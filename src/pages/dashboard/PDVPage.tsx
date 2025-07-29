@@ -15136,9 +15136,21 @@ const PDVPage: React.FC = () => {
           <!-- Forma de Pagamento -->
           ${dadosImpressao.pagamento?.forma_pagamento_nome ? `
             <div class="pagamento-section">
-              <div class="center bold">FORMA DE PAGAMENTO</div>
-              <div class="center">${dadosImpressao.pagamento.forma_pagamento_nome}</div>
-              ${dadosImpressao.pagamento.forma_pagamento_tipo ? `<div class="center" style="font-size: 10px; color: #666;">(${dadosImpressao.pagamento.forma_pagamento_tipo})</div>` : ''}
+              <div class="bold">FORMA DE PAGAMENTO</div>
+              <div>${dadosImpressao.pagamento.forma_pagamento_nome}${(() => {
+                // Se for dinheiro, mostrar informações de troco
+                if (dadosImpressao.pagamento.forma_pagamento_tipo === 'dinheiro') {
+                  const detalhes = dadosImpressao.pagamento.forma_pagamento_detalhes;
+                  if (detalhes) {
+                    if (detalhes.precisa_troco === false) {
+                      return ' (SEM TROCO)';
+                    } else if (detalhes.precisa_troco === true && detalhes.troco > 0) {
+                      return ` (Troco ${formatCurrency(detalhes.troco)})`;
+                    }
+                  }
+                }
+                return '';
+              })()}</div>
             </div>
           ` : ''}
 
