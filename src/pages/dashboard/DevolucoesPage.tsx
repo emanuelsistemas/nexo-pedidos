@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { isDesktopScreen } from '../../config/responsive';
 import { Devolucao } from '../../types';
+import NovaDevolucaoModal from '../../components/devolucao/NovaDevolucaoModal';
 
 const DevolucoesPage: React.FC = () => {
   const [devolucoes, setDevolucoes] = useState<Devolucao[]>([]);
@@ -14,7 +15,8 @@ const DevolucoesPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [dataFilter, setDataFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  
+  const [showNovaDevolucaoModal, setShowNovaDevolucaoModal] = useState(false);
+
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -64,60 +66,36 @@ const DevolucoesPage: React.FC = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
-      // Obter devoluções do usuário (simulando dados por enquanto)
-      // TODO: Implementar consulta real quando a tabela for criada
-      const mockDevolucoes: Devolucao[] = [
-        {
-          id: '1',
-          numero: 'DEV001',
-          pedido_id: 'ped1',
-          pedido_numero: 'PED001',
-          cliente_id: 'cli1',
-          cliente_nome: 'João Silva',
-          usuario_id: userData.user.id,
-          empresa_id: 'emp1',
-          valor_total: 150.00,
-          motivo_geral: 'Produto com defeito',
-          status: 'pendente',
-          tipo_devolucao: 'parcial',
-          forma_reembolso: 'dinheiro',
-          created_at: new Date().toISOString(),
-          cliente: {
-            nome: 'João Silva',
-            telefone: '(11) 99999-9999'
-          },
-          pedido: {
-            numero: 'PED001',
-            data_pedido: new Date().toISOString()
-          }
-        },
-        {
-          id: '2',
-          numero: 'DEV002',
-          pedido_id: 'ped2',
-          pedido_numero: 'PED002',
-          cliente_id: 'cli2',
-          cliente_nome: 'Maria Santos',
-          usuario_id: userData.user.id,
-          empresa_id: 'emp1',
-          valor_total: 89.90,
-          motivo_geral: 'Produto errado',
-          status: 'processada',
-          tipo_devolucao: 'total',
-          forma_reembolso: 'credito',
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          cliente: {
-            nome: 'Maria Santos',
-            telefone: '(11) 88888-8888'
-          },
-          pedido: {
-            numero: 'PED002',
-            data_pedido: new Date(Date.now() - 86400000).toISOString()
-          }
-        }
-      ];
+      // Obter empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
 
-      setDevolucoes(mockDevolucoes);
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar devoluções reais da empresa
+      // TODO: Implementar quando a tabela devolucoes for criada
+      // Por enquanto, retorna array vazio
+      const { data: devolucoesData, error } = await supabase
+        .from('devolucoes')
+        .select(`
+          *,
+          cliente:clientes(nome, telefone),
+          pedido:pdv(numero_venda, created_at)
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar devoluções:', error);
+        // Se a tabela não existir ainda, usar array vazio
+        setDevolucoes([]);
+        return;
+      }
+
+      setDevolucoes(devolucoesData || []);
     } catch (error) {
       console.error('Erro ao carregar devoluções:', error);
     } finally {
@@ -171,7 +149,14 @@ const DevolucoesPage: React.FC = () => {
   };
 
   const handleNovaDevolucao = () => {
-    navigate('/dashboard/devolucoes/nova');
+    setShowNovaDevolucaoModal(true);
+  };
+
+  const handleConfirmDevolucao = (vendaId: string, vendaData: any) => {
+    console.log('Venda selecionada para devolução:', { vendaId, vendaData });
+    // TODO: Implementar criação da devolução
+    // Por enquanto, apenas fecha o modal
+    setShowNovaDevolucaoModal(false);
   };
 
   const formatCurrency = (value: number) => {
@@ -408,6 +393,13 @@ const DevolucoesPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Modal Nova Devolução */}
+      <NovaDevolucaoModal
+        isOpen={showNovaDevolucaoModal}
+        onClose={() => setShowNovaDevolucaoModal(false)}
+        onConfirm={handleConfirmDevolucao}
+      />
     </div>
   );
 };
