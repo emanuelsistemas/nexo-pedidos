@@ -21,6 +21,7 @@ import EntregadorPage from './pages/dashboard/EntregadorPage';
 import TaxaEntregaPage from './pages/dashboard/TaxaEntregaPage';
 import ConfiguracoesPage from './pages/dashboard/ConfiguracoesPage';
 import PDVPage from './pages/dashboard/PDVPage';
+import DevolucoesPage from './pages/dashboard/DevolucoesPage';
 import EstoqueMinimoPage from './pages/dashboard/EstoqueMinimoPage';
 import NfePage from './pages/dashboard/NfePage';
 import InutilizacaoPage from './pages/dashboard/InutilizacaoPage';
@@ -72,6 +73,7 @@ function App() {
           <Route path="pedidos/editar/:id" element={<UserNovoPedidoPage />} />
           <Route path="faturamento" element={<FaturamentoPage />} />
           <Route path="pdv" element={<PDVPage />} />
+          <Route path="devolucoes" element={<DevolucoesPage />} />
           <Route path="editar-pedido/:id" element={<EditarPedidoPage />} />
           <Route path="gestor" element={<GestorPage />} />
           <Route path="conexao" element={<ConexaoPage />} />

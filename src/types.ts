@@ -199,3 +199,47 @@ export interface PDVConfig {
   created_at?: string;
   updated_at?: string;
 }
+
+// Interfaces para Devolução
+export interface DevolucaoItem {
+  id?: string;
+  devolucao_id?: string;
+  produto_id: string;
+  produto_nome: string;
+  quantidade: number;
+  preco_unitario: number;
+  preco_total: number;
+  motivo?: string;
+  produto?: Produto;
+}
+
+export interface Devolucao {
+  id: string;
+  numero: string;
+  pedido_id?: string;
+  pedido_numero?: string;
+  cliente_id?: string;
+  cliente_nome?: string;
+  usuario_id: string;
+  empresa_id: string;
+  valor_total: number;
+  motivo_geral?: string;
+  status: 'pendente' | 'processada' | 'cancelada';
+  tipo_devolucao: 'total' | 'parcial';
+  forma_reembolso: 'dinheiro' | 'credito' | 'troca' | 'estorno_cartao';
+  observacoes?: string;
+  processada_em?: string;
+  processada_por_usuario_id?: string;
+  created_at: string;
+  updated_at?: string;
+  itens?: DevolucaoItem[];
+  cliente?: {
+    nome: string;
+    telefone?: string;
+    email?: string;
+  };
+  pedido?: {
+    numero: string;
+    data_pedido: string;
+  };
+}
