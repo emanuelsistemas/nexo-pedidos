@@ -3598,12 +3598,12 @@ const PDVPage: React.FC = () => {
           id,
           nome_produto,
           quantidade,
-          preco_unitario,
-          subtotal,
+          valor_unitario,
+          valor_subtotal,
           unidade,
-          observacao
+          observacao_item
         `)
-        .eq('venda_id', vendaId)
+        .eq('pdv_id', vendaId)
         .order('nome_produto');
 
       if (error) {
@@ -21480,14 +21480,14 @@ const PDVPage: React.FC = () => {
                                             <div className="flex-1">
                                               <div className="text-sm font-medium text-white">{item.nome_produto}</div>
                                               <div className="text-xs text-gray-400">
-                                                {item.quantidade} {item.unidade} × R$ {item.preco_unitario.toFixed(2).replace('.', ',')}
+                                                {item.quantidade} {item.unidade} × R$ {item.valor_unitario.toFixed(2).replace('.', ',')}
                                               </div>
-                                              {item.observacao && (
-                                                <div className="text-xs text-gray-500 mt-1">{item.observacao}</div>
+                                              {item.observacao_item && (
+                                                <div className="text-xs text-gray-500 mt-1">{item.observacao_item}</div>
                                               )}
                                             </div>
                                             <div className="text-sm font-semibold text-yellow-400">
-                                              R$ {item.subtotal.toFixed(2).replace('.', ',')}
+                                              R$ {item.valor_subtotal.toFixed(2).replace('.', ',')}
                                             </div>
                                           </div>
                                         ))}
