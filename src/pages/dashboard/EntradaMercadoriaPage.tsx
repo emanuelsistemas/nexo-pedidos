@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, Search, Filter, ArrowLeft, Save, Trash2, X, MoreVertical, Package, Calendar, FileText } from 'lucide-react';
+import { Plus, Edit, Eye, Search, Filter, ArrowLeft, Save, Trash2, X, MoreVertical, Package, Calendar, FileText, Upload, FileInput } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/comum/Button';
+import FornecedorDropdown from '../../components/comum/FornecedorDropdown';
+import NovoFornecedorModal from '../../components/comum/NovoFornecedorModal';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -21,7 +23,7 @@ interface EntradaMercadoria {
 const EntradaMercadoriaPage: React.FC = () => {
   const [entradas, setEntradas] = useState<EntradaMercadoria[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
@@ -133,7 +135,7 @@ const EntradaMercadoriaPage: React.FC = () => {
 
   // Função para nova entrada
   const handleNovaEntrada = () => {
-    setShowForm(true);
+    setShowModal(true);
   };
 
   // Função para limpar filtros
@@ -150,9 +152,7 @@ const EntradaMercadoriaPage: React.FC = () => {
     setDataFimFilter(hoje.toISOString().slice(0, 16));
   };
 
-  if (showForm) {
-    return <EntradaMercadoriaForm onBack={() => setShowForm(false)} onSave={loadEntradas} />;
-  }
+
 
   return (
     <div className="p-6 space-y-6">
@@ -275,12 +275,6 @@ const EntradaMercadoriaPage: React.FC = () => {
           <p className="text-gray-400 mb-4">
             {searchTerm || statusFilter !== 'todos' ? 'Tente ajustar os filtros de pesquisa' : 'Comece criando sua primeira entrada de mercadoria'}
           </p>
-          {!searchTerm && statusFilter === 'todos' && (
-            <Button variant="primary" onClick={handleNovaEntrada}>
-              <Plus size={20} className="mr-2" />
-              Nova Entrada
-            </Button>
-          )}
         </div>
       ) : (
         <div className="grid gap-4">
@@ -351,33 +345,402 @@ const EntradaMercadoriaPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Modal de Nova Entrada */}
+      <AnimatePresence>
+        {showModal && (
+          <EntradaMercadoriaModal
+            onClose={() => setShowModal(false)}
+            onSave={loadEntradas}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
-// Componente do formulário de entrada de mercadoria (placeholder)
-const EntradaMercadoriaForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack, onSave }) => {
+// Modal de Nova Entrada de Mercadoria com abas
+const EntradaMercadoriaModal: React.FC<{ onClose: () => void; onSave: () => void }> = ({ onClose, onSave }) => {
+  const [activeTab, setActiveTab] = useState<'manual' | 'xml'>('manual');
+
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={onBack}
-          className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="text-2xl font-bold text-white">Nova Entrada de Mercadoria</h1>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed top-0 left-0 right-0 bottom-0 bg-black/50 backdrop-blur-sm z-[9999]"
+      onClick={onClose}
+      style={{ margin: 0, padding: 0 }}
+    >
+      <motion.div
+        initial={{ scale: 0.98, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.98, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full h-full bg-background-card flex flex-col"
+        style={{ margin: 0, padding: 0, minHeight: '100vh', minWidth: '100vw' }}
+      >
+        {/* Header do Modal */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-700">
+          <h1 className="text-xl font-bold text-white">Nova Entrada de Mercadoria</h1>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Abas */}
+        <div className="flex border-b border-gray-700">
+          <button
+            onClick={() => setActiveTab('manual')}
+            className={`flex items-center gap-2 px-4 py-2.5 font-medium transition-colors border-b-2 ${
+              activeTab === 'manual'
+                ? 'text-primary-400 border-primary-500 bg-primary-500/10'
+                : 'text-gray-400 border-transparent hover:text-white hover:bg-gray-800/50'
+            }`}
+          >
+            <Package size={18} />
+            Entrada Manual
+          </button>
+          <button
+            onClick={() => setActiveTab('xml')}
+            className={`flex items-center gap-2 px-4 py-2.5 font-medium transition-colors border-b-2 ${
+              activeTab === 'xml'
+                ? 'text-primary-400 border-primary-500 bg-primary-500/10'
+                : 'text-gray-400 border-transparent hover:text-white hover:bg-gray-800/50'
+            }`}
+          >
+            <FileInput size={18} />
+            Entrada por XML
+          </button>
+        </div>
+
+        {/* Conteúdo das Abas */}
+        <div className="flex-1 overflow-hidden">
+          {activeTab === 'manual' && <EntradaManualTab onClose={onClose} onSave={onSave} />}
+          {activeTab === 'xml' && <EntradaXMLTab onClose={onClose} onSave={onSave} />}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// Aba de Entrada Manual
+const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = ({ onClose, onSave }) => {
+  // Estados do formulário
+  const [empresaId, setEmpresaId] = useState('');
+  const [fornecedorId, setFornecedorId] = useState('');
+  const [fornecedorNome, setFornecedorNome] = useState('');
+  const [fornecedorDocumento, setFornecedorDocumento] = useState('');
+  const [numeroDocumento, setNumeroDocumento] = useState('');
+  const [dataEntrada, setDataEntrada] = useState(() => {
+    const hoje = new Date();
+    return hoje.toISOString().slice(0, 10);
+  });
+  const [observacoes, setObservacoes] = useState('');
+  const [showNovoFornecedorModal, setShowNovoFornecedorModal] = useState(false);
+
+  // Carregar empresa do usuário
+  useEffect(() => {
+    const loadEmpresaId = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (usuarioData?.empresa_id) {
+          setEmpresaId(usuarioData.empresa_id);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar empresa:', error);
+      }
+    };
+
+    loadEmpresaId();
+  }, []);
+
+  const handleFornecedorChange = (
+    id: string,
+    nome: string,
+    documento?: string,
+    dadosCompletos?: any
+  ) => {
+    setFornecedorId(id);
+    setFornecedorNome(nome);
+    setFornecedorDocumento(documento || '');
+  };
+
+  const handleNovoFornecedor = () => {
+    setShowNovoFornecedorModal(true);
+  };
+
+  const handleFornecedorCreated = (fornecedorId: string, fornecedorNome: string, fornecedorDocumento?: string) => {
+    setFornecedorId(fornecedorId);
+    setFornecedorNome(fornecedorNome);
+    setFornecedorDocumento(fornecedorDocumento || '');
+    setShowNovoFornecedorModal(false);
+  };
+
+  return (
+    <div className="h-full overflow-y-auto p-4">
+      <div className="max-w-4xl mx-auto space-y-4">
+        {/* Dados do Fornecedor */}
+        <div className="bg-gray-800/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <Package size={18} />
+            Dados do Fornecedor
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Nome/Razão Social *
+              </label>
+              <FornecedorDropdown
+                value={fornecedorId}
+                onChange={handleFornecedorChange}
+                empresaId={empresaId}
+                placeholder="Selecione um fornecedor"
+                required
+                onNovoFornecedor={handleNovoFornecedor}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                CNPJ/CPF
+              </label>
+              <input
+                type="text"
+                value={fornecedorDocumento}
+                readOnly
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 cursor-not-allowed"
+                placeholder="Será preenchido automaticamente"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Número do Documento *
+              </label>
+              <input
+                type="text"
+                value={numeroDocumento}
+                onChange={(e) => setNumeroDocumento(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Número da nota fiscal"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Data de Entrada *
+              </label>
+              <input
+                type="date"
+                value={dataEntrada}
+                onChange={(e) => setDataEntrada(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Produtos */}
+        <div className="bg-gray-800/50 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Package size={18} />
+              Produtos
+            </h3>
+            <Button variant="primary" size="sm">
+              <Plus size={16} className="mr-2" />
+              Adicionar Produto
+            </Button>
+          </div>
+
+          <div className="text-center py-8 text-gray-400">
+            <Package className="mx-auto h-12 w-12 mb-2" />
+            <p>Nenhum produto adicionado</p>
+            <p className="text-sm">Clique em "Adicionar Produto" para começar</p>
+          </div>
+        </div>
+
+        {/* Observações */}
+        <div className="bg-gray-800/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-white mb-3">Observações</h3>
+          <textarea
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            rows={4}
+            placeholder="Observações sobre a entrada de mercadoria..."
+          />
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-700">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="outline">
+            <Save size={16} className="mr-2" />
+            Salvar Rascunho
+          </Button>
+          <Button variant="primary">
+            <Package size={16} className="mr-2" />
+            Processar Entrada
+          </Button>
+        </div>
       </div>
-      
-      <div className="bg-background-card border border-gray-700 rounded-lg p-6">
-        <div className="text-center py-12">
-          <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-300 mb-2">Formulário em Desenvolvimento</h3>
-          <p className="text-gray-400 mb-4">
-            O formulário de entrada de mercadoria será implementado em breve.
-          </p>
-          <Button variant="secondary" onClick={onBack}>
-            Voltar
+
+      {/* Modal de Novo Fornecedor */}
+      <NovoFornecedorModal
+        isOpen={showNovoFornecedorModal}
+        onClose={() => setShowNovoFornecedorModal(false)}
+        empresaId={empresaId}
+        onFornecedorCreated={handleFornecedorCreated}
+      />
+    </div>
+  );
+};
+
+// Aba de Entrada por XML
+const EntradaXMLTab: React.FC<{ onClose: () => void; onSave: () => void }> = ({ onClose, onSave }) => {
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      // Mostrar mensagem de funcionalidade em desenvolvimento
+      showMessage('info', 'Funcionalidade em desenvolvimento! Utilize a "Entrada Manual" por enquanto.');
+    }
+  };
+
+  const handleFileSelect = () => {
+    // Mostrar mensagem de funcionalidade em desenvolvimento
+    showMessage('info', 'Funcionalidade em desenvolvimento! Utilize a "Entrada Manual" por enquanto.');
+  };
+
+  const handleProcessXML = () => {
+    // Mostrar mensagem de funcionalidade em desenvolvimento
+    showMessage('info', 'Funcionalidade em desenvolvimento! Utilize a "Entrada Manual" por enquanto.');
+  };
+
+  return (
+    <div className="h-full overflow-y-auto p-4">
+      <div className="max-w-4xl mx-auto space-y-4">
+        {/* Upload de XML */}
+        <div className="bg-gray-800/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <FileInput size={18} />
+            Upload do XML da Nota Fiscal
+          </h3>
+
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+              dragActive
+                ? 'border-primary-500 bg-primary-500/10'
+                : 'border-gray-600 hover:border-gray-500'
+            }`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h4 className="text-lg font-medium text-white mb-2">
+              Arraste o arquivo XML aqui
+            </h4>
+            <p className="text-gray-400 mb-4">
+              ou clique para selecionar o arquivo
+            </p>
+            <Button variant="outline" onClick={handleFileSelect}>
+              <FileInput size={16} className="mr-2" />
+              Selecionar Arquivo XML
+            </Button>
+
+            <div className="mt-4 text-sm text-gray-500">
+              <p>Formatos aceitos: .xml</p>
+              <p>Tamanho máximo: 10MB</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Informações do XML */}
+        <div className="bg-gray-800/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-white mb-3">Informações do XML</h3>
+
+          <div className="text-center py-8 text-gray-400">
+            <FileText className="mx-auto h-12 w-12 mb-2" />
+            <p>Nenhum arquivo XML carregado</p>
+            <p className="text-sm">Faça upload do XML para visualizar as informações</p>
+          </div>
+        </div>
+
+        {/* Configurações de Importação */}
+        <div className="bg-gray-800/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-white mb-3">Configurações de Importação</h3>
+
+          <div className="space-y-4">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                className="w-4 h-4 text-primary-600 bg-gray-800 border-gray-600 rounded focus:ring-primary-500"
+                defaultChecked
+              />
+              <span className="text-gray-300">Atualizar estoque automaticamente</span>
+            </label>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                className="w-4 h-4 text-primary-600 bg-gray-800 border-gray-600 rounded focus:ring-primary-500"
+                defaultChecked
+              />
+              <span className="text-gray-300">Criar produtos não cadastrados</span>
+            </label>
+
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                className="w-4 h-4 text-primary-600 bg-gray-800 border-gray-600 rounded focus:ring-primary-500"
+              />
+              <span className="text-gray-300">Validar CNPJ do fornecedor</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-700">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={handleProcessXML}>
+            <Upload size={16} className="mr-2" />
+            Processar XML
           </Button>
         </div>
       </div>

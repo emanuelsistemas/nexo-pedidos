@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter } from 'lucide-react';
+import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
+import NovoClienteModal from './NovoClienteModal';
+
+// Função para formatar moeda
+const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value);
+};
+
+interface ItemVenda {
+  id: string;
+  pdv_id: string;
+  produto_id: string;
+  nome_produto: string;
+  quantidade: number;
+  valor_unitario: number;
+  valor_total_item: number;
+  observacao_item?: string;
+}
 
 interface Venda {
   id: string;
@@ -15,6 +35,7 @@ interface Venda {
   status_fiscal?: string;
   modelo_documento?: number;
   itens_count?: number;
+  itens?: ItemVenda[];
 }
 
 interface NovaDevolucaoModalProps {
@@ -44,6 +65,13 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Estados de expansão e seleção
+  const [expandedVendas, setExpandedVendas] = useState<Set<string>>(new Set());
+  const [selectedItens, setSelectedItens] = useState<Set<string>>(new Set());
+  const [selectedVendas, setSelectedVendas] = useState<Set<string>>(new Set());
+  const [loadingItens, setLoadingItens] = useState<Set<string>>(new Set());
+  const [showFinalizarModal, setShowFinalizarModal] = useState(false);
 
   // Carregar empresa do usuário e vendas
   useEffect(() => {
@@ -171,9 +199,182 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
     }
   };
 
+  const loadItensVenda = async (vendaId: string) => {
+    try {
+      setLoadingItens(prev => new Set([...prev, vendaId]));
+
+      const { data: itensData, error } = await supabase
+        .from('pdv_itens')
+        .select(`
+          id,
+          pdv_id,
+          produto_id,
+          nome_produto,
+          quantidade,
+          valor_unitario,
+          valor_total_item,
+          observacao_item
+        `)
+        .eq('pdv_id', vendaId)
+        .order('nome_produto');
+
+      if (error) throw error;
+
+      // Atualizar a venda com os itens carregados
+      setVendas(prev => prev.map(venda =>
+        venda.id === vendaId
+          ? { ...venda, itens: itensData || [] }
+          : venda
+      ));
+
+      setFilteredVendas(prev => prev.map(venda =>
+        venda.id === vendaId
+          ? { ...venda, itens: itensData || [] }
+          : venda
+      ));
+
+    } catch (error) {
+      console.error('Erro ao carregar itens da venda:', error);
+    } finally {
+      setLoadingItens(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(vendaId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleExpandVenda = async (vendaId: string) => {
+    const isExpanded = expandedVendas.has(vendaId);
+
+    if (isExpanded) {
+      // Recolher
+      setExpandedVendas(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(vendaId);
+        return newSet;
+      });
+    } else {
+      // Expandir e carregar itens se necessário
+      setExpandedVendas(prev => new Set([...prev, vendaId]));
+
+      const venda = vendas.find(v => v.id === vendaId);
+      if (venda && !venda.itens) {
+        await loadItensVenda(vendaId);
+      }
+    }
+  };
+
   const handleVendaSelect = (venda: Venda) => {
+    // Coletar todos os itens selecionados
+    const itensSelecionados = Array.from(selectedItens);
+    const vendasSelecionadas = Array.from(selectedVendas);
+
+    console.log('Itens selecionados:', itensSelecionados);
+    console.log('Vendas completas selecionadas:', vendasSelecionadas);
+
     onConfirm(venda.id, venda);
     handleClose();
+  };
+
+  const handleSelectVendaCompleta = async (vendaId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedVendas(prev => new Set([...prev, vendaId]));
+
+      // Carregar itens se ainda não foram carregados
+      const venda = vendas.find(v => v.id === vendaId);
+      if (venda && !venda.itens) {
+        await loadItensVenda(vendaId);
+      }
+
+      // Remover itens individuais desta venda se estavam selecionados
+      if (venda?.itens) {
+        setSelectedItens(prev => {
+          const newSet = new Set(prev);
+          venda.itens!.forEach(item => newSet.delete(item.id));
+          return newSet;
+        });
+      }
+    } else {
+      setSelectedVendas(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(vendaId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleSelectItem = (itemId: string, vendaId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedItens(prev => new Set([...prev, itemId]));
+      // Remover venda completa se estava selecionada
+      setSelectedVendas(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(vendaId);
+        return newSet;
+      });
+    } else {
+      setSelectedItens(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
+    }
+  };
+
+  const getValorTotalSelecionado = () => {
+    let total = 0;
+
+    // Somar vendas completas selecionadas
+    selectedVendas.forEach(vendaId => {
+      const venda = vendas.find(v => v.id === vendaId);
+      if (venda) {
+        total += venda.valor_total;
+      }
+    });
+
+    // Somar itens individuais selecionados
+    selectedItens.forEach(itemId => {
+      vendas.forEach(venda => {
+        const item = venda.itens?.find(i => i.id === itemId);
+        if (item) {
+          total += item.valor_total_item;
+        }
+      });
+    });
+
+    return total;
+  };
+
+  const getQuantidadeItensSelecionados = () => {
+    let count = 0;
+
+    // Contar itens de vendas completas
+    selectedVendas.forEach(vendaId => {
+      const venda = vendas.find(v => v.id === vendaId);
+      if (venda) {
+        // Se a venda tem itens carregados, contar os itens reais
+        if (venda.itens && venda.itens.length > 0) {
+          count += venda.itens.length;
+        } else {
+          // Caso contrário, usar o contador de itens
+          count += venda.itens_count || 0;
+        }
+      }
+    });
+
+    // Contar itens individuais (apenas os que não fazem parte de vendas completas selecionadas)
+    selectedItens.forEach(itemId => {
+      // Verificar se este item não faz parte de uma venda completa selecionada
+      const itemVenda = vendas.find(venda =>
+        venda.itens?.some(item => item.id === itemId)
+      );
+      if (itemVenda && !selectedVendas.has(itemVenda.id)) {
+        count += 1;
+      }
+    });
+
+    return count;
   };
 
   const handleClose = () => {
@@ -186,15 +387,14 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
     setDataInicio('');
     setDataFim('');
     setShowFilters(false);
+    setExpandedVendas(new Set());
+    setSelectedItens(new Set());
+    setSelectedVendas(new Set());
+    setLoadingItens(new Set());
     onClose();
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -226,27 +426,37 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
+    <div className="fixed top-0 left-0 right-0 bottom-0 z-[9999] bg-background-card" style={{ margin: 0, padding: 0 }}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full h-full max-w-6xl bg-background-card rounded-lg border border-gray-800 flex flex-col shadow-2xl"
-        style={{ maxHeight: 'calc(100vh - 2rem)' }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="w-full h-full bg-background-card flex flex-col"
+        style={{ margin: 0, padding: 0, minHeight: '100vh', minWidth: '100vw' }}
       >
         {/* Cabeçalho */}
-        <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between bg-background-card">
+        <div className="flex-shrink-0 px-6 py-3 border-b border-gray-800 flex items-center justify-between bg-gray-900/50">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold text-white">
               Nova Devolução - Selecionar Venda
             </h2>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-3">
+            {(selectedItens.size > 0 || selectedVendas.size > 0) && (
+              <button
+                onClick={() => setShowFinalizarModal(true)}
+                className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors font-medium"
+              >
+                Finalizar Devolução
+              </button>
+            )}
+            <button
+              onClick={handleClose}
+              className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Conteúdo */}
@@ -255,46 +465,46 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
           <div className="flex flex-col h-full">
 
             {/* Filtros de busca */}
-            <div className="flex-shrink-0 p-4 border-b border-gray-800 space-y-3">
-              {/* Filtro de Cliente (opcional) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Filtrar por Cliente (opcional)
-                </label>
-                <ClienteDropdown
-                  value={clienteId}
-                  onChange={handleClienteSelect}
-                  empresaId={empresaId}
-                  placeholder="Todos os clientes"
-                  required={false}
-                />
-              </div>
-
-              {/* Barra de busca */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Buscar por número da venda ou nome do cliente..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-3 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                />
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
-
-                {/* Botão de filtros */}
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-gray-400 hover:text-white rounded-lg transition-colors"
-                  >
-                    <Filter size={16} />
-                    <span className="text-sm">Filtros</span>
-                  </button>
-                  <span className="text-sm text-gray-400">
-                    {filteredVendas.length} venda(s) encontrada(s)
-                  </span>
+            <div className="flex-shrink-0 px-6 py-4 border-b border-gray-800 space-y-3">
+              {/* Linha única com Cliente, Busca e Filtros */}
+              <div className="flex gap-4 items-center">
+                {/* Filtro de Cliente (opcional) */}
+                <div className="w-80">
+                  <ClienteDropdown
+                    value={clienteId}
+                    onChange={handleClienteSelect}
+                    empresaId={empresaId}
+                    placeholder="Todos os clientes"
+                    required={false}
+                  />
                 </div>
+
+                {/* Barra de busca */}
+                <div className="relative flex-1 max-w-2xl">
+                  <input
+                    type="text"
+                    placeholder="Buscar por número da venda ou nome do cliente..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  />
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+
+                {/* Botão de filtros (apenas ícone) */}
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="p-2.5 bg-gray-800 text-gray-400 hover:text-white rounded-lg transition-colors"
+                  title="Filtros Avançados"
+                >
+                  <Filter size={18} />
+                </button>
+
+                {/* Contador de vendas */}
+                <span className="text-gray-400 font-medium whitespace-nowrap">
+                  {filteredVendas.length} venda(s)
+                </span>
+              </div>
 
                 {/* Filtros expandidos */}
                 <AnimatePresence>
@@ -368,54 +578,423 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {filteredVendas.map((venda) => (
-                      <motion.div
-                        key={venda.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-3 bg-gray-800/30 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer"
-                        onClick={() => handleVendaSelect(venda)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-white font-medium">
-                                #{venda.numero_venda || 'S/N'}
-                              </span>
-                              <span className={`text-xs px-1.5 py-0.5 rounded-full border ${getStatusColor(venda.status_venda)}`}>
-                                {venda.status_venda}
-                              </span>
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
-                                {getTipoVenda(venda.modelo_documento)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-gray-400">
-                              <div className="flex items-center gap-1">
-                                <Clock size={12} />
-                                {formatDate(venda.created_at)}
+                  <div className="space-y-4">
+                    {filteredVendas.map((venda) => {
+                      const isExpanded = expandedVendas.has(venda.id);
+                      const isVendaSelected = selectedVendas.has(venda.id);
+                      const isLoadingItens = loadingItens.has(venda.id);
+
+                      return (
+                        <motion.div
+                          key={venda.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-gray-800/30 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors"
+                        >
+                          {/* Cabeçalho da Venda */}
+                          <div className="p-4">
+                            <div className="flex items-center gap-3">
+                              {/* Checkbox para selecionar venda completa */}
+                              <div className="flex-shrink-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isVendaSelected}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectVendaCompleta(venda.id, e.target.checked);
+                                  }}
+                                  className="w-4 h-4 text-primary-500 bg-gray-700 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                                />
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Package size={12} />
-                                {venda.itens_count} item(s)
+
+                              {/* Informações da venda */}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-white font-medium">
+                                    #{venda.numero_venda || 'S/N'}
+                                  </span>
+                                  <span className={`text-xs px-1.5 py-0.5 rounded-full border ${getStatusColor(venda.status_venda)}`}>
+                                    {venda.status_venda}
+                                  </span>
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
+                                    {getTipoVenda(venda.modelo_documento)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-gray-400">
+                                  <div className="flex items-center gap-1">
+                                    <Clock size={12} />
+                                    {formatDate(venda.created_at)}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Package size={12} />
+                                    {venda.itens_count} item(s)
+                                  </div>
+                                  {venda.nome_cliente && (
+                                    <div className="flex items-center gap-1">
+                                      <User size={12} />
+                                      {venda.nome_cliente}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Valor e botão expandir */}
+                              <div className="flex items-center gap-2">
+                                <div className="text-right">
+                                  <div className="flex items-center gap-1 text-white font-medium">
+                                    <DollarSign size={14} className="text-green-400" />
+                                    {formatCurrency(venda.valor_total)}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExpandVenda(venda.id);
+                                  }}
+                                  className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                                >
+                                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </button>
                               </div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="flex items-center gap-1 text-white font-medium">
-                              <DollarSign size={14} className="text-green-400" />
-                              {formatCurrency(venda.valor_total)}
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
+
+                          {/* Lista de Itens (quando expandido) */}
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="border-t border-gray-700 p-3 bg-gray-800/20">
+                                  {isLoadingItens ? (
+                                    <div className="text-center py-4">
+                                      <div className="w-6 h-6 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto mb-2"></div>
+                                      <p className="text-sm text-gray-400">Carregando itens...</p>
+                                    </div>
+                                  ) : venda.itens && venda.itens.length > 0 ? (
+                                    <div className="space-y-2">
+                                      <h4 className="text-sm font-medium text-gray-300 mb-2">
+                                        Itens da Venda:
+                                      </h4>
+                                      {venda.itens.map((item) => {
+                                        const isVendaCompleteSelected = selectedVendas.has(venda.id);
+                                        const isItemSelected = selectedItens.has(item.id);
+                                        const isChecked = isVendaCompleteSelected || isItemSelected;
+                                        return (
+                                          <div
+                                            key={item.id}
+                                            className="flex items-center gap-3 p-2 bg-gray-700/30 rounded border border-gray-600"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isChecked}
+                                              disabled={isVendaCompleteSelected}
+                                              onChange={(e) => {
+                                                e.stopPropagation();
+                                                if (!isVendaCompleteSelected) {
+                                                  handleSelectItem(item.id, venda.id, e.target.checked);
+                                                }
+                                              }}
+                                              className={`w-4 h-4 text-primary-500 bg-gray-700 border-gray-600 rounded focus:ring-primary-500 focus:ring-2 ${
+                                                isVendaCompleteSelected ? 'opacity-75 cursor-not-allowed' : ''
+                                              }`}
+                                            />
+                                            <div className="flex-1">
+                                              <div className="flex items-center justify-between">
+                                                <span className="text-white text-sm font-medium">
+                                                  {item.nome_produto}
+                                                </span>
+                                                <span className="text-white font-medium">
+                                                  {formatCurrency(item.valor_total_item)}
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center gap-4 text-xs text-gray-400">
+                                                <span>Qtd: {item.quantidade}</span>
+                                                <span>Unit: {formatCurrency(item.valor_unitario)}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-gray-400 text-center py-2">
+                                      Nenhum item encontrado
+                                    </p>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
+
+        {/* Controlador de Valor - Rodapé */}
+        {(selectedItens.size > 0 || selectedVendas.size > 0) && (
+          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-800 bg-gray-900/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Package size={16} className="text-gray-400" />
+                  <span className="text-sm text-gray-400">
+                    {getQuantidadeItensSelecionados()} item(s) selecionado(s)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <DollarSign size={16} className="text-green-400" />
+                  <span className="text-lg font-semibold text-white">
+                    {formatCurrency(getValorTotalSelecionado())}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedItens(new Set());
+                    setSelectedVendas(new Set());
+                  }}
+                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  Limpar Seleção
+                </button>
+                <button
+                  onClick={() => {
+                    // Confirmar devolução com itens selecionados
+                    const dadosDevolucao = {
+                      vendasCompletas: Array.from(selectedVendas),
+                      itensIndividuais: Array.from(selectedItens),
+                      valorTotal: getValorTotalSelecionado(),
+                      quantidadeItens: getQuantidadeItensSelecionados()
+                    };
+                    onConfirm('', dadosDevolucao);
+                    handleClose();
+                  }}
+                  className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors font-medium"
+                >
+                  Confirmar Devolução
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </div>
       </motion.div>
+
+      {/* Modal de Finalização da Devolução */}
+      {showFinalizarModal && (
+        <FinalizarDevolucaoModal
+          isOpen={showFinalizarModal}
+          onClose={() => setShowFinalizarModal(false)}
+          selectedItens={selectedItens}
+          selectedVendas={selectedVendas}
+          vendas={vendas}
+          empresaId={empresaId}
+          valorTotal={getValorTotalSelecionado()}
+          onConfirm={(dadosDevolucao) => {
+            // Aqui você pode processar a devolução final
+            console.log('Devolução finalizada:', dadosDevolucao);
+            setShowFinalizarModal(false);
+            handleClose();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Interfaces para o modal de finalização
+interface FinalizarDevolucaoModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedItens: Set<string>;
+  selectedVendas: Set<string>;
+  vendas: Venda[];
+  empresaId: string;
+  valorTotal: number;
+  onConfirm: (dadosDevolucao: any) => void;
+}
+
+// Componente do Modal de Finalização
+const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
+  isOpen,
+  onClose,
+  selectedItens,
+  selectedVendas,
+  vendas,
+  empresaId,
+  valorTotal,
+  onConfirm
+}) => {
+  const [clienteId, setClienteId] = useState('');
+  const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
+
+  // Função para obter todos os itens selecionados
+  const getItensSelecionados = () => {
+    const itens: ItemVenda[] = [];
+
+    // Itens de vendas completas
+    selectedVendas.forEach(vendaId => {
+      const venda = vendas.find(v => v.id === vendaId);
+      if (venda?.itens) {
+        itens.push(...venda.itens);
+      }
+    });
+
+    // Itens individuais
+    selectedItens.forEach(itemId => {
+      const item = vendas
+        .flatMap(v => v.itens || [])
+        .find(i => i.id === itemId);
+      if (item) {
+        // Verificar se não faz parte de uma venda completa selecionada
+        const itemVenda = vendas.find(venda =>
+          venda.itens?.some(i => i.id === itemId)
+        );
+        if (itemVenda && !selectedVendas.has(itemVenda.id)) {
+          itens.push(item);
+        }
+      }
+    });
+
+    return itens;
+  };
+
+  const itensSelecionados = getItensSelecionados();
+
+  const handleConfirm = () => {
+    const dadosDevolucao = {
+      clienteId,
+      itens: itensSelecionados,
+      valorTotal,
+      vendasCompletas: Array.from(selectedVendas),
+      itensIndividuais: Array.from(selectedItens)
+    };
+    onConfirm(dadosDevolucao);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-2xl bg-background-card rounded-lg border border-gray-800 flex flex-col shadow-2xl max-h-[90vh]"
+      >
+        {/* Cabeçalho */}
+        <div className="flex-shrink-0 px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-white">
+            Finalizar Devolução
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Conteúdo */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Seleção de Cliente */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-3">
+              Cliente para a Devolução
+            </label>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <ClienteDropdown
+                  value={clienteId}
+                  onChange={setClienteId}
+                  empresaId={empresaId}
+                  placeholder="Selecione o cliente"
+                  required={true}
+                />
+              </div>
+              <button
+                onClick={() => setShowNovoClienteModal(true)}
+                className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors whitespace-nowrap"
+              >
+                Novo Cliente
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de Itens Selecionados */}
+          <div>
+            <h3 className="text-lg font-medium text-white mb-4">
+              Itens para Devolução ({itensSelecionados.length})
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {itensSelecionados.map((item, index) => (
+                <div
+                  key={`${item.id}-${index}`}
+                  className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700"
+                >
+                  <div className="flex-1">
+                    <div className="text-white font-medium">{item.nome_produto}</div>
+                    <div className="text-gray-400 text-sm">
+                      Qtd: {item.quantidade} | Unit: {formatCurrency(item.valor_unitario)}
+                    </div>
+                  </div>
+                  <div className="text-white font-semibold">
+                    {formatCurrency(item.valor_total_item)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Valor Total */}
+          <div className="border-t border-gray-700 pt-4">
+            <div className="flex items-center justify-between text-lg">
+              <span className="text-gray-400">Valor Total da Devolução:</span>
+              <span className="text-white font-bold text-xl">
+                {formatCurrency(valorTotal)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Rodapé */}
+        <div className="flex-shrink-0 px-6 py-4 border-t border-gray-800 flex items-center justify-between">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!clienteId}
+            className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+          >
+            Confirmar Devolução
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Modal de Novo Cliente */}
+      {showNovoClienteModal && (
+        <NovoClienteModal
+          isOpen={showNovoClienteModal}
+          onClose={() => setShowNovoClienteModal(false)}
+          empresaId={empresaId}
+          onClienteCreated={(novoClienteId) => {
+            setClienteId(novoClienteId);
+            setShowNovoClienteModal(false);
+          }}
+        />
+      )}
     </div>
   );
 };

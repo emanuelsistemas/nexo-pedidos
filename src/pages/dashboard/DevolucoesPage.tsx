@@ -77,25 +77,8 @@ const DevolucoesPage: React.FC = () => {
 
       // Buscar devoluções reais da empresa
       // TODO: Implementar quando a tabela devolucoes for criada
-      // Por enquanto, retorna array vazio
-      const { data: devolucoesData, error } = await supabase
-        .from('devolucoes')
-        .select(`
-          *,
-          cliente:clientes(nome, telefone),
-          pedido:pdv(numero_venda, created_at)
-        `)
-        .eq('empresa_id', usuarioData.empresa_id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao carregar devoluções:', error);
-        // Se a tabela não existir ainda, usar array vazio
-        setDevolucoes([]);
-        return;
-      }
-
-      setDevolucoes(devolucoesData || []);
+      // Por enquanto, retorna array vazio pois a tabela ainda não existe
+      setDevolucoes([]);
     } catch (error) {
       console.error('Erro ao carregar devoluções:', error);
     } finally {
