@@ -1479,8 +1479,6 @@ const PDVPage: React.FC = () => {
       }
 
       if (vendasOrfas && vendasOrfas.length > 0) {
-        console.log(`🔍 Encontradas ${vendasOrfas.length} vendas órfãs (status 'aberta')`);
-
         // Verificar se há venda sendo editada atualmente
         const temVendaEmAndamento = vendaEmAndamento !== null;
 
@@ -1498,8 +1496,6 @@ const PDVPage: React.FC = () => {
           if (updateError) {
             console.error('❌ Erro ao corrigir vendas órfãs:', updateError);
           } else {
-            console.log(`✅ ${vendasOrfas.length} vendas órfãs corrigidas (status voltou para 'salva')`);
-
             // Mostrar notificação discreta
             const numerosVendas = vendasOrfas.map(v => v.numero_venda).join(', ');
             toast.info(`🔄 ${vendasOrfas.length} venda(s) recuperada(s): ${numerosVendas}`);
@@ -1521,8 +1517,6 @@ const PDVPage: React.FC = () => {
 
             if (updateError) {
               console.error('❌ Erro ao corrigir vendas órfãs:', updateError);
-            } else {
-              console.log(`✅ ${vendasParaCorrigir.length} vendas órfãs corrigidas (excluindo venda em andamento)`);
             }
           }
         }
@@ -9645,8 +9639,6 @@ const PDVPage: React.FC = () => {
 
         // Adicionar ao carrinho
         setCarrinho(prev => [...prev, itemTaxaEntrega]);
-
-        console.log('✅ Taxa de entrega adicionada ao carrinho:', valorTaxa, descricaoTaxa);
       }
     } catch (error) {
       console.error('❌ Erro ao adicionar taxa de entrega ao carrinho:', error);
@@ -12261,15 +12253,18 @@ const PDVPage: React.FC = () => {
         const numeroParcelas = parcelasFormaPagamento[formaPagamentoSelecionada] || 1;
         const valorParcela = numeroParcelas > 1 ? valorTotal / numeroParcelas : null;
 
+        // ✅ CORREÇÃO: Tratar fiado de forma especial (não salvar ID customizado)
+        const isFiadoSelecionado = formaSelecionada?.nome?.toLowerCase() === 'fiado';
+
         pagamentoData = {
           tipo_pagamento: 'vista',
-          forma_pagamento_id: formaPagamentoSelecionada,
+          forma_pagamento_id: isFiadoSelecionado ? null : formaPagamentoSelecionada, // ✅ NULL para fiado
           valor_pago: valorTotal,
           valor_troco: 0,
           parcelas: numeroParcelas,
           // ✅ NOVO: Estrutura expandida para formas_pagamento
           formas_pagamento: [{
-            forma_id: formaPagamentoSelecionada,
+            forma_id: isFiadoSelecionado ? null : formaPagamentoSelecionada, // ✅ NULL para fiado
             forma_nome: formaSelecionada?.nome || 'Forma de Pagamento',
             valor: valorTotal,
             tipo: formaSelecionada?.nome?.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico',
@@ -12283,8 +12278,11 @@ const PDVPage: React.FC = () => {
         // ✅ NOVO: Expandir dados dos pagamentos parciais com informações de parcelamento
         const formasExpandidas = pagamentosParciais.map(pagamento => {
           const forma = formasPagamento.find(f => f.id === pagamento.forma);
+          // ✅ CORREÇÃO: Tratar fiado de forma especial nos pagamentos parciais
+          const isFiadoParcial = forma?.nome?.toLowerCase() === 'fiado';
+
           return {
-            forma_id: pagamento.forma,
+            forma_id: isFiadoParcial ? null : pagamento.forma, // ✅ NULL para fiado
             forma_nome: forma?.nome || 'Forma de Pagamento',
             valor: pagamento.valor,
             tipo: pagamento.tipo,
@@ -12301,7 +12299,36 @@ const PDVPage: React.FC = () => {
         };
       }
 
+      // ✅ NOVO: CONTROLE DE FIADO - Detectar se a venda é fiado
+      setEtapaProcessamento('Verificando se é venda fiado...');
+      let isVendaFiado = false;
+      let valorFiado = 0;
 
+      if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
+        const formaSelecionada = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+        if (formaSelecionada?.nome?.toLowerCase() === 'fiado') {
+          isVendaFiado = true;
+          valorFiado = valorTotal;
+        }
+      } else if (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) {
+        // Verificar se algum pagamento parcial é fiado
+        for (const pagamento of pagamentosParciais) {
+          const forma = formasPagamento.find(f => f.id === pagamento.forma);
+          if (forma?.nome?.toLowerCase() === 'fiado') {
+            isVendaFiado = true;
+            valorFiado += pagamento.valor;
+          }
+        }
+      }
+
+      // ✅ VALIDAÇÃO CRÍTICA: Se é fiado, deve ter cliente
+      if (isVendaFiado && !clienteData.cliente_id) {
+        setEtapaProcessamento('ERRO: Venda fiado sem cliente identificado!');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        setShowProcessandoVenda(false);
+        toast.error('ERRO: Vendas fiado devem ter um cliente identificado!');
+        return;
+      }
 
       // Buscar configuração de controle de estoque
       setEtapaProcessamento('Verificando configuração de estoque...');
@@ -12404,6 +12431,8 @@ const PDVPage: React.FC = () => {
         serie_documento: tipoFinalizacao.startsWith('nfce_') ? serieDocumentoReservado : null,
         // ✅ NOVO: Marcar como delivery local quando tipo de finalização for delivery
         delivery_local: tipoFinalizacao.startsWith('delivery_'),
+        // ✅ NOVO: CONTROLE DE FIADO - Marcar se a venda é fiado
+        fiado: isVendaFiado,
         ...clienteData,
         ...pagamentoData
       };
@@ -12481,7 +12510,45 @@ const PDVPage: React.FC = () => {
       const vendaId = vendaInserida.id;
       setVendaProcessadaId(vendaId);
 
+      // ✅ NOVO: CONTROLE DE FIADO - Atualizar saldo devedor do cliente
+      if (isVendaFiado && clienteData.cliente_id && valorFiado > 0) {
+        setEtapaProcessamento('Atualizando saldo devedor do cliente...');
 
+        try {
+          // Buscar saldo atual do cliente
+          const { data: clienteAtual, error: clienteError } = await supabase
+            .from('clientes')
+            .select('saldo_devedor')
+            .eq('id', clienteData.cliente_id)
+            .single();
+
+          if (clienteError) {
+            console.error('❌ Erro ao buscar saldo do cliente:', clienteError);
+          } else {
+            const saldoAtual = clienteAtual?.saldo_devedor || 0;
+            const novoSaldo = saldoAtual + valorFiado;
+
+            // Atualizar saldo devedor do cliente
+            const { error: updateSaldoError } = await supabase
+              .from('clientes')
+              .update({
+                saldo_devedor: novoSaldo,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', clienteData.cliente_id);
+
+            if (updateSaldoError) {
+              console.error('❌ Erro ao atualizar saldo devedor:', updateSaldoError);
+              // ✅ NÃO parar a venda por erro de saldo - apenas logar
+            } else {
+              console.log(`✅ Saldo devedor atualizado: ${clienteData.nome_cliente} - R$ ${novoSaldo.toFixed(2)}`);
+            }
+          }
+        } catch (saldoError) {
+          console.error('❌ Erro inesperado ao atualizar saldo devedor:', saldoError);
+          // ✅ NÃO parar a venda por erro de saldo - apenas logar
+        }
+      }
 
       // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
       let configVendaSemProduto = null;
