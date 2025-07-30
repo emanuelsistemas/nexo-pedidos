@@ -444,6 +444,14 @@ const PDVPage: React.FC = () => {
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
+  // ✅ NOVO: Estados para controle do modal de fiados
+  const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
+  const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
+  const [pesquisaClienteFiado, setPesquisaClienteFiado] = useState('');
+  const [dataInicioFiltro, setDataInicioFiltro] = useState('');
+  const [dataFimFiltro, setDataFimFiltro] = useState('');
+  const [totalSaldoDevedor, setTotalSaldoDevedor] = useState(0);
+
   const [showVendaSemProdutoModal, setShowVendaSemProdutoModal] = useState(false);
   const [valorVendaSemProduto, setValorVendaSemProduto] = useState('');
   const [descricaoVendaSemProduto, setDescricaoVendaSemProduto] = useState('');
@@ -2267,6 +2275,13 @@ const PDVPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [showMesasModal, showComandasModal, showVendasAbertasModal, showDeliveryModal]);
 
+  // ✅ NOVO: useEffect para carregar clientes devedores quando modal abrir ou filtros mudarem
+  useEffect(() => {
+    if (showFiadosModal) {
+      loadClientesDevedores();
+    }
+  }, [showFiadosModal, pesquisaClienteFiado, dataInicioFiltro, dataFimFiltro]);
+
   // ✅ NOVO: Sistema Realtime para monitorar mudanças na tabela PDV (delivery local)
   useEffect(() => {
     let deliverySubscription: any = null;
@@ -3426,6 +3441,94 @@ const PDVPage: React.FC = () => {
       }
     } catch (error) {
       setAmbienteNFe('homologacao'); // Fallback para homologação
+    }
+  };
+
+  // ✅ NOVA: Função para carregar clientes devedores
+  const loadClientesDevedores = async () => {
+    setLoadingClientesDevedores(true);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Query base para buscar clientes com saldo devedor > 0
+      let query = supabase
+        .from('clientes')
+        .select(`
+          id,
+          nome,
+          telefone,
+          documento,
+          saldo_devedor,
+          created_at,
+          updated_at
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .gt('saldo_devedor', 0)
+        .order('saldo_devedor', { ascending: false });
+
+      // Aplicar filtro de pesquisa se houver
+      if (pesquisaClienteFiado.trim()) {
+        query = query.or(`nome.ilike.%${pesquisaClienteFiado}%,telefone.ilike.%${pesquisaClienteFiado}%,documento.ilike.%${pesquisaClienteFiado}%`);
+      }
+
+      const { data: clientesData, error } = await query;
+
+      if (error) {
+        console.error('❌ Erro ao carregar clientes devedores:', error);
+        return;
+      }
+
+      // Filtrar por data se especificado
+      let clientesFiltrados = clientesData || [];
+
+      if (dataInicioFiltro || dataFimFiltro) {
+        // Buscar vendas fiado dos clientes no período especificado
+        let queryVendas = supabase
+          .from('pdv')
+          .select('cliente_id, valor_total, data_venda')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('fiado', true);
+
+        if (dataInicioFiltro) {
+          queryVendas = queryVendas.gte('data_venda', dataInicioFiltro);
+        }
+
+        if (dataFimFiltro) {
+          queryVendas = queryVendas.lte('data_venda', dataFimFiltro + 'T23:59:59');
+        }
+
+        const { data: vendasFiado } = await queryVendas;
+
+        if (vendasFiado && vendasFiado.length > 0) {
+          const clientesComVendasNoPeriodo = new Set(vendasFiado.map(v => v.cliente_id));
+          clientesFiltrados = clientesFiltrados.filter(cliente =>
+            clientesComVendasNoPeriodo.has(cliente.id)
+          );
+        } else {
+          clientesFiltrados = [];
+        }
+      }
+
+      setClientesDevedores(clientesFiltrados);
+
+      // Calcular total do saldo devedor
+      const total = clientesFiltrados.reduce((acc, cliente) => acc + (cliente.saldo_devedor || 0), 0);
+      setTotalSaldoDevedor(total);
+
+    } catch (error) {
+      console.error('❌ Erro inesperado ao carregar clientes devedores:', error);
+    } finally {
+      setLoadingClientesDevedores(false);
     }
   };
 
@@ -12304,36 +12407,24 @@ const PDVPage: React.FC = () => {
       let isVendaFiado = false;
       let valorFiado = 0;
 
-      console.log('🔍 [FIADO DEBUG] Iniciando detecção de fiado...');
-      console.log('🔍 [FIADO DEBUG] tipoPagamento:', tipoPagamento);
-      console.log('🔍 [FIADO DEBUG] formaPagamentoSelecionada:', formaPagamentoSelecionada);
-
       if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
         const formaSelecionada = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
-        console.log('🔍 [FIADO DEBUG] formaSelecionada:', formaSelecionada);
 
         if (formaSelecionada?.nome?.toLowerCase() === 'fiado') {
           isVendaFiado = true;
           valorFiado = valorTotal;
-          console.log('✅ [FIADO DEBUG] Fiado detectado à vista! Valor:', valorFiado);
         }
       } else if (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) {
-        console.log('🔍 [FIADO DEBUG] pagamentosParciais:', pagamentosParciais);
-
         // Verificar se algum pagamento parcial é fiado
         for (const pagamento of pagamentosParciais) {
           const forma = formasPagamento.find(f => f.id === pagamento.forma);
-          console.log('🔍 [FIADO DEBUG] Verificando pagamento:', pagamento, 'forma encontrada:', forma);
 
           if (forma?.nome?.toLowerCase() === 'fiado') {
             isVendaFiado = true;
             valorFiado += pagamento.valor;
-            console.log('✅ [FIADO DEBUG] Fiado detectado parcial! Valor adicionado:', pagamento.valor, 'Total fiado:', valorFiado);
           }
         }
       }
-
-      console.log('🔍 [FIADO DEBUG] Resultado final - isVendaFiado:', isVendaFiado, 'valorFiado:', valorFiado);
 
       // ✅ VALIDAÇÃO CRÍTICA: Se é fiado, deve ter cliente
       if (isVendaFiado && !clienteData.cliente_id) {
@@ -12525,35 +12616,22 @@ const PDVPage: React.FC = () => {
       setVendaProcessadaId(vendaId);
 
       // ✅ NOVO: CONTROLE DE FIADO - Atualizar saldo devedor do cliente
-      console.log('🔍 [SALDO DEBUG] Verificando condições para atualizar saldo...');
-      console.log('🔍 [SALDO DEBUG] isVendaFiado:', isVendaFiado);
-      console.log('🔍 [SALDO DEBUG] clienteData.cliente_id:', clienteData.cliente_id);
-      console.log('🔍 [SALDO DEBUG] valorFiado:', valorFiado);
-      console.log('🔍 [SALDO DEBUG] clienteData completo:', clienteData);
-
       if (isVendaFiado && clienteData.cliente_id && valorFiado > 0) {
         setEtapaProcessamento('Atualizando saldo devedor do cliente...');
-        console.log('✅ [SALDO DEBUG] Iniciando atualização do saldo devedor...');
 
         try {
           // Buscar saldo atual do cliente
-          console.log('🔍 [SALDO DEBUG] Buscando saldo atual do cliente ID:', clienteData.cliente_id);
-
           const { data: clienteAtual, error: clienteError } = await supabase
             .from('clientes')
             .select('saldo_devedor')
             .eq('id', clienteData.cliente_id)
             .single();
 
-          console.log('🔍 [SALDO DEBUG] Resultado da busca:', { clienteAtual, clienteError });
-
           if (clienteError) {
-            console.error('❌ [SALDO DEBUG] Erro ao buscar saldo do cliente:', clienteError);
+            console.error('❌ Erro ao buscar saldo do cliente:', clienteError);
           } else {
             const saldoAtual = clienteAtual?.saldo_devedor || 0;
             const novoSaldo = saldoAtual + valorFiado;
-
-            console.log('🔍 [SALDO DEBUG] Saldo atual:', saldoAtual, 'Valor fiado:', valorFiado, 'Novo saldo:', novoSaldo);
 
             // Atualizar saldo devedor do cliente
             const { error: updateSaldoError } = await supabase
@@ -12564,21 +12642,17 @@ const PDVPage: React.FC = () => {
               })
               .eq('id', clienteData.cliente_id);
 
-            console.log('🔍 [SALDO DEBUG] Resultado da atualização:', { updateSaldoError });
-
             if (updateSaldoError) {
-              console.error('❌ [SALDO DEBUG] Erro ao atualizar saldo devedor:', updateSaldoError);
+              console.error('❌ Erro ao atualizar saldo devedor:', updateSaldoError);
               // ✅ NÃO parar a venda por erro de saldo - apenas logar
             } else {
-              console.log(`✅ [SALDO DEBUG] Saldo devedor atualizado com sucesso: ${clienteData.nome_cliente} - R$ ${novoSaldo.toFixed(2)}`);
+              console.log(`✅ Saldo devedor atualizado: ${clienteData.nome_cliente} - R$ ${novoSaldo.toFixed(2)}`);
             }
           }
         } catch (saldoError) {
-          console.error('❌ [SALDO DEBUG] Erro inesperado ao atualizar saldo devedor:', saldoError);
+          console.error('❌ Erro inesperado ao atualizar saldo devedor:', saldoError);
           // ✅ NÃO parar a venda por erro de saldo - apenas logar
         }
-      } else {
-        console.log('❌ [SALDO DEBUG] Condições não atendidas para atualizar saldo devedor');
       }
 
       // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
@@ -20996,42 +21070,158 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Modal de Fiados */}
+      {/* Modal de Fiados - Tela Completa */}
       <AnimatePresence>
         {showFiadosModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            onClick={() => setShowFiadosModal(false)}
+            className="fixed inset-0 bg-black/90 z-50"
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card h-full w-full overflow-hidden flex flex-col"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Vendas Fiadas</h3>
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-800">
+                <h3 className="text-2xl font-bold text-white">Controle de Fiados</h3>
                 <button
                   onClick={() => setShowFiadosModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-800 rounded-lg"
                 >
-                  <X size={20} />
+                  <X size={24} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="bg-gray-800/50 p-4 rounded-lg">
-                  <div className="text-sm text-gray-400">Total em Fiados</div>
-                  <div className="text-2xl font-bold text-yellow-400">R$ 0,00</div>
+              {/* Conteúdo Principal */}
+              <div className="flex-1 overflow-hidden flex flex-col p-6 space-y-6">
+                {/* Seção Superior: Resumo e Filtros lado a lado */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Total em Fiados */}
+                  <div className="bg-gray-800/50 p-6 rounded-lg">
+                    <div className="text-sm text-gray-400 mb-2">Total em Fiados</div>
+                    <div className="text-4xl font-bold text-yellow-400 mb-2">
+                      R$ {totalSaldoDevedor.toFixed(2).replace('.', ',')}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {clientesDevedores.length} cliente{clientesDevedores.length !== 1 ? 's' : ''} devedor{clientesDevedores.length !== 1 ? 'es' : ''}
+                    </div>
+                  </div>
+
+                  {/* Filtros */}
+                  <div className="bg-gray-800/30 p-6 rounded-lg space-y-4">
+                    <h4 className="text-lg font-medium text-white mb-4">Filtros</h4>
+
+                    {/* Campo de Pesquisa */}
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-2">Pesquisar Cliente</label>
+                      <input
+                        type="text"
+                        value={pesquisaClienteFiado}
+                        onChange={(e) => setPesquisaClienteFiado(e.target.value)}
+                        placeholder="Nome, telefone ou documento..."
+                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Filtros de Data */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Data Início</label>
+                        <input
+                          type="date"
+                          value={dataInicioFiltro}
+                          onChange={(e) => setDataInicioFiltro(e.target.value)}
+                          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Data Fim</label>
+                        <input
+                          type="date"
+                          value={dataFimFiltro}
+                          onChange={(e) => setDataFimFiltro(e.target.value)}
+                          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Botão Limpar Filtros */}
+                    {(pesquisaClienteFiado || dataInicioFiltro || dataFimFiltro) && (
+                      <button
+                        onClick={() => {
+                          setPesquisaClienteFiado('');
+                          setDataInicioFiltro('');
+                          setDataFimFiltro('');
+                        }}
+                        className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="text-center py-8">
-                  <Clock size={48} className="mx-auto mb-4 text-gray-500" />
-                  <p className="text-gray-400">Nenhuma venda fiada registrada</p>
+                {/* Lista de Clientes Devedores */}
+                <div className="flex-1 bg-gray-800/30 rounded-lg overflow-hidden flex flex-col">
+                  <div className="p-6 border-b border-gray-700">
+                    <h4 className="text-lg font-medium text-white">Clientes Devedores</h4>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    {loadingClientesDevedores ? (
+                      <div className="p-12 text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-6"></div>
+                        <p className="text-gray-400 text-lg">Carregando clientes...</p>
+                      </div>
+                    ) : clientesDevedores.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <Clock size={64} className="mx-auto mb-6 text-gray-500" />
+                        <p className="text-gray-400 text-lg">
+                          {pesquisaClienteFiado || dataInicioFiltro || dataFimFiltro
+                            ? 'Nenhum cliente encontrado com os filtros aplicados'
+                            : 'Nenhum cliente com saldo devedor'
+                          }
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-700">
+                        {clientesDevedores.map((cliente) => (
+                          <div key={cliente.id} className="p-6 hover:bg-gray-700/30 transition-colors">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="font-semibold text-white text-lg mb-2">{cliente.nome}</div>
+                                <div className="space-y-1">
+                                  {cliente.telefone && (
+                                    <div className="text-sm text-gray-400 flex items-center">
+                                      📞 {cliente.telefone}
+                                    </div>
+                                  )}
+                                  {cliente.documento && (
+                                    <div className="text-sm text-gray-400 flex items-center">
+                                      📄 {cliente.documento}
+                                    </div>
+                                  )}
+                                  <div className="text-sm text-gray-500">
+                                    Atualizado em: {new Date(cliente.updated_at).toLocaleDateString('pt-BR')}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right ml-6">
+                                <div className="text-2xl font-bold text-yellow-400 mb-1">
+                                  R$ {cliente.saldo_devedor.toFixed(2).replace('.', ',')}
+                                </div>
+                                <div className="text-sm text-gray-400">saldo devedor</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
