@@ -20,6 +20,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   FileText,
   TrendingDown,
   TrendingUp,
@@ -452,6 +454,14 @@ const PDVPage: React.FC = () => {
   const [dataFimFiltro, setDataFimFiltro] = useState('');
   const [totalSaldoDevedor, setTotalSaldoDevedor] = useState(0);
   const [showFiltrosData, setShowFiltrosData] = useState(false); // ✅ NOVO: Controlar expansão dos filtros de data
+
+  // ✅ NOVO: Estados para modal de detalhes do cliente
+  const [showDetalhesClienteModal, setShowDetalhesClienteModal] = useState(false);
+  const [clienteSelecionadoDetalhes, setClienteSelecionadoDetalhes] = useState<any>(null);
+  const [vendasFiadoCliente, setVendasFiadoCliente] = useState<any[]>([]);
+  const [loadingVendasFiado, setLoadingVendasFiado] = useState(false);
+  const [vendaExpandida, setVendaExpandida] = useState<string | null>(null);
+  const [itensVendaExpandida, setItensVendaExpandida] = useState<any[]>([]);
 
   const [showVendaSemProdutoModal, setShowVendaSemProdutoModal] = useState(false);
   const [valorVendaSemProduto, setValorVendaSemProduto] = useState('');
@@ -3530,6 +3540,106 @@ const PDVPage: React.FC = () => {
       console.error('❌ Erro inesperado ao carregar clientes devedores:', error);
     } finally {
       setLoadingClientesDevedores(false);
+    }
+  };
+
+  // ✅ NOVA: Função para carregar vendas fiado de um cliente específico
+  const loadVendasFiadoCliente = async (clienteId: string) => {
+    setLoadingVendasFiado(true);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar vendas fiado do cliente
+      const { data: vendasData, error } = await supabase
+        .from('pdv')
+        .select(`
+          id,
+          numero_venda,
+          valor_total,
+          data_venda,
+          created_at,
+          observacao
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('cliente_id', clienteId)
+        .eq('fiado', true)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Erro ao carregar vendas fiado do cliente:', error);
+        return;
+      }
+
+      setVendasFiadoCliente(vendasData || []);
+
+    } catch (error) {
+      console.error('❌ Erro inesperado ao carregar vendas fiado do cliente:', error);
+    } finally {
+      setLoadingVendasFiado(false);
+    }
+  };
+
+  // ✅ NOVA: Função para carregar itens de uma venda específica
+  const loadItensVenda = async (vendaId: string) => {
+    try {
+      const { data: itensData, error } = await supabase
+        .from('pdv_itens')
+        .select(`
+          id,
+          nome_produto,
+          quantidade,
+          preco_unitario,
+          subtotal,
+          unidade,
+          observacao
+        `)
+        .eq('venda_id', vendaId)
+        .order('nome_produto');
+
+      if (error) {
+        console.error('❌ Erro ao carregar itens da venda:', error);
+        return [];
+      }
+
+      return itensData || [];
+    } catch (error) {
+      console.error('❌ Erro inesperado ao carregar itens da venda:', error);
+      return [];
+    }
+  };
+
+  // ✅ NOVA: Função para abrir detalhes do cliente
+  const abrirDetalhesCliente = async (cliente: any) => {
+    setClienteSelecionadoDetalhes(cliente);
+    setShowDetalhesClienteModal(true);
+    setVendaExpandida(null);
+    setItensVendaExpandida([]);
+
+    // Carregar vendas fiado do cliente
+    await loadVendasFiadoCliente(cliente.id);
+  };
+
+  // ✅ NOVA: Função para expandir/recolher venda
+  const toggleVendaExpandida = async (vendaId: string) => {
+    if (vendaExpandida === vendaId) {
+      // Recolher venda
+      setVendaExpandida(null);
+      setItensVendaExpandida([]);
+    } else {
+      // Expandir venda
+      setVendaExpandida(vendaId);
+      const itens = await loadItensVenda(vendaId);
+      setItensVendaExpandida(itens);
     }
   };
 
@@ -21214,7 +21324,11 @@ const PDVPage: React.FC = () => {
                     ) : (
                       <div className="divide-y divide-gray-700">
                         {clientesDevedores.map((cliente) => (
-                          <div key={cliente.id} className="p-4 hover:bg-gray-700/30 transition-colors">
+                          <div
+                            key={cliente.id}
+                            className="p-4 hover:bg-gray-700/30 transition-colors cursor-pointer"
+                            onClick={() => abrirDetalhesCliente(cliente)}
+                          >
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
                                 <div className="font-semibold text-white text-base mb-1">{cliente.nome}</div>
@@ -21236,6 +21350,159 @@ const PDVPage: React.FC = () => {
                                 <div className="text-xs text-gray-400">saldo devedor</div>
                               </div>
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Detalhes do Cliente */}
+      <AnimatePresence>
+        {showDetalhesClienteModal && clienteSelecionadoDetalhes && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card h-full w-full overflow-hidden flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800">
+                <h3 className="text-xl font-bold text-white">Detalhes do Cliente</h3>
+                <button
+                  onClick={() => setShowDetalhesClienteModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Conteúdo Principal */}
+              <div className="flex-1 overflow-hidden flex flex-col p-4 space-y-4">
+                {/* Informações do Cliente */}
+                <div className="bg-gray-800/50 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-400 mb-1">Nome do Cliente</div>
+                      <div className="text-lg font-semibold text-white">{clienteSelecionadoDetalhes.nome}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-400 mb-1">Documento</div>
+                      <div className="text-base text-gray-300">{clienteSelecionadoDetalhes.documento || 'Não informado'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-400 mb-1">Saldo Devedor</div>
+                      <div className="text-xl font-bold text-yellow-400">
+                        R$ {clienteSelecionadoDetalhes.saldo_devedor.toFixed(2).replace('.', ',')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lista de Vendas Fiado */}
+                <div className="flex-1 bg-gray-800/30 rounded-lg overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-gray-700">
+                    <h4 className="text-lg font-medium text-white">Histórico de Vendas Fiado</h4>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    {loadingVendasFiado ? (
+                      <div className="p-12 text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-6"></div>
+                        <p className="text-gray-400 text-lg">Carregando vendas...</p>
+                      </div>
+                    ) : vendasFiadoCliente.length === 0 ? (
+                      <div className="p-12 text-center">
+                        <Clock size={64} className="mx-auto mb-6 text-gray-500" />
+                        <p className="text-gray-400 text-lg">Nenhuma venda fiado encontrada</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-700">
+                        {vendasFiadoCliente.map((venda) => (
+                          <div key={venda.id} className="p-4">
+                            {/* Cabeçalho da Venda */}
+                            <div
+                              className="flex justify-between items-center cursor-pointer hover:bg-gray-700/30 p-3 rounded-lg transition-colors"
+                              onClick={() => toggleVendaExpandida(venda.id)}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3">
+                                  <div className="font-semibold text-white">Venda #{venda.numero_venda}</div>
+                                  <div className="text-sm text-gray-400">
+                                    {new Date(venda.data_venda || venda.created_at).toLocaleDateString('pt-BR')}
+                                  </div>
+                                </div>
+                                {venda.observacao && (
+                                  <div className="text-sm text-gray-500 mt-1">{venda.observacao}</div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-lg font-bold text-yellow-400">
+                                  R$ {venda.valor_total.toFixed(2).replace('.', ',')}
+                                </div>
+                                {vendaExpandida === venda.id ? (
+                                  <ChevronUp size={20} className="text-gray-400" />
+                                ) : (
+                                  <ChevronDown size={20} className="text-gray-400" />
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Itens da Venda - Expandido */}
+                            <AnimatePresence>
+                              {vendaExpandida === venda.id && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.3 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="mt-3 bg-gray-900/50 rounded-lg p-4">
+                                    <h5 className="text-sm font-medium text-white mb-3">Itens da Venda</h5>
+                                    {itensVendaExpandida.length === 0 ? (
+                                      <p className="text-gray-400 text-sm">Carregando itens...</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {itensVendaExpandida.map((item) => (
+                                          <div key={item.id} className="flex justify-between items-center py-2 border-b border-gray-700 last:border-b-0">
+                                            <div className="flex-1">
+                                              <div className="text-sm font-medium text-white">{item.nome_produto}</div>
+                                              <div className="text-xs text-gray-400">
+                                                {item.quantidade} {item.unidade} × R$ {item.preco_unitario.toFixed(2).replace('.', ',')}
+                                              </div>
+                                              {item.observacao && (
+                                                <div className="text-xs text-gray-500 mt-1">{item.observacao}</div>
+                                              )}
+                                            </div>
+                                            <div className="text-sm font-semibold text-yellow-400">
+                                              R$ {item.subtotal.toFixed(2).replace('.', ',')}
+                                            </div>
+                                          </div>
+                                        ))}
+                                        <div className="flex justify-between items-center pt-2 border-t border-gray-600">
+                                          <div className="text-sm font-semibold text-white">Total da Venda</div>
+                                          <div className="text-lg font-bold text-yellow-400">
+                                            R$ {venda.valor_total.toFixed(2).replace('.', ',')}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         ))}
                       </div>
