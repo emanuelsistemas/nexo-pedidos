@@ -451,6 +451,7 @@ const PDVPage: React.FC = () => {
   const [dataInicioFiltro, setDataInicioFiltro] = useState('');
   const [dataFimFiltro, setDataFimFiltro] = useState('');
   const [totalSaldoDevedor, setTotalSaldoDevedor] = useState(0);
+  const [showFiltrosData, setShowFiltrosData] = useState(false); // ✅ NOVO: Controlar expansão dos filtros de data
 
   const [showVendaSemProdutoModal, setShowVendaSemProdutoModal] = useState(false);
   const [valorVendaSemProduto, setValorVendaSemProduto] = useState('');
@@ -21086,34 +21087,33 @@ const PDVPage: React.FC = () => {
               className="bg-background-card h-full w-full overflow-hidden flex flex-col"
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-800">
-                <h3 className="text-2xl font-bold text-white">Controle de Fiados</h3>
+              <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800">
+                <h3 className="text-xl font-bold text-white">Controle de Fiados</h3>
                 <button
                   onClick={() => setShowFiadosModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-800 rounded-lg"
+                  className="text-gray-400 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded-lg"
                 >
-                  <X size={24} />
+                  <X size={20} />
                 </button>
               </div>
 
               {/* Conteúdo Principal */}
-              <div className="flex-1 overflow-hidden flex flex-col p-6 space-y-6">
-                {/* Seção Superior: Resumo e Filtros lado a lado */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Total em Fiados */}
-                  <div className="bg-gray-800/50 p-6 rounded-lg">
-                    <div className="text-sm text-gray-400 mb-2">Total em Fiados</div>
-                    <div className="text-4xl font-bold text-yellow-400 mb-2">
-                      R$ {totalSaldoDevedor.toFixed(2).replace('.', ',')}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {clientesDevedores.length} cliente{clientesDevedores.length !== 1 ? 's' : ''} devedor{clientesDevedores.length !== 1 ? 'es' : ''}
-                    </div>
-                  </div>
-
+              <div className="flex-1 overflow-hidden flex flex-col p-4 space-y-4">
+                {/* Seção Superior: Filtros à esquerda e Total à direita */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Filtros */}
-                  <div className="bg-gray-800/30 p-6 rounded-lg space-y-4">
-                    <h4 className="text-lg font-medium text-white mb-4">Filtros</h4>
+                  <div className="bg-gray-800/30 p-4 rounded-lg space-y-3">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Filter size={20} className="text-blue-400" />
+                      <h4 className="text-lg font-medium text-white">Filtros</h4>
+                      <button
+                        onClick={() => setShowFiltrosData(!showFiltrosData)}
+                        className="ml-auto p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                        title={showFiltrosData ? "Ocultar filtros de data" : "Mostrar filtros de data"}
+                      >
+                        <Filter size={16} className={`text-gray-400 hover:text-white transition-colors ${showFiltrosData ? 'text-blue-400' : ''}`} />
+                      </button>
+                    </div>
 
                     {/* Campo de Pesquisa */}
                     <div>
@@ -21127,27 +21127,39 @@ const PDVPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Filtros de Data */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Data Início</label>
-                        <input
-                          type="date"
-                          value={dataInicioFiltro}
-                          onChange={(e) => setDataInicioFiltro(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-2">Data Fim</label>
-                        <input
-                          type="date"
-                          value={dataFimFiltro}
-                          onChange={(e) => setDataFimFiltro(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
+                    {/* Filtros de Data - Colapsáveis */}
+                    <AnimatePresence>
+                      {showFiltrosData && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="grid grid-cols-2 gap-4 pt-2">
+                            <div>
+                              <label className="block text-sm text-gray-400 mb-2">Data Início</label>
+                              <input
+                                type="date"
+                                value={dataInicioFiltro}
+                                onChange={(e) => setDataInicioFiltro(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-gray-400 mb-2">Data Fim</label>
+                              <input
+                                type="date"
+                                value={dataFimFiltro}
+                                onChange={(e) => setDataFimFiltro(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     {/* Botão Limpar Filtros */}
                     {(pesquisaClienteFiado || dataInicioFiltro || dataFimFiltro) && (
@@ -21156,6 +21168,7 @@ const PDVPage: React.FC = () => {
                           setPesquisaClienteFiado('');
                           setDataInicioFiltro('');
                           setDataFimFiltro('');
+                          setShowFiltrosData(false);
                         }}
                         className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
                       >
@@ -21163,11 +21176,22 @@ const PDVPage: React.FC = () => {
                       </button>
                     )}
                   </div>
+
+                  {/* Total em Fiados */}
+                  <div className="bg-gray-800/50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-400 mb-1">Total em Fiados</div>
+                    <div className="text-3xl font-bold text-yellow-400 mb-1">
+                      R$ {totalSaldoDevedor.toFixed(2).replace('.', ',')}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {clientesDevedores.length} cliente{clientesDevedores.length !== 1 ? 's' : ''} devedor{clientesDevedores.length !== 1 ? 'es' : ''}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Lista de Clientes Devedores */}
                 <div className="flex-1 bg-gray-800/30 rounded-lg overflow-hidden flex flex-col">
-                  <div className="p-6 border-b border-gray-700">
+                  <div className="p-4 border-b border-gray-700">
                     <h4 className="text-lg font-medium text-white">Clientes Devedores</h4>
                   </div>
 
@@ -21190,31 +21214,26 @@ const PDVPage: React.FC = () => {
                     ) : (
                       <div className="divide-y divide-gray-700">
                         {clientesDevedores.map((cliente) => (
-                          <div key={cliente.id} className="p-6 hover:bg-gray-700/30 transition-colors">
+                          <div key={cliente.id} className="p-4 hover:bg-gray-700/30 transition-colors">
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
-                                <div className="font-semibold text-white text-lg mb-2">{cliente.nome}</div>
+                                <div className="font-semibold text-white text-base mb-1">{cliente.nome}</div>
                                 <div className="space-y-1">
-                                  {cliente.telefone && (
-                                    <div className="text-sm text-gray-400 flex items-center">
-                                      📞 {cliente.telefone}
-                                    </div>
-                                  )}
                                   {cliente.documento && (
                                     <div className="text-sm text-gray-400 flex items-center">
                                       📄 {cliente.documento}
                                     </div>
                                   )}
-                                  <div className="text-sm text-gray-500">
+                                  <div className="text-xs text-gray-500">
                                     Atualizado em: {new Date(cliente.updated_at).toLocaleDateString('pt-BR')}
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right ml-6">
-                                <div className="text-2xl font-bold text-yellow-400 mb-1">
+                              <div className="text-right ml-4">
+                                <div className="text-xl font-bold text-yellow-400 mb-1">
                                   R$ {cliente.saldo_devedor.toFixed(2).replace('.', ',')}
                                 </div>
-                                <div className="text-sm text-gray-400">saldo devedor</div>
+                                <div className="text-xs text-gray-400">saldo devedor</div>
                               </div>
                             </div>
                           </div>
