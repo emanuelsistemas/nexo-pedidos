@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
-import NovoClienteModal from './NovoClienteModal';
+import ClientesPage from '../../pages/dashboard/ClientesPage';
 
 // Função para formatar moeda
 const formatCurrency = (value: number): string => {
@@ -983,17 +983,24 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         </div>
       </motion.div>
 
-      {/* Modal de Novo Cliente */}
+      {/* Formulário Completo de Novo Cliente */}
       {showNovoClienteModal && (
-        <NovoClienteModal
-          isOpen={showNovoClienteModal}
-          onClose={() => setShowNovoClienteModal(false)}
-          empresaId={empresaId}
-          onClienteCreated={(novoClienteId) => {
-            setClienteId(novoClienteId);
-            setShowNovoClienteModal(false);
-          }}
-        />
+        <div className="fixed inset-0 z-[99999] bg-black">
+          <ClientesPage
+            fornecedorMode={false}
+            onClienteCreated={(novoClienteId) => {
+              setClienteId(novoClienteId);
+              setShowNovoClienteModal(false);
+            }}
+          />
+          {/* Botão para fechar o modal */}
+          <button
+            onClick={() => setShowNovoClienteModal(false)}
+            className="fixed top-4 right-4 z-[100000] p-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors shadow-lg"
+          >
+            <X size={24} />
+          </button>
+        </div>
       )}
     </div>
   );

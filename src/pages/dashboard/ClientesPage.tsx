@@ -49,7 +49,17 @@ interface Empresa {
   nome: string;
 }
 
-const ClientesPage: React.FC = () => {
+interface ClientesPageProps {
+  fornecedorMode?: boolean;
+  onFornecedorCreated?: (fornecedorId: string, fornecedorNome: string, fornecedorDocumento?: string) => void;
+  onClienteCreated?: (clienteId: string, clienteNome: string, clienteDocumento?: string) => void;
+}
+
+const ClientesPage: React.FC<ClientesPageProps> = ({
+  fornecedorMode = false,
+  onFornecedorCreated,
+  onClienteCreated
+}) => {
   const [isLoading, setIsLoading] = useState(true);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
@@ -1127,7 +1137,17 @@ const ClientesPage: React.FC = () => {
 
       // Recarregar a lista e fechar o sidebar
       console.log('Cliente salvo com sucesso, recarregando lista...');
-      await loadClientes();
+
+      // Se for modo fornecedor, chamar callback
+      if (fornecedorMode && onFornecedorCreated && clienteData) {
+        onFornecedorCreated(clienteId, clienteData.nome, clienteData.documento);
+      } else if (onClienteCreated && clienteData) {
+        // Callback para cliente criado (usado em devoluções)
+        onClienteCreated(clienteId, clienteData.nome, clienteData.documento);
+      } else {
+        await loadClientes();
+      }
+
       setShowSidebar(false);
       await resetForm();
     } catch (error: any) {
@@ -1298,10 +1318,10 @@ const ClientesPage: React.FC = () => {
       codigo_municipio: '',
       inscricao_estadual: '',
       // Tipos de cliente
-      is_cliente: true,
+      is_cliente: fornecedorMode ? false : true,
       is_funcionario: false,
       is_vendedor: false,
-      is_fornecedor: false,
+      is_fornecedor: fornecedorMode ? true : false,
       is_transportadora: false,
       // Observações
       observacao_nfe: '',
@@ -2416,115 +2436,140 @@ const ClientesPage: React.FC = () => {
                   )}
 
                   {/* Tipos de Cliente */}
-                  <div className="bg-gray-800/30 rounded-lg border border-gray-700 p-4">
-                    <h3 className="text-white font-medium mb-4">Tipos de Cliente</h3>
-                    <p className="text-sm text-gray-400 mb-4">
-                      Selecione os tipos que se aplicam a este cliente. Você pode marcar múltiplas opções.
-                    </p>
+                  {!fornecedorMode && (
+                    <div className="bg-gray-800/30 rounded-lg border border-gray-700 p-4">
+                      <h3 className="text-white font-medium mb-4">Tipos de Cliente</h3>
+                      <p className="text-sm text-gray-400 mb-4">
+                        Selecione os tipos que se aplicam a este cliente. Você pode marcar múltiplas opções.
+                      </p>
 
                     <div className="space-y-3">
                       {/* Cliente */}
-                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <User size={16} className="text-blue-400" />
+                      {!fornecedorMode && (
+                        <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <User size={16} className="text-blue-400" />
+                            </div>
+                            <span className="text-white font-medium whitespace-nowrap">Cliente</span>
                           </div>
-                          <span className="text-white font-medium whitespace-nowrap">Cliente</span>
+                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                            <input
+                              type="checkbox"
+                              checked={formData.is_cliente}
+                              onChange={(e) => setFormData({ ...formData, is_cliente: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                          </label>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
-                          <input
-                            type="checkbox"
-                            checked={formData.is_cliente}
-                            onChange={(e) => setFormData({ ...formData, is_cliente: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-                        </label>
-                      </div>
+                      )}
 
                       {/* Funcionário */}
-                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <User size={16} className="text-green-400" />
+                      {!fornecedorMode && (
+                        <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <User size={16} className="text-green-400" />
+                            </div>
+                            <span className="text-white font-medium whitespace-nowrap">Funcionário</span>
                           </div>
-                          <span className="text-white font-medium whitespace-nowrap">Funcionário</span>
+                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                            <input
+                              type="checkbox"
+                              checked={formData.is_funcionario}
+                              onChange={(e) => setFormData({ ...formData, is_funcionario: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                          </label>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
-                          <input
-                            type="checkbox"
-                            checked={formData.is_funcionario}
-                            onChange={(e) => setFormData({ ...formData, is_funcionario: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-                        </label>
-                      </div>
+                      )}
 
                       {/* Vendedor */}
-                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <User size={16} className="text-purple-400" />
+                      {!fornecedorMode && (
+                        <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <User size={16} className="text-purple-400" />
+                            </div>
+                            <span className="text-white font-medium whitespace-nowrap">Vendedor</span>
                           </div>
-                          <span className="text-white font-medium whitespace-nowrap">Vendedor</span>
+                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                            <input
+                              type="checkbox"
+                              checked={formData.is_vendedor}
+                              onChange={(e) => setFormData({ ...formData, is_vendedor: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                          </label>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
-                          <input
-                            type="checkbox"
-                            checked={formData.is_vendedor}
-                            onChange={(e) => setFormData({ ...formData, is_vendedor: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-                        </label>
-                      </div>
+                      )}
 
                       {/* Fornecedor */}
-                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                      <div className={`flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px] ${fornecedorMode ? 'bg-orange-500/10 border-orange-500/30' : ''}`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                             <User size={16} className="text-orange-400" />
                           </div>
                           <span className="text-white font-medium whitespace-nowrap">Fornecedor</span>
+                          {fornecedorMode && (
+                            <span className="text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded-full">
+                              Ativo
+                            </span>
+                          )}
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
                           <input
                             type="checkbox"
                             checked={formData.is_fornecedor}
-                            onChange={(e) => setFormData({ ...formData, is_fornecedor: e.target.checked })}
+                            onChange={(e) => !fornecedorMode && setFormData({ ...formData, is_fornecedor: e.target.checked })}
                             className="sr-only peer"
+                            disabled={fornecedorMode}
                           />
                           <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
                         </label>
                       </div>
 
                       {/* Transportadora */}
-                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <User size={16} className="text-red-400" />
+                      {!fornecedorMode && (
+                        <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <User size={16} className="text-red-400" />
+                            </div>
+                            <span className="text-white font-medium whitespace-nowrap">Transportadora</span>
                           </div>
-                          <span className="text-white font-medium whitespace-nowrap">Transportadora</span>
+                          <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                            <input
+                              type="checkbox"
+                              checked={formData.is_transportadora}
+                              onChange={(e) => setFormData({ ...formData, is_transportadora: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                          </label>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
-                          <input
-                            type="checkbox"
-                            checked={formData.is_transportadora}
-                            onChange={(e) => setFormData({ ...formData, is_transportadora: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-                        </label>
-                      </div>
+                      )}
                     </div>
                   </div>
+                  )}
+
+                  {fornecedorMode && (
+                    <div className="bg-gray-800/30 rounded-lg border border-gray-700 p-4">
+                      <h3 className="text-white font-medium mb-4">Tipo de Cadastro</h3>
+                      <p className="text-sm text-gray-400 mb-4">
+                        Este cadastro será marcado automaticamente como Fornecedor.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Campo oculto para empresa - selecionada automaticamente */}
                   <input type="hidden" value={formData.empresa_id} />
 
-                    </div>
-                  ) : activeTab === 'descontos' ? (
+                </div>
+              ) : activeTab === 'descontos' ? (
                     <div className="space-y-6">
                       {/* Descontos por Prazo de Faturamento */}
                       <div className="space-y-4">
