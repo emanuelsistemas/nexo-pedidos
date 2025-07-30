@@ -25,6 +25,7 @@ import DevolucoesPage from './pages/dashboard/DevolucoesPage';
 import EstoqueMinimoPage from './pages/dashboard/EstoqueMinimoPage';
 import NfePage from './pages/dashboard/NfePage';
 import InutilizacaoPage from './pages/dashboard/InutilizacaoPage';
+import EntradaMercadoriaPage from './pages/dashboard/EntradaMercadoriaPage';
 import TesteEmailPage from './pages/dashboard/TesteEmailPage';
 import TesteKeenSliderPage from './pages/dashboard/TesteKeenSliderPage';
 import TestePixPage from './pages/dashboard/TestePixPage';
@@ -82,6 +83,7 @@ function App() {
           <Route path="estoque-minimo" element={<EstoqueMinimoPage />} />
           <Route path="nfe" element={<NfePage />} />
           <Route path="inutilizacao" element={<InutilizacaoPage />} />
+          <Route path="entrada-mercadoria" element={<EntradaMercadoriaPage />} />
           <Route path="teste-email" element={<TesteEmailPage />} />
           <Route path="teste-keen-slider" element={<TesteKeenSliderPage />} />
           <Route path="teste-pix" element={<TestePixPage />} />

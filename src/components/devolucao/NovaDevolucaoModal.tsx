@@ -29,15 +29,14 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   onConfirm
 }) => {
   // Estados do modal
-  const [step, setStep] = useState<'cliente' | 'vendas'>('cliente');
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Estados do cliente
+
+  // Estados do cliente (opcional)
   const [clienteId, setClienteId] = useState('');
   const [clienteNome, setClienteNome] = useState('');
   const [clienteTelefone, setClienteTelefone] = useState('');
   const [empresaId, setEmpresaId] = useState('');
-  
+
   // Estados das vendas
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [filteredVendas, setFilteredVendas] = useState<Venda[]>([]);
@@ -46,19 +45,19 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const [dataFim, setDataFim] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Carregar empresa do usuário
+  // Carregar empresa do usuário e vendas
   useEffect(() => {
     if (isOpen) {
-      loadEmpresaId();
+      loadEmpresaIdAndVendas();
     }
   }, [isOpen]);
 
   // Aplicar filtros nas vendas
   useEffect(() => {
     applyFilters();
-  }, [vendas, searchTerm, dataInicio, dataFim]);
+  }, [vendas, searchTerm, dataInicio, dataFim, clienteId]);
 
-  const loadEmpresaId = async () => {
+  const loadEmpresaIdAndVendas = async () => {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
@@ -71,6 +70,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
 
       if (usuarioData?.empresa_id) {
         setEmpresaId(usuarioData.empresa_id);
+        await loadVendas(usuarioData.empresa_id);
       }
     } catch (error) {
       console.error('Erro ao carregar empresa:', error);
@@ -80,11 +80,17 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const applyFilters = () => {
     let filtered = [...vendas];
 
-    // Filtro por termo de busca (número da venda)
+    // Filtro por termo de busca (número da venda ou nome do cliente)
     if (searchTerm) {
       filtered = filtered.filter(venda =>
-        venda.numero_venda?.toLowerCase().includes(searchTerm.toLowerCase())
+        venda.numero_venda?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        venda.nome_cliente?.toLowerCase().includes(searchTerm.toLowerCase())
       );
+    }
+
+    // Filtro por cliente (se selecionado)
+    if (clienteId) {
+      filtered = filtered.filter(venda => venda.nome_cliente === clienteNome);
     }
 
     // Filtro por data de início
@@ -112,20 +118,14 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
     setClienteTelefone(telefone);
   };
 
-  const handleProximoStep = async () => {
-    if (step === 'cliente' && clienteId) {
-      setStep('vendas');
-      await loadVendas();
-    }
-  };
-
-  const loadVendas = async () => {
-    if (!empresaId || !clienteId) return;
+  const loadVendas = async (empresaIdParam?: string) => {
+    const empresaIdToUse = empresaIdParam || empresaId;
+    if (!empresaIdToUse) return;
 
     try {
       setIsLoading(true);
 
-      // Buscar vendas do cliente na empresa
+      // Buscar todas as vendas da empresa (não apenas do cliente)
       let query = supabase
         .from('pdv')
         .select(`
@@ -139,11 +139,10 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
           status_fiscal,
           modelo_documento
         `)
-        .eq('empresa_id', empresaId)
-        .eq('cliente_id', clienteId)
+        .eq('empresa_id', empresaIdToUse)
         .in('status_venda', ['finalizada', 'paga'])
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       const { data, error } = await query;
 
@@ -178,7 +177,6 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   };
 
   const handleClose = () => {
-    setStep('cliente');
     setClienteId('');
     setClienteNome('');
     setClienteTelefone('');
@@ -189,17 +187,6 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
     setDataFim('');
     setShowFilters(false);
     onClose();
-  };
-
-  const handleVoltar = () => {
-    if (step === 'vendas') {
-      setStep('cliente');
-      setVendas([]);
-      setFilteredVendas([]);
-      setSearchTerm('');
-      setDataInicio('');
-      setDataFim('');
-    }
   };
 
   const formatCurrency = (value: number) => {
@@ -239,26 +226,19 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+    <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full h-full max-w-4xl max-h-[90vh] bg-background-card rounded-lg border border-gray-800 flex flex-col"
+        className="w-full h-full max-w-6xl bg-background-card rounded-lg border border-gray-800 flex flex-col shadow-2xl"
+        style={{ maxHeight: 'calc(100vh - 2rem)' }}
       >
         {/* Cabeçalho */}
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+        <div className="flex-shrink-0 p-4 border-b border-gray-800 flex items-center justify-between bg-background-card">
           <div className="flex items-center gap-3">
-            {step === 'vendas' && (
-              <button
-                onClick={handleVoltar}
-                className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
-              >
-                ←
-              </button>
-            )}
             <h2 className="text-xl font-semibold text-white">
-              {step === 'cliente' ? 'Nova Devolução - Selecionar Cliente' : 'Selecionar Venda'}
+              Nova Devolução - Selecionar Venda
             </h2>
           </div>
           <button
@@ -270,70 +250,37 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
         </div>
 
         {/* Conteúdo */}
-        <div className="flex-1 overflow-hidden">
-          {step === 'cliente' ? (
-            // Passo 1: Seleção de Cliente
-            <div className="p-6 space-y-6">
-              <div className="text-center">
-                <User size={48} className="text-primary-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">
-                  Selecione o Cliente
-                </h3>
-                <p className="text-gray-400">
-                  Escolha o cliente para buscar suas vendas disponíveis para devolução
-                </p>
-              </div>
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {/* Seleção de Venda */}
+          <div className="flex flex-col h-full">
 
-              <div className="max-w-md mx-auto">
+            {/* Filtros de busca */}
+            <div className="flex-shrink-0 p-4 border-b border-gray-800 space-y-3">
+              {/* Filtro de Cliente (opcional) */}
+              <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Cliente <span className="text-red-500">*</span>
+                  Filtrar por Cliente (opcional)
                 </label>
                 <ClienteDropdown
                   value={clienteId}
                   onChange={handleClienteSelect}
                   empresaId={empresaId}
-                  placeholder="Selecione ou busque um cliente"
-                  required={true}
+                  placeholder="Todos os clientes"
+                  required={false}
                 />
               </div>
 
-              <div className="flex justify-center">
-                <button
-                  onClick={handleProximoStep}
-                  disabled={!clienteId}
-                  className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
-                >
-                  Próximo
-                </button>
+              {/* Barra de busca */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar por número da venda ou nome do cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-3 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                />
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               </div>
-            </div>
-          ) : (
-            // Passo 2: Seleção de Venda
-            <div className="flex flex-col h-full">
-              {/* Informações do cliente selecionado */}
-              <div className="p-4 bg-gray-800/50 border-b border-gray-800">
-                <div className="flex items-center gap-2">
-                  <User size={16} className="text-gray-400" />
-                  <span className="text-white font-medium">{clienteNome}</span>
-                  {clienteTelefone && (
-                    <span className="text-gray-400">• {clienteTelefone}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Filtros de busca */}
-              <div className="p-4 border-b border-gray-800 space-y-3">
-                {/* Barra de busca */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Buscar por número da venda..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-3 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                  />
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                </div>
 
                 {/* Botão de filtros */}
                 <div className="flex items-center justify-between">
@@ -402,7 +349,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
               </div>
 
               {/* Lista de vendas */}
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 min-h-0 custom-scrollbar">
                 {isLoading ? (
                   <div className="text-center py-8">
                     <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
@@ -415,9 +362,9 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                       Nenhuma venda encontrada
                     </h3>
                     <p className="text-gray-400">
-                      {searchTerm || dataInicio || dataFim
+                      {searchTerm || dataInicio || dataFim || clienteId
                         ? 'Tente ajustar os filtros de busca'
-                        : 'Este cliente não possui vendas disponíveis para devolução'}
+                        : 'Não há vendas disponíveis para devolução'}
                     </p>
                   </div>
                 ) : (
@@ -467,7 +414,6 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                 )}
               </div>
             </div>
-          )}
         </div>
       </motion.div>
     </div>
