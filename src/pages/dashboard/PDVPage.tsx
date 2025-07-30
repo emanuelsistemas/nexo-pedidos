@@ -12304,22 +12304,36 @@ const PDVPage: React.FC = () => {
       let isVendaFiado = false;
       let valorFiado = 0;
 
+      console.log('🔍 [FIADO DEBUG] Iniciando detecção de fiado...');
+      console.log('🔍 [FIADO DEBUG] tipoPagamento:', tipoPagamento);
+      console.log('🔍 [FIADO DEBUG] formaPagamentoSelecionada:', formaPagamentoSelecionada);
+
       if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
         const formaSelecionada = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+        console.log('🔍 [FIADO DEBUG] formaSelecionada:', formaSelecionada);
+
         if (formaSelecionada?.nome?.toLowerCase() === 'fiado') {
           isVendaFiado = true;
           valorFiado = valorTotal;
+          console.log('✅ [FIADO DEBUG] Fiado detectado à vista! Valor:', valorFiado);
         }
       } else if (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) {
+        console.log('🔍 [FIADO DEBUG] pagamentosParciais:', pagamentosParciais);
+
         // Verificar se algum pagamento parcial é fiado
         for (const pagamento of pagamentosParciais) {
           const forma = formasPagamento.find(f => f.id === pagamento.forma);
+          console.log('🔍 [FIADO DEBUG] Verificando pagamento:', pagamento, 'forma encontrada:', forma);
+
           if (forma?.nome?.toLowerCase() === 'fiado') {
             isVendaFiado = true;
             valorFiado += pagamento.valor;
+            console.log('✅ [FIADO DEBUG] Fiado detectado parcial! Valor adicionado:', pagamento.valor, 'Total fiado:', valorFiado);
           }
         }
       }
+
+      console.log('🔍 [FIADO DEBUG] Resultado final - isVendaFiado:', isVendaFiado, 'valorFiado:', valorFiado);
 
       // ✅ VALIDAÇÃO CRÍTICA: Se é fiado, deve ter cliente
       if (isVendaFiado && !clienteData.cliente_id) {
@@ -12511,22 +12525,35 @@ const PDVPage: React.FC = () => {
       setVendaProcessadaId(vendaId);
 
       // ✅ NOVO: CONTROLE DE FIADO - Atualizar saldo devedor do cliente
+      console.log('🔍 [SALDO DEBUG] Verificando condições para atualizar saldo...');
+      console.log('🔍 [SALDO DEBUG] isVendaFiado:', isVendaFiado);
+      console.log('🔍 [SALDO DEBUG] clienteData.cliente_id:', clienteData.cliente_id);
+      console.log('🔍 [SALDO DEBUG] valorFiado:', valorFiado);
+      console.log('🔍 [SALDO DEBUG] clienteData completo:', clienteData);
+
       if (isVendaFiado && clienteData.cliente_id && valorFiado > 0) {
         setEtapaProcessamento('Atualizando saldo devedor do cliente...');
+        console.log('✅ [SALDO DEBUG] Iniciando atualização do saldo devedor...');
 
         try {
           // Buscar saldo atual do cliente
+          console.log('🔍 [SALDO DEBUG] Buscando saldo atual do cliente ID:', clienteData.cliente_id);
+
           const { data: clienteAtual, error: clienteError } = await supabase
             .from('clientes')
             .select('saldo_devedor')
             .eq('id', clienteData.cliente_id)
             .single();
 
+          console.log('🔍 [SALDO DEBUG] Resultado da busca:', { clienteAtual, clienteError });
+
           if (clienteError) {
-            console.error('❌ Erro ao buscar saldo do cliente:', clienteError);
+            console.error('❌ [SALDO DEBUG] Erro ao buscar saldo do cliente:', clienteError);
           } else {
             const saldoAtual = clienteAtual?.saldo_devedor || 0;
             const novoSaldo = saldoAtual + valorFiado;
+
+            console.log('🔍 [SALDO DEBUG] Saldo atual:', saldoAtual, 'Valor fiado:', valorFiado, 'Novo saldo:', novoSaldo);
 
             // Atualizar saldo devedor do cliente
             const { error: updateSaldoError } = await supabase
@@ -12537,17 +12564,21 @@ const PDVPage: React.FC = () => {
               })
               .eq('id', clienteData.cliente_id);
 
+            console.log('🔍 [SALDO DEBUG] Resultado da atualização:', { updateSaldoError });
+
             if (updateSaldoError) {
-              console.error('❌ Erro ao atualizar saldo devedor:', updateSaldoError);
+              console.error('❌ [SALDO DEBUG] Erro ao atualizar saldo devedor:', updateSaldoError);
               // ✅ NÃO parar a venda por erro de saldo - apenas logar
             } else {
-              console.log(`✅ Saldo devedor atualizado: ${clienteData.nome_cliente} - R$ ${novoSaldo.toFixed(2)}`);
+              console.log(`✅ [SALDO DEBUG] Saldo devedor atualizado com sucesso: ${clienteData.nome_cliente} - R$ ${novoSaldo.toFixed(2)}`);
             }
           }
         } catch (saldoError) {
-          console.error('❌ Erro inesperado ao atualizar saldo devedor:', saldoError);
+          console.error('❌ [SALDO DEBUG] Erro inesperado ao atualizar saldo devedor:', saldoError);
           // ✅ NÃO parar a venda por erro de saldo - apenas logar
         }
+      } else {
+        console.log('❌ [SALDO DEBUG] Condições não atendidas para atualizar saldo devedor');
       }
 
       // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
