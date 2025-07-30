@@ -3568,7 +3568,7 @@ const PDVPage: React.FC = () => {
           valor_total,
           data_venda,
           created_at,
-          observacao
+          observacao_venda
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('cliente_id', clienteId)
@@ -21443,8 +21443,8 @@ const PDVPage: React.FC = () => {
                                     {new Date(venda.data_venda || venda.created_at).toLocaleDateString('pt-BR')}
                                   </div>
                                 </div>
-                                {venda.observacao && (
-                                  <div className="text-sm text-gray-500 mt-1">{venda.observacao}</div>
+                                {venda.observacao_venda && (
+                                  <div className="text-sm text-gray-500 mt-1">{venda.observacao_venda}</div>
                                 )}
                               </div>
                               <div className="flex items-center gap-3">
