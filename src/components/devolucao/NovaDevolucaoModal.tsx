@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus } from 'lucide-react';
+import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
 import ClienteFormCompleto from '../comum/ClienteFormCompleto';
@@ -74,6 +74,8 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const [selectedVendas, setSelectedVendas] = useState<Set<string>>(new Set());
   const [loadingItens, setLoadingItens] = useState<Set<string>>(new Set());
   const [showFinalizarModal, setShowFinalizarModal] = useState(false);
+  const [showAvisoModal, setShowAvisoModal] = useState(false);
+  const [avisoMensagem, setAvisoMensagem] = useState('');
 
   // Carregar empresa do usuário e vendas
   useEffect(() => {
@@ -179,19 +181,31 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
       if (error) throw error;
 
       // Buscar produtos que já estão em devoluções pendentes
-      const { data: devolucoesPendentes } = await supabase
+      const { data: devolucoesPendentes, error: errorPendentes } = await supabase
         .from('devolucao_itens')
         .select(`
           produto_id,
           venda_origem_id,
-          devolucoes!inner(status)
+          pdv_item_id,
+          devolucoes!inner(status, empresa_id)
         `)
         .eq('devolucoes.status', 'pendente')
         .eq('devolucoes.empresa_id', empresaIdToUse);
 
+      // Debug: Log dos produtos pendentes
+      console.log('🔍 Debug - Produtos em devoluções pendentes:', {
+        devolucoesPendentes,
+        errorPendentes,
+        empresaId: empresaIdToUse
+      });
+
       // Criar um Set com os produtos pendentes para busca rápida
+      // Usar tanto produto_id quanto pdv_item_id para maior precisão
       const produtosPendentes = new Set(
-        (devolucoesPendentes || []).map(item => `${item.venda_origem_id}-${item.produto_id}`)
+        (devolucoesPendentes || []).flatMap(item => [
+          `${item.venda_origem_id}-${item.produto_id}`,
+          `pdv_item-${item.pdv_item_id}`
+        ]).filter(Boolean)
       );
 
       // Contar itens de cada venda e marcar produtos pendentes
@@ -203,10 +217,28 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
             .eq('pdv_id', venda.id);
 
           // Marcar itens que estão pendentes de devolução
-          const itensComStatus = (itens || []).map(item => ({
-            ...item,
-            devolucao_pendente: produtosPendentes.has(`${venda.id}-${item.produto_id}`)
-          }));
+          const itensComStatus = (itens || []).map(item => {
+            const isPendentePorProduto = produtosPendentes.has(`${venda.id}-${item.produto_id}`);
+            const isPendentePorItem = produtosPendentes.has(`pdv_item-${item.id}`);
+            const devolucao_pendente = isPendentePorProduto || isPendentePorItem;
+
+            // Debug: Log de itens marcados como pendentes
+            if (devolucao_pendente) {
+              console.log('🔍 Debug - Item marcado como pendente:', {
+                item: item.nome_produto,
+                produto_id: item.produto_id,
+                pdv_item_id: item.id,
+                venda_id: venda.id,
+                isPendentePorProduto,
+                isPendentePorItem
+              });
+            }
+
+            return {
+              ...item,
+              devolucao_pendente
+            };
+          });
 
           return {
             ...venda,
@@ -301,19 +333,29 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
 
   const handleSelectVendaCompleta = async (vendaId: string, checked: boolean) => {
     if (checked) {
-      setSelectedVendas(prev => new Set([...prev, vendaId]));
-
       // Carregar itens se ainda não foram carregados
       const venda = vendas.find(v => v.id === vendaId);
       if (venda && !venda.itens) {
         await loadItensVenda(vendaId);
       }
 
+      // Verificar se há itens pendentes na venda
+      const vendaAtualizada = vendas.find(v => v.id === vendaId);
+      const temItensPendentes = vendaAtualizada?.itens?.some(item => item.devolucao_pendente);
+
+      if (temItensPendentes) {
+        setAvisoMensagem('Esta venda contém itens que já estão em processo de devolução e não pode ser selecionada completamente.');
+        setShowAvisoModal(true);
+        return;
+      }
+
+      setSelectedVendas(prev => new Set([...prev, vendaId]));
+
       // Remover itens individuais desta venda se estavam selecionados
-      if (venda?.itens) {
+      if (vendaAtualizada?.itens) {
         setSelectedItens(prev => {
           const newSet = new Set(prev);
-          venda.itens!.forEach(item => newSet.delete(item.id));
+          vendaAtualizada.itens!.forEach(item => newSet.delete(item.id));
           return newSet;
         });
       }
@@ -900,6 +942,45 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
             }
           }}
         />
+      )}
+
+      {/* Modal de Aviso */}
+      {showAvisoModal && (
+        <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-md bg-background-card rounded-lg border border-gray-800 shadow-2xl"
+          >
+            {/* Cabeçalho */}
+            <div className="px-6 py-4 border-b border-gray-800 flex items-center gap-3">
+              <div className="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                <AlertCircle size={20} className="text-yellow-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">
+                Atenção
+              </h3>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6">
+              <p className="text-gray-300 leading-relaxed">
+                {avisoMensagem}
+              </p>
+            </div>
+
+            {/* Rodapé */}
+            <div className="px-6 py-4 border-t border-gray-800 flex justify-end">
+              <button
+                onClick={() => setShowAvisoModal(false)}
+                className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors font-medium"
+              >
+                Entendi
+              </button>
+            </div>
+          </motion.div>
+        </div>
       )}
     </div>
   );

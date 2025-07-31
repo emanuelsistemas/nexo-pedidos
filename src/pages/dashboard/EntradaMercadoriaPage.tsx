@@ -40,6 +40,13 @@ const EntradaMercadoriaPage: React.FC = () => {
     return hoje.toISOString().slice(0, 16);
   });
 
+  // Estados para edição e exclusão
+  const [entradaParaEditar, setEntradaParaEditar] = useState<EntradaMercadoria | null>(null);
+  const [showModalExclusao, setShowModalExclusao] = useState(false);
+  const [showModalConfirmacao, setShowModalConfirmacao] = useState(false);
+  const [entradaParaExcluir, setEntradaParaExcluir] = useState<EntradaMercadoria | null>(null);
+  const [tipoExclusao, setTipoExclusao] = useState<'permitida' | 'negada'>('permitida');
+
   // Função para carregar entradas de mercadoria
   const loadEntradas = async () => {
     try {
@@ -109,6 +116,50 @@ const EntradaMercadoriaPage: React.FC = () => {
   useEffect(() => {
     loadEntradas();
   }, []);
+
+  // Função para editar entrada
+  const handleEditarEntrada = (entrada: EntradaMercadoria) => {
+    console.log('🔄 Editando entrada:', entrada);
+    setEntradaParaEditar(entrada);
+    setShowModal(true);
+  };
+
+  // Função para excluir entrada
+  const handleExcluirEntrada = (entrada: EntradaMercadoria) => {
+    console.log('🗑️ Tentativa de exclusão:', entrada);
+
+    setEntradaParaExcluir(entrada);
+
+    if (entrada.status === 'processada') {
+      // Se a entrada já foi processada, mostrar modal de aviso
+      setTipoExclusao('negada');
+      setShowModalExclusao(true);
+    } else {
+      // Se é rascunho, mostrar modal de confirmação
+      setTipoExclusao('permitida');
+      setShowModalConfirmacao(true);
+    }
+  };
+
+  // Função para confirmar exclusão
+  const confirmarExclusao = async (entrada: EntradaMercadoria) => {
+    try {
+      console.log('🗑️ Excluindo entrada:', entrada.id);
+
+      const { error } = await supabase
+        .from('entrada_mercadoria')
+        .update({ deletado: true })
+        .eq('id', entrada.id);
+
+      if (error) throw error;
+
+      showMessage('success', 'Entrada excluída com sucesso!');
+      loadEntradas(); // Recarregar lista
+    } catch (error) {
+      console.error('Erro ao excluir entrada:', error);
+      showMessage('error', 'Erro ao excluir entrada');
+    }
+  };
 
   // Função para filtrar entradas
   const filteredEntradas = entradas.filter(entrada => {
@@ -337,19 +388,15 @@ const EntradaMercadoriaPage: React.FC = () => {
                 <div className="flex items-center gap-2 ml-4">
                   <button
                     className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                    title="Visualizar"
-                  >
-                    <Eye size={18} />
-                  </button>
-                  <button
-                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                     title="Editar"
+                    onClick={() => handleEditarEntrada(entrada)}
                   >
                     <Edit size={18} />
                   </button>
                   <button
                     className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors"
                     title="Excluir"
+                    onClick={() => handleExcluirEntrada(entrada)}
                   >
                     <Trash2 size={18} />
                   </button>
@@ -364,9 +411,128 @@ const EntradaMercadoriaPage: React.FC = () => {
       <AnimatePresence>
         {showModal && (
           <EntradaMercadoriaModal
-            onClose={() => setShowModal(false)}
+            onClose={() => {
+              setShowModal(false);
+              setEntradaParaEditar(null);
+            }}
             onSave={loadEntradas}
+            entradaParaEditar={entradaParaEditar}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <AnimatePresence>
+        {showModalExclusao && entradaParaExcluir && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card border border-gray-700 rounded-lg p-6 w-full max-w-md"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <Trash2 size={24} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Exclusão não permitida</h3>
+                  <p className="text-gray-400 text-sm">Esta entrada não pode ser excluída</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-300 mb-2">
+                  A entrada <strong className="text-white">{entradaParaExcluir.numero_documento}</strong> já foi processada e não pode ser excluída.
+                </p>
+                <p className="text-gray-400 text-sm">
+                  Entradas processadas são protegidas para manter a integridade dos dados do sistema.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setShowModalExclusao(false);
+                    setEntradaParaExcluir(null);
+                  }}
+                  className="flex-1"
+                >
+                  Entendi
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <AnimatePresence>
+        {showModalConfirmacao && entradaParaExcluir && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card border border-gray-700 rounded-lg p-6 w-full max-w-md"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <Trash2 size={24} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Confirmar exclusão</h3>
+                  <p className="text-gray-400 text-sm">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-300 mb-2">
+                  Tem certeza que deseja excluir a entrada <strong className="text-white">{entradaParaExcluir.numero_documento}</strong>?
+                </p>
+                <p className="text-gray-400 text-sm">
+                  Todos os dados desta entrada serão removidos permanentemente.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowModalConfirmacao(false);
+                    setEntradaParaExcluir(null);
+                  }}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    if (entradaParaExcluir) {
+                      confirmarExclusao(entradaParaExcluir);
+                    }
+                    setShowModalConfirmacao(false);
+                    setEntradaParaExcluir(null);
+                  }}
+                  className="flex-1"
+                >
+                  Excluir
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -374,7 +540,11 @@ const EntradaMercadoriaPage: React.FC = () => {
 };
 
 // Modal de Nova Entrada de Mercadoria com abas
-const EntradaMercadoriaModal: React.FC<{ onClose: () => void; onSave: () => void }> = ({ onClose, onSave }) => {
+const EntradaMercadoriaModal: React.FC<{
+  onClose: () => void;
+  onSave: () => void;
+  entradaParaEditar?: EntradaMercadoria | null;
+}> = ({ onClose, onSave, entradaParaEditar }) => {
   const [activeTab, setActiveTab] = useState<'manual' | 'xml'>('manual');
 
   return (
@@ -385,6 +555,7 @@ const EntradaMercadoriaModal: React.FC<{ onClose: () => void; onSave: () => void
       className="fixed top-0 left-0 right-0 bottom-0 bg-black/50 backdrop-blur-sm z-[9999]"
       onClick={onClose}
       style={{ margin: 0, padding: 0 }}
+      data-modal="entrada-mercadoria"
     >
       <motion.div
         initial={{ scale: 0.98, opacity: 0 }}
@@ -396,10 +567,13 @@ const EntradaMercadoriaModal: React.FC<{ onClose: () => void; onSave: () => void
       >
         {/* Header do Modal */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-700">
-          <h1 className="text-xl font-bold text-white">Nova Entrada de Mercadoria</h1>
+          <h1 className="text-xl font-bold text-white">
+            {entradaParaEditar ? `Editar Entrada #${entradaParaEditar.numero_documento}` : 'Nova Entrada de Mercadoria'}
+          </h1>
           <button
             onClick={onClose}
             className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+            data-action="close"
           >
             <X size={20} />
           </button>
@@ -433,7 +607,7 @@ const EntradaMercadoriaModal: React.FC<{ onClose: () => void; onSave: () => void
 
         {/* Conteúdo das Abas */}
         <div className="flex-1 overflow-hidden">
-          {activeTab === 'manual' && <EntradaManualTab onClose={onClose} onSave={onSave} />}
+          {activeTab === 'manual' && <EntradaManualTab onClose={onClose} onSave={onSave} entradaParaEditar={entradaParaEditar} />}
           {activeTab === 'xml' && <EntradaXMLTab onClose={onClose} onSave={onSave} />}
         </div>
       </motion.div>
@@ -442,7 +616,11 @@ const EntradaMercadoriaModal: React.FC<{ onClose: () => void; onSave: () => void
 };
 
 // Aba de Entrada Manual
-const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = ({ onClose, onSave }) => {
+const EntradaManualTab: React.FC<{
+  onClose: () => void;
+  onSave: () => void;
+  entradaParaEditar?: EntradaMercadoria | null;
+}> = ({ onClose, onSave, entradaParaEditar }) => {
   // Estados do formulário
   const [empresaId, setEmpresaId] = useState('');
   const [usuarioId, setUsuarioId] = useState('');
@@ -484,6 +662,65 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
 
     loadUserData();
   }, []);
+
+  // Carregar dados da entrada quando for edição
+  useEffect(() => {
+    const loadEntradaData = async () => {
+      if (!entradaParaEditar || !empresaId) return;
+
+      try {
+        console.log('🔄 Carregando dados da entrada para edição:', entradaParaEditar);
+
+        // Carregar dados básicos da entrada
+        setFornecedorNome(entradaParaEditar.fornecedor_nome);
+        setFornecedorDocumento(entradaParaEditar.fornecedor_cnpj);
+        setNumeroDocumento(entradaParaEditar.numero_documento);
+        setDataEntrada(entradaParaEditar.data_entrada);
+        setObservacoes(entradaParaEditar.observacoes);
+
+        // Buscar o fornecedor_id na tabela de fornecedores
+        const { data: fornecedorData } = await supabase
+          .from('fornecedores')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('nome', entradaParaEditar.fornecedor_nome)
+          .eq('deletado', false)
+          .single();
+
+        if (fornecedorData) {
+          setFornecedorId(fornecedorData.id);
+        }
+
+        // Carregar produtos da entrada se existirem
+        const { data: produtosData } = await supabase
+          .from('entrada_mercadoria_itens')
+          .select(`
+            *,
+            produto:produtos(*)
+          `)
+          .eq('entrada_mercadoria_id', entradaParaEditar.id)
+          .eq('deletado', false);
+
+        if (produtosData && produtosData.length > 0) {
+          const produtosFormatados = produtosData.map(item => ({
+            id: item.produto?.id || item.produto_id,
+            nome: item.produto?.nome || item.nome_produto,
+            codigo: item.produto?.codigo || item.codigo_produto,
+            quantidade: item.quantidade,
+            preco_unitario: item.preco_custo || item.preco_unitario,
+            preco_total: item.preco_total
+          }));
+          setProdutos(produtosFormatados);
+        }
+
+      } catch (error) {
+        console.error('Erro ao carregar dados da entrada:', error);
+        showMessage('error', 'Erro ao carregar dados da entrada');
+      }
+    };
+
+    loadEntradaData();
+  }, [entradaParaEditar, empresaId]);
 
   const handleFornecedorChange = (
     id: string,
@@ -1516,9 +1753,23 @@ const ProdutoEntradaModal: React.FC<{
       console.log('✅ Rascunho salvo com sucesso!');
       showMessage('success', 'Rascunho salvo com sucesso!');
 
-      // Fechar modal e retornar à listagem
-      console.log('🔄 Fechando modal e retornando à listagem...');
+      // Fechar modal de produtos
+      console.log('🔄 Fechando modal de produtos...');
       onClose();
+
+      // Fechar modal principal e retornar à listagem
+      console.log('🔄 Retornando à listagem...');
+      // Aguardar um pouco para garantir que o modal de produtos fechou
+      setTimeout(() => {
+        // Encontrar e fechar o modal principal
+        const modalPrincipal = document.querySelector('[data-modal="entrada-mercadoria"]');
+        if (modalPrincipal) {
+          const botaoFechar = modalPrincipal.querySelector('button[data-action="close"]');
+          if (botaoFechar) {
+            (botaoFechar as HTMLButtonElement).click();
+          }
+        }
+      }, 100);
     } catch (error) {
       console.error('❌ Erro detalhado ao salvar rascunho:', error);
       console.error('❌ Stack trace:', error.stack);
@@ -1627,7 +1878,7 @@ const ProdutoEntradaModal: React.FC<{
                         setShowProdutoSeletor(true);
                       }
                     }}
-                    className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-gray-600 transition-colors"
+                    className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-gray-100 hover:text-white hover:bg-gray-600 transition-colors"
                   >
                     {produtoSelecionado ? <X size={14} /> : <Search size={14} />}
                   </button>

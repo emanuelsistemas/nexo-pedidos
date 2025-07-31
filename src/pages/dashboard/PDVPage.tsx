@@ -2020,6 +2020,10 @@ const PDVPage: React.FC = () => {
       if (item.id === 'pedidos' || item.id === 'movimentos') {
         return carrinho.length === 0; // Só mostra se carrinho estiver vazio
       }
+      // ✅ NOVO: Ocultar "Devoluções" quando o carrinho estiver vazio
+      if (item.id === 'devolucoes') {
+        return carrinho.length > 0; // Só mostra se carrinho tiver itens
+      }
       // Se for o item 'comandas', só mostrar se a configuração estiver habilitada
       if (item.id === 'comandas') {
         return pdvConfig?.comandas === true;
