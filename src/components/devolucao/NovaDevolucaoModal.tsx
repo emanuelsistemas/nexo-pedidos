@@ -960,7 +960,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           {/* Seleção de Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-3">
-              Cliente para a Devolução
+              Cliente para a Devolução <span className="text-gray-500">(opcional)</span>
             </label>
             <div className="flex gap-3">
               <div className="flex-1">
@@ -968,8 +968,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                   value={clienteId}
                   onChange={setClienteId}
                   empresaId={empresaId}
-                  placeholder="Selecione o cliente"
-                  required={true}
+                  placeholder="Selecione o cliente (opcional)"
+                  required={false}
                 />
               </div>
               <button

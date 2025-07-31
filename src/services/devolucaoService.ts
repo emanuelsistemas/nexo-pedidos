@@ -81,6 +81,42 @@ class DevolucaoService {
   }
 
   /**
+   * Gerar código único de troca para a empresa
+   */
+  private async gerarCodigoTroca(empresaId: string): Promise<string> {
+    let tentativas = 0;
+    const maxTentativas = 10;
+
+    while (tentativas < maxTentativas) {
+      // Gerar código no formato TRC-XXXXXX (6 dígitos aleatórios)
+      const numeroAleatorio = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      const codigoTroca = `TRC-${numeroAleatorio}`;
+
+      // Verificar se o código já existe para esta empresa
+      const { data, error } = await supabase
+        .from('devolucoes')
+        .select('id')
+        .eq('empresa_id', empresaId)
+        .eq('codigo_troca', codigoTroca)
+        .limit(1);
+
+      if (error) {
+        console.error('Erro ao verificar código de troca:', error);
+        throw new Error('Erro ao gerar código de troca');
+      }
+
+      // Se não existe, usar este código
+      if (!data || data.length === 0) {
+        return codigoTroca;
+      }
+
+      tentativas++;
+    }
+
+    throw new Error('Não foi possível gerar um código de troca único após várias tentativas');
+  }
+
+  /**
    * Criar nova devolução
    */
   async criarDevolucao(dados: CriarDevolucaoData): Promise<Devolucao> {
@@ -93,10 +129,12 @@ class DevolucaoService {
 
       const empresaId = await this.obterEmpresaId();
       const numeroDevol = await this.obterProximoNumero(empresaId);
+      const codigoTroca = await this.gerarCodigoTroca(empresaId);
 
       // Preparar dados da devolução principal
       const devolucaoData = {
         numero: numeroDevol,
+        codigo_troca: codigoTroca,
         empresa_id: empresaId,
         usuario_id: userData.user.id,
         cliente_id: dados.clienteId || null,

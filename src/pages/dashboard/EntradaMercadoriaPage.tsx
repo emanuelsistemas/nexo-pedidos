@@ -917,6 +917,57 @@ const ProdutoEntradaModal: React.FC<{
     preco_total: 0
   });
 
+  // Estados para sistema de tabelas de preços
+  const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState<boolean>(false);
+  const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
+  const [abaPrecoAtiva, setAbaPrecoAtiva] = useState<string>('padrao');
+  const [precosTabelas, setPrecosTabelas] = useState<{[key: string]: number}>({});
+
+  // Função para carregar configurações de tabela de preços
+  const carregarConfiguracoesTabelaPrecos = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Carregar configuração de tabela de preços
+      const { data: configData } = await supabase
+        .from('tabela_preco_config')
+        .select('trabalha_com_tabela_precos')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (configData?.trabalha_com_tabela_precos) {
+        setTrabalhaComTabelaPrecos(true);
+
+        // Carregar tabelas de preços ativas
+        const { data: tabelasData } = await supabase
+          .from('tabela_de_preco')
+          .select('id, nome')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('ativo', true)
+          .eq('deletado', false)
+          .order('created_at', { ascending: true });
+
+        if (tabelasData) {
+          setTabelasPrecos(tabelasData);
+        }
+      } else {
+        setTrabalhaComTabelaPrecos(false);
+        setTabelasPrecos([]);
+      }
+    } catch (error) {
+      // Erro silencioso
+    }
+  };
+
   // Funções de cálculo automático
   const calcularPrecoVenda = (custo: number, margem: number): number => {
     if (custo <= 0 || margem <= 0) return 0;
@@ -927,6 +978,87 @@ const ProdutoEntradaModal: React.FC<{
     if (custo <= 0 || precoVenda <= 0) return 0;
     return ((precoVenda - custo) / custo) * 100;
   };
+
+  // Função para carregar preços das tabelas de um produto
+  const carregarPrecosTabelas = async (produtoId: string) => {
+    try {
+      const { data: precosData } = await supabase
+        .from('produto_precos')
+        .select('tabela_preco_id, preco')
+        .eq('produto_id', produtoId);
+
+      if (precosData) {
+        const precosMap: {[key: string]: number} = {};
+        precosData.forEach(item => {
+          precosMap[item.tabela_preco_id] = item.preco;
+        });
+        setPrecosTabelas(precosMap);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar preços das tabelas:', error);
+    }
+  };
+
+  // Função para salvar preços das tabelas
+  const salvarPrecosTabelas = async (produtoId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return {};
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return {};
+
+      // Preparar dados para inserção em lote
+      const precosParaInserir = [];
+      const precosMap: {[key: string]: number} = {};
+
+      // Verificar cada tabela de preços e seus valores
+      for (const tabela of tabelasPrecos) {
+        const preco = precosTabelas[tabela.id];
+
+        // Incluir preços >= 0 (permite salvar valor 0 para remover preço)
+        if (preco !== undefined && preco >= 0) {
+          precosParaInserir.push({
+            empresa_id: usuarioData.empresa_id,
+            produto_id: produtoId,
+            tabela_preco_id: tabela.id,
+            preco: preco
+          });
+          precosMap[tabela.id] = preco;
+        }
+      }
+
+      // Se há preços para salvar, fazer upsert em lote
+      if (precosParaInserir.length > 0) {
+        const { error } = await supabase
+          .from('produto_precos')
+          .upsert(precosParaInserir, {
+            onConflict: 'produto_id,tabela_preco_id'
+          });
+
+        if (error) throw error;
+        return precosMap;
+      }
+
+      return {};
+    } catch (error) {
+      console.error('Erro ao salvar preços das tabelas:', error);
+      showMessage('error', 'Erro ao salvar preços das tabelas');
+      return {};
+    }
+  };
+
+  // Carregar configurações quando o modal abrir
+  useEffect(() => {
+    if (isOpen) {
+      carregarConfiguracoesTabelaPrecos();
+    }
+  }, [isOpen]);
 
   // Resetar form quando produto é selecionado
   useEffect(() => {
@@ -942,8 +1074,13 @@ const ProdutoEntradaModal: React.FC<{
         preco_venda: precoVenda,
         preco_total: precoVenda
       });
+
+      // Carregar preços das tabelas para este produto
+      if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+        carregarPrecosTabelas(produtoSelecionado.id);
+      }
     }
-  }, [produtoSelecionado]);
+  }, [produtoSelecionado, trabalhaComTabelaPrecos, tabelasPrecos]);
 
   // Calcular preço total quando quantidade ou preço de venda mudam
   useEffect(() => {
@@ -978,7 +1115,7 @@ const ProdutoEntradaModal: React.FC<{
   };
 
   // Adicionar produto à lista
-  const adicionarProduto = () => {
+  const adicionarProduto = async () => {
     if (!produtoSelecionado) {
       showMessage('error', 'Selecione um produto');
       return;
@@ -994,6 +1131,11 @@ const ProdutoEntradaModal: React.FC<{
       return;
     }
 
+    // Salvar preços das tabelas se houver
+    if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+      await salvarPrecosTabelas(produtoSelecionado.id);
+    }
+
     const novoProduto = {
       id: Date.now().toString(), // ID temporário
       produto_id: produtoSelecionado.id,
@@ -1004,7 +1146,8 @@ const ProdutoEntradaModal: React.FC<{
       preco_custo: produtoForm.preco_custo,
       margem_percentual: produtoForm.margem_percentual,
       preco_venda: produtoForm.preco_venda,
-      preco_total: produtoForm.preco_total
+      preco_total: produtoForm.preco_total,
+      tabelas_precos: { ...precosTabelas } // Salvar preços das tabelas
     };
 
     setProdutos(prev => [...prev, novoProduto]);
@@ -1019,6 +1162,8 @@ const ProdutoEntradaModal: React.FC<{
       preco_venda: 0,
       preco_total: 0
     });
+    setPrecosTabelas({});
+    setAbaPrecoAtiva('padrao');
 
     showMessage('success', 'Produto adicionado com sucesso');
   };
@@ -1054,6 +1199,42 @@ const ProdutoEntradaModal: React.FC<{
           {/* Área de Busca de Produtos */}
           <div className="bg-gray-800/50 rounded-lg border border-gray-700 px-3 py-2">
             <h3 className="text-sm font-medium text-white mb-2">Adicionar Produto</h3>
+
+            {/* Abas de Preços (quando trabalha com tabelas) */}
+            {trabalhaComTabelaPrecos && tabelasPrecos.length > 0 && (
+              <div className="mb-3 border-b border-gray-700">
+                <div className="flex space-x-1 overflow-x-auto">
+                  {/* Aba Preço Padrão */}
+                  <button
+                    type="button"
+                    onClick={() => setAbaPrecoAtiva('padrao')}
+                    className={`flex-shrink-0 px-3 py-1 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      abaPrecoAtiva === 'padrao'
+                        ? 'border-primary-500 text-primary-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300'
+                    }`}
+                  >
+                    Preço
+                  </button>
+
+                  {/* Abas das Tabelas de Preços */}
+                  {tabelasPrecos.map((tabela) => (
+                    <button
+                      key={tabela.id}
+                      type="button"
+                      onClick={() => setAbaPrecoAtiva(tabela.id)}
+                      className={`flex-shrink-0 px-3 py-1 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                        abaPrecoAtiva === tabela.id
+                          ? 'border-primary-500 text-primary-400'
+                          : 'border-transparent text-gray-400 hover:text-gray-300'
+                      }`}
+                    >
+                      {tabela.nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Layout compacto em uma linha */}
             <div className="flex flex-wrap gap-2 items-end">
@@ -1168,21 +1349,30 @@ const ProdutoEntradaModal: React.FC<{
               {/* Preço de Venda - Compacto */}
               <div className="w-20">
                 <label className="block text-xs font-medium text-gray-300 mb-1">
-                  Venda (R$)
+                  {abaPrecoAtiva === 'padrao' ? 'Venda (R$)' : 'Preço (R$)'}
                 </label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={produtoForm.preco_venda}
+                  value={abaPrecoAtiva === 'padrao' ? produtoForm.preco_venda : (precosTabelas[abaPrecoAtiva] || 0)}
                   onChange={(e) => {
-                    const precoVenda = parseFloat(e.target.value) || 0;
-                    setProdutoForm(prev => ({ ...prev, preco_venda: precoVenda }));
+                    const preco = parseFloat(e.target.value) || 0;
 
-                    // Se tem custo definido, calcular margem
-                    if (produtoForm.preco_custo > 0) {
-                      const margem = calcularMargem(produtoForm.preco_custo, precoVenda);
-                      setProdutoForm(prev => ({ ...prev, margem_percentual: Math.ceil(margem) }));
+                    if (abaPrecoAtiva === 'padrao') {
+                      setProdutoForm(prev => ({ ...prev, preco_venda: preco }));
+
+                      // Se tem custo definido, calcular margem
+                      if (produtoForm.preco_custo > 0) {
+                        const margem = calcularMargem(produtoForm.preco_custo, preco);
+                        setProdutoForm(prev => ({ ...prev, margem_percentual: Math.ceil(margem) }));
+                      }
+                    } else {
+                      // Atualizar preço da tabela
+                      setPrecosTabelas(prev => ({
+                        ...prev,
+                        [abaPrecoAtiva]: preco
+                      }));
                     }
                   }}
                   className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"

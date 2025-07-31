@@ -482,6 +482,14 @@ const DevolucoesPage: React.FC = () => {
                       {getStatusText(devolucao.status)}
                     </span>
                   </div>
+                  {/* Código de Troca */}
+                  {devolucao.codigo_troca && (
+                    <div className="mb-1">
+                      <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30 font-mono">
+                        {devolucao.codigo_troca}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-gray-400 text-sm truncate">
                     {devolucao.cliente_nome || 'Sem Cliente'}
                   </p>
