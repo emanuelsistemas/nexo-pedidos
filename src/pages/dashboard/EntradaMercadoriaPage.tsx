@@ -1014,29 +1014,30 @@ const ProdutoEntradaModal: React.FC<{
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
       <div className="w-full h-full bg-gray-900 flex flex-col">
         {/* Cabeçalho */}
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Produtos da Entrada</h2>
+        <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Produtos da Entrada</h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-gray-800 text-gray-400 hover:text-white"
+            className="p-1.5 rounded-full bg-gray-800 text-gray-400 hover:text-white"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Conteúdo */}
-        <div className="flex-1 flex flex-col p-4 gap-4">
+        <div className="flex-1 flex flex-col p-3 gap-3">
           {/* Área de Busca de Produtos */}
-          <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-4">
-            <h3 className="text-lg font-medium text-white mb-4">Adicionar Produto</h3>
+          <div className="bg-gray-800/50 rounded-lg border border-gray-700 px-3 py-2">
+            <h3 className="text-sm font-medium text-white mb-2">Adicionar Produto</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Busca de Produto */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+            {/* Layout compacto em uma linha */}
+            <div className="flex flex-wrap gap-2 items-end">
+              {/* Busca de Produto - Flexível */}
+              <div className="flex-1 min-w-[300px]">
+                <label className="block text-xs font-medium text-gray-300 mb-1">
                   Buscar Produto
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <input
                     type="text"
                     value={codigoBusca}
@@ -1053,11 +1054,11 @@ const ProdutoEntradaModal: React.FC<{
                       }
                     }}
                     placeholder={produtoSelecionado ? produtoSelecionado.nome : "Digite código/EAN e pressione Enter"}
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="flex-1 px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                     readOnly={!!produtoSelecionado}
                   />
-                  <Button
-                    variant="outline"
+                  <button
+                    type="button"
                     onClick={() => {
                       if (produtoSelecionado) {
                         setProdutoSelecionado(null);
@@ -1066,16 +1067,17 @@ const ProdutoEntradaModal: React.FC<{
                         setShowProdutoSeletor(true);
                       }
                     }}
+                    className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-gray-600 transition-colors"
                   >
-                    {produtoSelecionado ? <X size={16} /> : <Search size={16} />}
-                  </Button>
+                    {produtoSelecionado ? <X size={14} /> : <Search size={14} />}
+                  </button>
                 </div>
               </div>
 
-              {/* Quantidade */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Quantidade
+              {/* Quantidade - Compacto */}
+              <div className="w-20">
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Qtd
                 </label>
                 <input
                   type="number"
@@ -1083,15 +1085,15 @@ const ProdutoEntradaModal: React.FC<{
                   step="0.001"
                   value={produtoForm.quantidade}
                   onChange={(e) => setProdutoForm(prev => ({ ...prev, quantidade: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                   disabled={!produtoSelecionado}
                 />
               </div>
 
-              {/* Preço Unitário */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Preço Unitário (R$)
+              {/* Preço Unitário - Compacto */}
+              <div className="w-24">
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Preço Unit. (R$)
                 </label>
                 <input
                   type="number"
@@ -1099,41 +1101,42 @@ const ProdutoEntradaModal: React.FC<{
                   step="0.01"
                   value={produtoForm.preco_unitario}
                   onChange={(e) => setProdutoForm(prev => ({ ...prev, preco_unitario: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                   disabled={!produtoSelecionado}
                 />
               </div>
 
-              {/* Preço Total */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Preço Total (R$)
+              {/* Preço Total - Compacto */}
+              <div className="w-24">
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Total (R$)
                 </label>
                 <input
                   type="text"
-                  value={`R$ ${produtoForm.preco_total.toFixed(2)}`}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  value={produtoForm.preco_total.toFixed(2)}
+                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                   readOnly
                 />
               </div>
 
-              {/* Botão Adicionar */}
-              <div className="md:col-span-2 flex justify-end">
-                <Button
-                  variant="primary"
+              {/* Botão Adicionar - Compacto */}
+              <div>
+                <button
+                  type="button"
                   onClick={adicionarProduto}
                   disabled={!produtoSelecionado}
+                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors flex items-center gap-1"
                 >
-                  <Plus size={16} className="mr-2" />
-                  Adicionar Produto
-                </Button>
+                  <Plus size={14} />
+                  Adicionar
+                </button>
               </div>
             </div>
           </div>
 
           {/* Lista de Produtos Adicionados */}
-          <div className="flex-1 bg-gray-800/50 rounded-lg border border-gray-700 p-4">
-            <h3 className="text-lg font-medium text-white mb-4">
+          <div className="flex-1 bg-gray-800/50 rounded-lg border border-gray-700 p-3">
+            <h3 className="text-base font-medium text-white mb-3">
               Produtos Adicionados ({produtos.length})
             </h3>
 
@@ -1193,8 +1196,8 @@ const ProdutoEntradaModal: React.FC<{
         </div>
 
         {/* Rodapé com Botões */}
-        <div className="p-4 border-t border-gray-800 flex items-center justify-between">
-          <div className="text-gray-400">
+        <div className="px-4 py-3 border-t border-gray-800 flex items-center justify-between">
+          <div className="text-sm text-gray-400">
             {produtos.length} produto(s) adicionado(s)
           </div>
           <div className="flex gap-3">

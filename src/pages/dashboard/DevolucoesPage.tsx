@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, Edit, RotateCcw, Plus, DollarSign, Package, Play } from 'lucide-react';
+import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, Edit, RotateCcw, Plus, DollarSign, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { isDesktopScreen } from '../../config/responsive';
 import { Devolucao } from '../../types';
 import NovaDevolucaoModal from '../../components/devolucao/NovaDevolucaoModal';
-import ProcessarDevolucaoModal from '../../components/devolucao/ProcessarDevolucaoModal';
+
 import EditarDevolucaoModal from '../../components/devolucao/EditarDevolucaoModal';
 import { devolucaoService, CriarDevolucaoData } from '../../services/devolucaoService';
 
@@ -19,7 +19,7 @@ const DevolucoesPage: React.FC = () => {
   const [dataFilter, setDataFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showNovaDevolucaoModal, setShowNovaDevolucaoModal] = useState(false);
-  const [showProcessarModal, setShowProcessarModal] = useState(false);
+
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [devolucaoSelecionada, setDevolucaoSelecionada] = useState<Devolucao | null>(null);
   const [isCreatingDevolucao, setIsCreatingDevolucao] = useState(false);
@@ -162,9 +162,25 @@ const DevolucoesPage: React.FC = () => {
       console.log('Estrutura dos itens recebidos:', JSON.stringify(vendaData.itens, null, 2));
       console.log('Primeiro item detalhado:', JSON.stringify(vendaData.itens[0], null, 2));
 
-      // Mapear itens do modal para o formato esperado pelo serviço
-      const itensFormatados = vendaData.itens.map((item: any, index: number) => {
-        console.log(`Mapeando item ${index}:`, JSON.stringify(item, null, 2));
+      // Filtrar apenas itens que são produtos reais (têm produto_id)
+      const itensValidos = vendaData.itens.filter((item: any) => {
+        const isValid = item.produto_id !== null && item.produto_id !== undefined;
+        if (!isValid) {
+          console.log(`Item "${item.nome_produto}" ignorado - não é um produto (produto_id: ${item.produto_id})`);
+        }
+        return isValid;
+      });
+
+      console.log('Itens válidos (com produto_id):', JSON.stringify(itensValidos, null, 2));
+
+      if (itensValidos.length === 0) {
+        alert('Erro: Nenhum produto válido selecionado para devolução.\n\nTaxas de entrega, serviços e outros itens sem produto não podem ser devolvidos.');
+        return;
+      }
+
+      // Mapear itens válidos para o formato esperado pelo serviço
+      const itensFormatados = itensValidos.map((item: any, index: number) => {
+        console.log(`Mapeando item válido ${index}:`, JSON.stringify(item, null, 2));
         const itemFormatado = {
           produto_id: item.produto_id,
           produto_nome: item.nome_produto,
@@ -177,21 +193,27 @@ const DevolucoesPage: React.FC = () => {
           preco_total: item.valor_total_item,
           motivo: 'Devolução solicitada pelo cliente'
         };
-        console.log(`Item ${index} formatado:`, JSON.stringify(itemFormatado, null, 2));
+        console.log(`Item válido ${index} formatado:`, JSON.stringify(itemFormatado, null, 2));
         return itemFormatado;
       });
 
       console.log('Todos os itens formatados:', JSON.stringify(itensFormatados, null, 2));
 
+      // Calcular valor total apenas dos itens válidos (produtos reais)
+      const valorTotalValido = itensFormatados.reduce((total, item) => total + item.preco_total, 0);
+
+      console.log('Valor total original (incluindo taxas):', vendaData.valorTotal);
+      console.log('Valor total válido (apenas produtos):', valorTotalValido);
+
       // Preparar dados para criação da devolução
       const dadosDevolucao: CriarDevolucaoData = {
         clienteId: vendaData.clienteId || undefined,
         itens: itensFormatados,
-        valorTotal: vendaData.valorTotal || 0,
+        valorTotal: valorTotalValido, // Usar apenas o valor dos produtos válidos
         tipoDevolucao: vendaData.vendasCompletas?.length > 0 ? 'total' : 'parcial',
         formaReembolso: 'dinheiro', // Padrão - pode ser alterado depois
         motivoGeral: 'Devolução solicitada pelo cliente',
-        observacoes: `Itens selecionados: ${vendaData.itens.length}`,
+        observacoes: `Itens selecionados: ${itensFormatados.length} produtos (Valor: R$ ${valorTotalValido.toFixed(2)})`,
         pedidoTipo: 'pdv'
       };
 
@@ -223,37 +245,9 @@ const DevolucoesPage: React.FC = () => {
     }
   };
 
-  const handleProcessarDevolucao = (devolucao: Devolucao) => {
-    setDevolucaoSelecionada(devolucao);
-    setShowProcessarModal(true);
-  };
-
   const handleEditarDevolucao = (devolucao: Devolucao) => {
     setDevolucaoSelecionada(devolucao);
     setShowEditarModal(true);
-  };
-
-  const handleConfirmProcessamento = async (aprovar: boolean, observacoes?: string) => {
-    if (!devolucaoSelecionada) return;
-
-    try {
-      await devolucaoService.processarDevolucao(
-        devolucaoSelecionada.id,
-        aprovar,
-        observacoes
-      );
-
-      // Recarregar a lista de devoluções
-      await loadDevolucoes(false);
-
-      // Fechar o modal
-      setShowProcessarModal(false);
-      setDevolucaoSelecionada(null);
-
-    } catch (error) {
-      console.error('Erro ao processar devolução:', error);
-      // TODO: Mostrar toast de erro
-    }
   };
 
   const handleConfirmEdicao = async (dadosAtualizados: any) => {
@@ -495,20 +489,10 @@ const DevolucoesPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Coluna Central - Detalhes */}
+                {/* Coluna Central - Espaço reservado */}
                 <div className={`${isLargeScreen ? 'flex-[2]' : 'flex-1'} min-w-0`}>
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <Package size={12} className="text-gray-500" />
-                    <span className="text-xs text-gray-400">
-                      {devolucao.tipo_devolucao === 'total' ? 'Total' : 'Parcial'}
-                    </span>
-                  </div>
-                  <p className="text-gray-400 text-xs truncate">
-                    {getFormaReembolsoText(devolucao.forma_reembolso)}
-                  </p>
-                  <p className="text-gray-500 text-xs">
-                    {formatDate(devolucao.created_at)}
-                  </p>
+                  {/* Removido: detalhes de tipo, forma de reembolso e data */}
+                  {/* A devolução será processada no PDV */}
                 </div>
 
                 {/* Coluna Direita - Valor e Ações */}
@@ -520,15 +504,6 @@ const DevolucoesPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    {devolucao.status === 'pendente' && (
-                      <button
-                        onClick={() => handleProcessarDevolucao(devolucao)}
-                        className="p-1 rounded text-blue-400 hover:text-blue-300 hover:bg-gray-700 transition-colors"
-                        title="Processar devolução"
-                      >
-                        <Play size={14} />
-                      </button>
-                    )}
                     <button
                       onClick={() => handleEditarDevolucao(devolucao)}
                       className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
@@ -552,16 +527,7 @@ const DevolucoesPage: React.FC = () => {
         isLoading={isCreatingDevolucao}
       />
 
-      {/* Modal Processar Devolução */}
-      <ProcessarDevolucaoModal
-        isOpen={showProcessarModal}
-        onClose={() => {
-          setShowProcessarModal(false);
-          setDevolucaoSelecionada(null);
-        }}
-        devolucao={devolucaoSelecionada}
-        onConfirm={handleConfirmProcessamento}
-      />
+
 
       {/* Modal Editar Devolução */}
       <EditarDevolucaoModal

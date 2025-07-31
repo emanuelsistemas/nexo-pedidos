@@ -327,19 +327,24 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const getValorTotalSelecionado = () => {
     let total = 0;
 
-    // Somar vendas completas selecionadas
+    // Somar vendas completas selecionadas (apenas itens válidos)
     selectedVendas.forEach(vendaId => {
       const venda = vendas.find(v => v.id === vendaId);
-      if (venda) {
-        total += venda.valor_total;
+      if (venda && venda.itens) {
+        // Somar apenas itens que têm produto_id (produtos reais)
+        venda.itens.forEach(item => {
+          if (item.produto_id !== null && item.produto_id !== undefined) {
+            total += item.valor_total_item;
+          }
+        });
       }
     });
 
-    // Somar itens individuais selecionados
+    // Somar itens individuais selecionados (apenas os válidos)
     selectedItens.forEach(itemId => {
       vendas.forEach(venda => {
         const item = venda.itens?.find(i => i.id === itemId);
-        if (item) {
+        if (item && item.produto_id !== null && item.produto_id !== undefined) {
           total += item.valor_total_item;
         }
       });
@@ -351,32 +356,55 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const getQuantidadeItensSelecionados = () => {
     let count = 0;
 
-    // Contar itens de vendas completas
+    // Contar itens válidos de vendas completas
     selectedVendas.forEach(vendaId => {
       const venda = vendas.find(v => v.id === vendaId);
       if (venda) {
-        // Se a venda tem itens carregados, contar os itens reais
+        // Se a venda tem itens carregados, contar apenas os itens válidos (com produto_id)
         if (venda.itens && venda.itens.length > 0) {
-          count += venda.itens.length;
+          const itensValidos = venda.itens.filter(item =>
+            item.produto_id !== null && item.produto_id !== undefined
+          );
+          count += itensValidos.length;
         } else {
-          // Caso contrário, usar o contador de itens
+          // Caso contrário, usar o contador de itens (assumindo que são válidos)
           count += venda.itens_count || 0;
         }
       }
     });
 
-    // Contar itens individuais (apenas os que não fazem parte de vendas completas selecionadas)
+    // Contar itens individuais válidos (apenas os que não fazem parte de vendas completas selecionadas)
     selectedItens.forEach(itemId => {
       // Verificar se este item não faz parte de uma venda completa selecionada
       const itemVenda = vendas.find(venda =>
         venda.itens?.some(item => item.id === itemId)
       );
       if (itemVenda && !selectedVendas.has(itemVenda.id)) {
-        count += 1;
+        const item = itemVenda.itens?.find(i => i.id === itemId);
+        // Contar apenas se for um item válido (com produto_id)
+        if (item && item.produto_id !== null && item.produto_id !== undefined) {
+          count += 1;
+        }
       }
     });
 
     return count;
+  };
+
+  // Função para calcular o valor válido de uma venda (apenas produtos, sem taxas/serviços)
+  const getValorValidoVenda = (venda: any) => {
+    if (!venda.itens || venda.itens.length === 0) {
+      // Se não tem itens carregados, retorna o valor total (assumindo que é válido)
+      return venda.valor_total;
+    }
+
+    // Somar apenas itens válidos (com produto_id)
+    return venda.itens.reduce((total: number, item: any) => {
+      if (item.produto_id !== null && item.produto_id !== undefined) {
+        return total + item.valor_total_item;
+      }
+      return total;
+    }, 0);
   };
 
   const handleClose = () => {
@@ -645,8 +673,13 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                 <div className="text-right">
                                   <div className="flex items-center gap-1 text-white font-medium">
                                     <DollarSign size={14} className="text-green-400" />
-                                    {formatCurrency(venda.valor_total)}
+                                    {formatCurrency(getValorValidoVenda(venda))}
                                   </div>
+                                  {venda.itens && venda.itens.length > 0 && getValorValidoVenda(venda) !== venda.valor_total && (
+                                    <div className="text-xs text-gray-400">
+                                      Total: {formatCurrency(venda.valor_total)}
+                                    </div>
+                                  )}
                                 </div>
                                 <button
                                   onClick={(e) => {
@@ -685,37 +718,56 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                         const isVendaCompleteSelected = selectedVendas.has(venda.id);
                                         const isItemSelected = selectedItens.has(item.id);
                                         const isChecked = isVendaCompleteSelected || isItemSelected;
+                                        const isItemValid = item.produto_id !== null && item.produto_id !== undefined;
+                                        const isDisabled = isVendaCompleteSelected || !isItemValid;
+
                                         return (
                                           <div
                                             key={item.id}
-                                            className="flex items-center gap-3 p-2 bg-gray-700/30 rounded border border-gray-600"
+                                            className={`flex items-center gap-3 p-2 rounded border ${
+                                              isItemValid
+                                                ? 'bg-gray-700/30 border-gray-600'
+                                                : 'bg-gray-800/50 border-gray-700 opacity-60'
+                                            }`}
                                           >
                                             <input
                                               type="checkbox"
                                               checked={isChecked}
-                                              disabled={isVendaCompleteSelected}
+                                              disabled={isDisabled}
                                               onChange={(e) => {
                                                 e.stopPropagation();
-                                                if (!isVendaCompleteSelected) {
+                                                if (!isDisabled) {
                                                   handleSelectItem(item.id, venda.id, e.target.checked);
                                                 }
                                               }}
                                               className={`w-4 h-4 text-primary-500 bg-gray-700 border-gray-600 rounded focus:ring-primary-500 focus:ring-2 ${
-                                                isVendaCompleteSelected ? 'opacity-75 cursor-not-allowed' : ''
+                                                isDisabled ? 'opacity-50 cursor-not-allowed' : ''
                                               }`}
                                             />
                                             <div className="flex-1">
                                               <div className="flex items-center justify-between">
-                                                <span className="text-white text-sm font-medium">
+                                                <span className={`text-sm font-medium ${
+                                                  isItemValid ? 'text-white' : 'text-gray-500'
+                                                }`}>
                                                   {item.nome_produto}
+                                                  {!isItemValid && (
+                                                    <span className="ml-2 text-xs text-orange-400">
+                                                      (Não disponível para devolução)
+                                                    </span>
+                                                  )}
                                                 </span>
-                                                <span className="text-white font-medium">
+                                                <span className={`font-medium ${
+                                                  isItemValid ? 'text-white' : 'text-gray-500'
+                                                }`}>
                                                   {formatCurrency(item.valor_total_item)}
                                                 </span>
                                               </div>
                                               <div className="flex items-center gap-4 text-xs text-gray-400">
                                                 <span>Qtd: {item.quantidade}</span>
                                                 <span>Unit: {formatCurrency(item.valor_unitario)}</span>
+                                                {!isItemValid && (
+                                                  <span className="text-orange-400">• Taxa/Serviço</span>
+                                                )}
                                               </div>
                                             </div>
                                           </div>

@@ -16,6 +16,7 @@ interface ClienteFormCompletoProps {
   empresaId: string;
   onClienteCreated: (clienteId: string) => void;
   fornecedorMode?: boolean;
+  showAllTabs?: boolean; // Nova prop para controlar se mostra todas as abas
 }
 
 const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
@@ -23,7 +24,8 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
   onClose,
   empresaId,
   onClienteCreated,
-  fornecedorMode = false
+  fornecedorMode = false,
+  showAllTabs = false // Por padrão, não mostra todas as abas (só mostra "Geral")
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
@@ -601,7 +603,9 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'tween', duration: 0.3 }}
-        className="fixed right-0 top-0 h-screen w-full max-w-4xl bg-background-card border-l border-gray-800 z-50 overflow-y-auto custom-scrollbar"
+        className={`fixed right-0 top-0 h-screen w-full ${
+          showAllTabs ? 'max-w-4xl' : 'max-w-lg'
+        } bg-background-card border-l border-gray-800 z-50 overflow-y-auto custom-scrollbar`}
       >
         <div className="p-6">
           {/* Header */}
@@ -623,47 +627,75 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('dados-gerais')}
-                className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
+                className={`py-2 px-2 font-medium text-xs border-b-2 ${
+                  showAllTabs ? 'flex-1 text-center' : 'text-left'
+                } ${
                   activeTab === 'dados-gerais'
                     ? 'border-primary-500 text-primary-500'
                     : 'border-transparent text-gray-400 hover:text-white'
                 } transition-colors`}
               >
-                Dados Gerais
+                Geral
               </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('descontos')}
-                className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
-                  activeTab === 'descontos'
-                    ? 'border-primary-500 text-primary-500'
-                    : 'border-transparent text-gray-400 hover:text-white'
-                } transition-colors`}
-              >
-                Descontos
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('financeiro')}
-                className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
-                  activeTab === 'financeiro'
-                    ? 'border-primary-500 text-primary-500'
-                    : 'border-transparent text-gray-400 hover:text-white'
-                } transition-colors`}
-              >
-                Financeiro
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('observacao')}
-                className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
-                  activeTab === 'observacao'
-                    ? 'border-primary-500 text-primary-500'
-                    : 'border-transparent text-gray-400 hover:text-white'
-                } transition-colors`}
-              >
-                Observação
-              </button>
+              {showAllTabs && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('descontos')}
+                    className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
+                      activeTab === 'descontos'
+                        ? 'border-primary-500 text-primary-500'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    } transition-colors`}
+                  >
+                    Descontos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('financeiro')}
+                    className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
+                      activeTab === 'financeiro'
+                        ? 'border-primary-500 text-primary-500'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    } transition-colors`}
+                  >
+                    Financeiro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('observacao')}
+                    className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
+                      activeTab === 'observacao'
+                        ? 'border-primary-500 text-primary-500'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    } transition-colors`}
+                  >
+                    Observação
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('devolucoes')}
+                    className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
+                      activeTab === 'devolucoes'
+                        ? 'border-primary-500 text-primary-500'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    } transition-colors`}
+                  >
+                    Devoluções
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('faturamentos')}
+                    className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
+                      activeTab === 'faturamentos'
+                        ? 'border-primary-500 text-primary-500'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    } transition-colors`}
+                  >
+                    Faturamentos
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Conteúdo da aba Dados Gerais */}
@@ -1156,7 +1188,7 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
             )}
 
             {/* Conteúdo da aba Descontos */}
-            {activeTab === 'descontos' && (
+            {showAllTabs && activeTab === 'descontos' && (
               <div className="space-y-6">
                 {/* Descontos por Prazo de Faturamento */}
                 <div className="space-y-4">
@@ -1400,7 +1432,7 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
             )}
 
             {/* Conteúdo da aba Financeiro */}
-            {activeTab === 'financeiro' && (
+            {showAllTabs && activeTab === 'financeiro' && (
               <div className="space-y-4">
                 <div className="text-center py-8 text-gray-400">
                   <Building className="mx-auto h-12 w-12 mb-2" />
@@ -1411,7 +1443,7 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
             )}
 
             {/* Conteúdo da aba Observação */}
-            {activeTab === 'observacao' && (
+            {showAllTabs && activeTab === 'observacao' && (
               <div className="space-y-4">
                 {/* Observação NFe */}
                 <div>
@@ -1439,6 +1471,98 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
                     placeholder="Observação interna (não aparece na NFe)"
                     rows={3}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Conteúdo da aba Devoluções */}
+            {showAllTabs && activeTab === 'devolucoes' && (
+              <div className="space-y-6">
+                <div className="text-center py-8">
+                  <div className="mx-auto w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m5 5v1a4 4 0 01-4 4H8m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-white mb-2">Histórico de Devoluções</h3>
+                  <p className="text-gray-400 mb-6">
+                    Aqui você poderá visualizar todas as devoluções realizadas por este cliente.
+                  </p>
+
+                  {/* Placeholder para futuras funcionalidades */}
+                  <div className="bg-gray-800/30 rounded-lg p-6 text-left">
+                    <h4 className="text-white font-medium mb-3">Funcionalidades Planejadas:</h4>
+                    <ul className="space-y-2 text-sm text-gray-400">
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                        Histórico completo de devoluções
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                        Motivos das devoluções
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                        Valores devolvidos
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                        Status das devoluções
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                        Relatórios de devolução
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Conteúdo da aba Faturamentos */}
+            {showAllTabs && activeTab === 'faturamentos' && (
+              <div className="space-y-6">
+                <div className="text-center py-8">
+                  <div className="mx-auto w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-white mb-2">Histórico de Faturamentos</h3>
+                  <p className="text-gray-400 mb-6">
+                    Aqui você poderá visualizar todo o histórico de faturamento deste cliente.
+                  </p>
+
+                  {/* Placeholder para futuras funcionalidades */}
+                  <div className="bg-gray-800/30 rounded-lg p-6 text-left">
+                    <h4 className="text-white font-medium mb-3">Funcionalidades Planejadas:</h4>
+                    <ul className="space-y-2 text-sm text-gray-400">
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        Histórico de pedidos faturados
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        Notas fiscais emitidas
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        Valores faturados por período
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        Status de pagamento
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        Relatórios financeiros
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        Análise de crédito
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             )}
