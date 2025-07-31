@@ -916,10 +916,13 @@ const ProdutoEntradaModal: React.FC<{
   // Resetar form quando produto é selecionado
   useEffect(() => {
     if (produtoSelecionado) {
+      // Priorizar preço de custo, depois preço de venda, depois zero
+      const precoSugerido = produtoSelecionado.preco_custo || produtoSelecionado.preco_venda || 0;
+
       setProdutoForm({
         quantidade: 1,
-        preco_unitario: produtoSelecionado.preco_venda || 0,
-        preco_total: produtoSelecionado.preco_venda || 0
+        preco_unitario: precoSugerido,
+        preco_total: precoSugerido
       });
     }
   }, [produtoSelecionado]);

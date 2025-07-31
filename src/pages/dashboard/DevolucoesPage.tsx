@@ -158,9 +158,9 @@ const DevolucoesPage: React.FC = () => {
         return;
       }
 
-      // Debug: Verificar estrutura dos itens
+      // Debug: Verificar estrutura dos dados recebidos
+      console.log('Dados completos da venda:', JSON.stringify(vendaData, null, 2));
       console.log('Estrutura dos itens recebidos:', JSON.stringify(vendaData.itens, null, 2));
-      console.log('Primeiro item detalhado:', JSON.stringify(vendaData.itens[0], null, 2));
 
       // Filtrar apenas itens que são produtos reais (têm produto_id)
       const itensValidos = vendaData.itens.filter((item: any) => {
@@ -187,7 +187,7 @@ const DevolucoesPage: React.FC = () => {
           produto_codigo: item.codigo_produto || null,
           pdv_item_id: item.id, // ID do item original da venda
           venda_origem_id: item.pdv_id, // ID da venda original
-          venda_origem_numero: null, // Será preenchido se necessário
+          venda_origem_numero: vendaData.numeroVenda || null, // Número da venda selecionada
           quantidade: item.quantidade,
           preco_unitario: item.valor_unitario,
           preco_total: item.valor_total_item,
@@ -480,7 +480,7 @@ const DevolucoesPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-gray-400 text-sm truncate">
-                    {devolucao.cliente_nome || 'Cliente'}
+                    {devolucao.cliente_nome || 'Cliente não informado'}
                   </p>
                   {devolucao.pedido_numero && (
                     <p className="text-gray-500 text-xs">
@@ -489,10 +489,26 @@ const DevolucoesPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Coluna Central - Espaço reservado */}
+                {/* Coluna Central - Detalhes da Devolução */}
                 <div className={`${isLargeScreen ? 'flex-[2]' : 'flex-1'} min-w-0`}>
-                  {/* Removido: detalhes de tipo, forma de reembolso e data */}
-                  {/* A devolução será processada no PDV */}
+                  <div className="space-y-1">
+                    {/* Data da devolução */}
+                    <p className="text-gray-400 text-xs">
+                      {formatDate(devolucao.created_at)}
+                    </p>
+
+                    {/* Número da venda origem */}
+                    {devolucao.venda_origem_numero && (
+                      <p className="text-gray-500 text-xs">
+                        Venda: #{devolucao.venda_origem_numero}
+                      </p>
+                    )}
+
+                    {/* Quantidade de itens */}
+                    <p className="text-gray-500 text-xs">
+                      {devolucao.itens?.length || 0} item(ns)
+                    </p>
+                  </div>
                 </div>
 
                 {/* Coluna Direita - Valor e Ações */}
