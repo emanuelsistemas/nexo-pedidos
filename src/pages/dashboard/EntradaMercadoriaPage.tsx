@@ -3,7 +3,7 @@ import { Plus, Edit, Eye, Search, Filter, ArrowLeft, Save, Trash2, X, MoreVertic
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/comum/Button';
 import FornecedorDropdown from '../../components/comum/FornecedorDropdown';
-import ClientesPage from './ClientesPage';
+import ClienteFormCompleto from '../../components/comum/ClienteFormCompleto';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -604,23 +604,25 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
       </div>
 
       {/* Formulário Completo de Novo Fornecedor */}
-      {showNovoFornecedorModal && (
-        <div className="fixed inset-0 z-[99999] bg-black">
-          <ClientesPage
-            fornecedorMode={true}
-            onFornecedorCreated={(fornecedorId, fornecedorNome, fornecedorDocumento) => {
-              handleFornecedorCreated(fornecedorId, fornecedorNome, fornecedorDocumento);
-            }}
-          />
-          {/* Botão para fechar o modal */}
-          <button
-            onClick={() => setShowNovoFornecedorModal(false)}
-            className="fixed top-4 right-4 z-[100000] p-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors shadow-lg"
-          >
-            <X size={24} />
-          </button>
-        </div>
-      )}
+      <ClienteFormCompleto
+        isOpen={showNovoFornecedorModal}
+        onClose={() => setShowNovoFornecedorModal(false)}
+        empresaId={empresaId}
+        onClienteCreated={(fornecedorId) => {
+          // Buscar dados do fornecedor criado para obter nome e documento
+          supabase
+            .from('clientes')
+            .select('nome, documento')
+            .eq('id', fornecedorId)
+            .single()
+            .then(({ data }) => {
+              if (data) {
+                handleFornecedorCreated(fornecedorId, data.nome, data.documento);
+              }
+            });
+        }}
+        fornecedorMode={true}
+      />
     </div>
   );
 };

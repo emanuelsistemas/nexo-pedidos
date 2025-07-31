@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
-import ClienteFormSidebar from '../comum/ClienteFormSidebar';
+import ClienteFormCompleto from '../comum/ClienteFormCompleto';
 
 // Função para formatar moeda
 const formatCurrency = (value: number): string => {
@@ -767,19 +767,12 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    // Confirmar devolução com itens selecionados
-                    const dadosDevolucao = {
-                      vendasCompletas: Array.from(selectedVendas),
-                      itensIndividuais: Array.from(selectedItens),
-                      valorTotal: getValorTotalSelecionado(),
-                      quantidadeItens: getQuantidadeItensSelecionados()
-                    };
-                    onConfirm('', dadosDevolucao);
-                    handleClose();
+                    // Abrir modal de finalização
+                    setShowFinalizarModal(true);
                   }}
                   className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors font-medium"
                 >
-                  Confirmar Devolução
+                  Continuar
                 </button>
               </div>
             </div>
@@ -799,8 +792,8 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
           empresaId={empresaId}
           valorTotal={getValorTotalSelecionado()}
           onConfirm={(dadosDevolucao) => {
-            // Aqui você pode processar a devolução final
-            console.log('Devolução finalizada:', dadosDevolucao);
+            // Processar a devolução final
+            onConfirm('', dadosDevolucao);
             setShowFinalizarModal(false);
             handleClose();
           }}
@@ -983,8 +976,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         </div>
       </motion.div>
 
-      {/* Formulário Slide Lateral de Novo Cliente */}
-      <ClienteFormSidebar
+      {/* Formulário Completo de Novo Cliente */}
+      <ClienteFormCompleto
         isOpen={showNovoClienteModal}
         onClose={() => setShowNovoClienteModal(false)}
         empresaId={empresaId}
@@ -992,6 +985,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           setClienteId(novoClienteId);
           setShowNovoClienteModal(false);
         }}
+        fornecedorMode={false}
       />
     </div>
   );

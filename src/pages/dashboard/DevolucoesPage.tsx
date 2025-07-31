@@ -6,6 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { isDesktopScreen } from '../../config/responsive';
 import { Devolucao } from '../../types';
 import NovaDevolucaoModal from '../../components/devolucao/NovaDevolucaoModal';
+import { devolucaoService, CriarDevolucaoData } from '../../services/devolucaoService';
 
 const DevolucoesPage: React.FC = () => {
   const [devolucoes, setDevolucoes] = useState<Devolucao[]>([]);
@@ -62,25 +63,20 @@ const DevolucoesPage: React.FC = () => {
         setIsLoading(true);
       }
 
-      // Obter o usuário atual
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      // Usar o serviço para carregar devoluções
+      const filtros = {
+        status: statusFilter !== 'todos' ? statusFilter : undefined,
+        dataInicio: dataFilter || undefined,
+        searchTerm: searchTerm || undefined,
+        limite: 100
+      };
 
-      // Obter empresa do usuário
-      const { data: usuarioData } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('id', userData.user.id)
-        .single();
-
-      if (!usuarioData?.empresa_id) return;
-
-      // Buscar devoluções reais da empresa
-      // TODO: Implementar quando a tabela devolucoes for criada
-      // Por enquanto, retorna array vazio pois a tabela ainda não existe
-      setDevolucoes([]);
+      const devolucoesList = await devolucaoService.listarDevolucoes(filtros);
+      setDevolucoes(devolucoesList);
     } catch (error) {
       console.error('Erro ao carregar devoluções:', error);
+      // Em caso de erro, manter array vazio
+      setDevolucoes([]);
     } finally {
       setIsLoading(false);
     }
@@ -89,6 +85,13 @@ const DevolucoesPage: React.FC = () => {
   useEffect(() => {
     loadDevolucoes();
   }, []);
+
+  // Recarregar quando filtros mudarem
+  useEffect(() => {
+    if (devolucoes.length > 0) { // Só recarregar se já tiver carregado uma vez
+      loadDevolucoes(false);
+    }
+  }, [statusFilter, dataFilter, searchTerm]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -135,11 +138,42 @@ const DevolucoesPage: React.FC = () => {
     setShowNovaDevolucaoModal(true);
   };
 
-  const handleConfirmDevolucao = (vendaId: string, vendaData: any) => {
-    console.log('Venda selecionada para devolução:', { vendaId, vendaData });
-    // TODO: Implementar criação da devolução
-    // Por enquanto, apenas fecha o modal
-    setShowNovaDevolucaoModal(false);
+  const handleConfirmDevolucao = async (vendaId: string, vendaData: any) => {
+    try {
+      console.log('Dados recebidos para devolução:', { vendaId, vendaData });
+
+      // Verificar se temos dados válidos
+      if (!vendaData || (!vendaData.itens && !vendaData.quantidadeItens)) {
+        console.error('Dados de devolução inválidos:', vendaData);
+        return;
+      }
+
+      // Preparar dados para criação da devolução
+      const dadosDevolucao: CriarDevolucaoData = {
+        clienteId: vendaData.clienteId || undefined,
+        itens: vendaData.itens || [],
+        valorTotal: vendaData.valorTotal || 0,
+        tipoDevolucao: vendaData.vendasCompletas?.length > 0 ? 'total' : 'parcial',
+        formaReembolso: 'dinheiro', // Padrão - pode ser alterado depois
+        motivoGeral: 'Devolução solicitada pelo cliente',
+        observacoes: `Itens selecionados: ${vendaData.quantidadeItens || vendaData.itens?.length || 0}`
+      };
+
+      // Criar a devolução
+      const novaDevolucao = await devolucaoService.criarDevolucao(dadosDevolucao);
+
+      console.log('Devolução criada com sucesso:', novaDevolucao);
+
+      // Recarregar a lista de devoluções
+      await loadDevolucoes(false);
+
+      // Fechar o modal
+      setShowNovaDevolucaoModal(false);
+
+    } catch (error) {
+      console.error('Erro ao criar devolução:', error);
+      // TODO: Mostrar toast de erro para o usuário
+    }
   };
 
   const formatCurrency = (value: number) => {
