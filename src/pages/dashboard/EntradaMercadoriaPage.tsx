@@ -1006,22 +1006,32 @@ const EntradaManualTab: React.FC<{
       });
 
       // Atualizar dados básicos da entrada
-      const { error: entradaError } = await supabase
+      const { data: entradaAtualizada, error: entradaError } = await supabase
         .from('entrada_mercadoria')
         .update({
           fornecedor_id: fornecedorId,
           fornecedor_nome: fornecedorNome,
           fornecedor_documento: fornecedorDocumento,
+          numero: numeroDocumento, // Usar 'numero' em vez de 'numero_documento'
           numero_documento: numeroDocumento,
           data_entrada: dataEntrada,
           observacoes: observacoes,
           updated_at: new Date().toISOString()
         })
-        .eq('id', entradaParaEditar.id);
+        .eq('id', entradaParaEditar.id)
+        .select();
+
+      console.log('📝 Resultado do UPDATE:', { entradaAtualizada, entradaError });
 
       if (entradaError) {
         console.error('Erro ao atualizar entrada:', entradaError);
         showMessage('error', 'Erro ao salvar alterações da entrada');
+        return;
+      }
+
+      if (!entradaAtualizada || entradaAtualizada.length === 0) {
+        console.error('Nenhuma entrada foi atualizada');
+        showMessage('error', 'Nenhuma entrada foi encontrada para atualizar');
         return;
       }
 

@@ -18547,7 +18547,8 @@ const PDVPage: React.FC = () => {
                             temDescontoTotal,
                             pdvConfigDescontoTotal: pdvConfig?.desconto_no_total,
                             isVendaComTroca,
-                            devolucaoAplicada
+                            devolucaoAplicada,
+                            condicaoExibicao: pdvConfig?.desconto_no_total && temDescontoTotal
                           });
 
                           return (temDescontoItens || temDescontoTotal) && (
@@ -18560,10 +18561,12 @@ const PDVPage: React.FC = () => {
                                 </div>
                               )}
 
-                              {/* Desconto no Total - Só aparece se configuração estiver habilitada E desconto aplicado */}
-                              {pdvConfig?.desconto_no_total && temDescontoTotal && (
+                              {/* Desconto no Total - Aparece se configuração habilitada OU se for devolução aplicada */}
+                              {(pdvConfig?.desconto_no_total || isVendaComTroca) && temDescontoTotal && (
                                 <div className="flex justify-between items-center text-xs mb-1.5">
-                                  <span className="text-red-400">Desconto no Total:</span>
+                                  <span className="text-red-400">
+                                    {isVendaComTroca ? 'Devolução Aplicada:' : 'Desconto no Total:'}
+                                  </span>
                                   <span className="text-red-400">-{formatCurrency(descontoGlobal)}</span>
                                 </div>
                               )}
