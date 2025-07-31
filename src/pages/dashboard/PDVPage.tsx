@@ -475,6 +475,8 @@ const PDVPage: React.FC = () => {
   const [devolucoesPendentes, setDevolucoesPendentes] = useState<any[]>([]);
   const [searchDevolucoes, setSearchDevolucoes] = useState('');
   const [loadingDevolucoes, setLoadingDevolucoes] = useState(false);
+  const [showConfirmarDevolucaoModal, setShowConfirmarDevolucaoModal] = useState(false);
+  const [devolucaoSelecionada, setDevolucaoSelecionada] = useState<any>(null);
   const modalCardapioAbertoRef = useRef(false);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
   const [descontoTotal, setDescontoTotal] = useState(0);
@@ -515,6 +517,31 @@ const PDVPage: React.FC = () => {
   const removerDescontoGlobal = () => {
     setDescontoGlobal(0);
     toast.info('Desconto no total removido');
+  };
+
+  // Função para aplicar devolução como desconto
+  const aplicarDevolucaoComoDesconto = (devolucao: any) => {
+    if (!devolucao || !devolucao.valor_total) {
+      toast.error('Devolução inválida');
+      return;
+    }
+
+    const totalAtual = carrinho.reduce((total, item) => total + item.subtotal, 0);
+    const valorDevolucao = devolucao.valor_total;
+
+    if (valorDevolucao >= totalAtual) {
+      toast.error('O valor da devolução não pode ser maior ou igual ao total da venda');
+      return;
+    }
+
+    // Aplicar o valor da devolução como desconto global
+    setDescontoGlobal(valorDevolucao);
+    toast.success(`Devolução #${devolucao.numero} aplicada como desconto (${formatCurrency(valorDevolucao)})`);
+
+    // Fechar modais
+    setShowConfirmarDevolucaoModal(false);
+    setShowDevolucoesModal(false);
+    setDevolucaoSelecionada(null);
   };
 
   // Estados para o modal de movimentos
@@ -28626,9 +28653,28 @@ const PDVPage: React.FC = () => {
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: index * 0.05 }}
                               className="p-2.5 bg-background-card rounded border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer"
-                              onClick={() => {
-                                // TODO: Implementar visualização de detalhes
-                                console.log('Ver detalhes da devolução:', devolucao.id);
+                              onClick={(e) => {
+                                console.log('🔍 Clique no card da devolução detectado!', devolucao.numero);
+                                console.log('🛒 Itens no carrinho:', carrinho.length);
+
+                                // Só permite aplicar como desconto se houver itens no carrinho
+                                if (carrinho.length > 0) {
+                                  console.log('✅ Abrindo modal de confirmação...');
+                                  console.log('📋 Devolução selecionada:', devolucao);
+                                  setDevolucaoSelecionada(devolucao);
+                                  setShowConfirmarDevolucaoModal(true);
+                                  console.log('🔄 Estados atualizados - showConfirmarDevolucaoModal: true');
+
+                                  // Verificar se os estados foram atualizados
+                                  setTimeout(() => {
+                                    console.log('⏰ Verificando estados após timeout...');
+                                    console.log('showConfirmarDevolucaoModal:', showConfirmarDevolucaoModal);
+                                    console.log('devolucaoSelecionada:', devolucaoSelecionada);
+                                  }, 100);
+                                } else {
+                                  console.log('❌ Carrinho vazio, mostrando erro...');
+                                  toast.error('Adicione itens ao carrinho antes de aplicar uma devolução como desconto');
+                                }
                               }}
                             >
                               {/* Layout em três colunas - Compacto */}
@@ -28638,23 +28684,9 @@ const PDVPage: React.FC = () => {
                                   {/* Código de Troca */}
                                   {devolucao.codigo_troca && (
                                     <div className="mb-1">
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30 font-mono">
-                                          {devolucao.codigo_troca}
-                                        </span>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigator.clipboard.writeText(devolucao.codigo_troca);
-                                            // Toast de confirmação simples
-                                            console.log('Código copiado:', devolucao.codigo_troca);
-                                          }}
-                                          className="text-blue-400 hover:text-blue-300 transition-colors p-1"
-                                          title="Copiar código"
-                                        >
-                                          <Copy size={12} />
-                                        </button>
-                                      </div>
+                                      <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30 font-mono">
+                                        {devolucao.codigo_troca}
+                                      </span>
                                     </div>
                                   )}
                                   <div className="flex items-center gap-2 mb-0.5">
@@ -28712,19 +28744,13 @@ const PDVPage: React.FC = () => {
                                       }).format(devolucao.valor_total)}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        // TODO: Implementar processamento da devolução
-                                        console.log('Processar devolução:', devolucao.id);
-                                      }}
-                                      className="p-1 rounded text-green-400 hover:text-green-300 hover:bg-green-900/30 transition-colors"
-                                      title="Processar devolução"
-                                    >
-                                      <Check size={14} />
-                                    </button>
-                                  </div>
+                                  {/* Indicador visual de que pode clicar para aplicar desconto */}
+                                  {carrinho.length > 0 && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <Percent size={12} className="text-orange-400" />
+                                      <span className="text-xs text-orange-400">Clique para aplicar desconto</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </motion.div>
@@ -28746,6 +28772,126 @@ const PDVPage: React.FC = () => {
                     className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
                   >
                     Fechar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação para Aplicar Devolução como Desconto */}
+      <AnimatePresence>
+        {showConfirmarDevolucaoModal && devolucaoSelecionada && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4"
+            onClick={() => setShowConfirmarDevolucaoModal(false)}
+            onAnimationStart={() => console.log('🎬 Modal de confirmação está sendo renderizado!')}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6 p-6 border-b border-gray-700">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Percent size={24} className="text-orange-400" />
+                  Aplicar Devolução como Desconto
+                </h3>
+                <button
+                  onClick={() => setShowConfirmarDevolucaoModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="px-6 pb-6">
+                {/* Informações da Devolução */}
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+                  <h4 className="text-white font-medium mb-3">Detalhes da Devolução</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Número:</span>
+                      <span className="text-white">#{devolucaoSelecionada.numero}</span>
+                    </div>
+                    {devolucaoSelecionada.codigo_troca && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Código:</span>
+                        <span className="text-blue-400 font-mono">{devolucaoSelecionada.codigo_troca}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Cliente:</span>
+                      <span className="text-white">{devolucaoSelecionada.cliente_nome || 'Sem Cliente'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Valor:</span>
+                      <span className="text-green-400 font-medium">
+                        {formatCurrency(devolucaoSelecionada.valor_total)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resumo da Aplicação */}
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 mb-4">
+                  <h4 className="text-orange-400 font-medium mb-3">Resumo da Aplicação</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Total atual da venda:</span>
+                      <span className="text-white">
+                        {formatCurrency(carrinho.reduce((total, item) => total + item.subtotal, 0))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-orange-400">Desconto a aplicar:</span>
+                      <span className="text-orange-400">
+                        -{formatCurrency(devolucaoSelecionada.valor_total)}
+                      </span>
+                    </div>
+                    <div className="border-t border-orange-500/30 pt-2 mt-2">
+                      <div className="flex justify-between">
+                        <span className="text-white font-medium">Total com desconto:</span>
+                        <span className="text-green-400 font-bold">
+                          {formatCurrency(
+                            carrinho.reduce((total, item) => total + item.subtotal, 0) - devolucaoSelecionada.valor_total
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Aviso */}
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-yellow-400 text-xs">
+                      <p className="font-medium mb-1">Atenção:</p>
+                      <p>O valor da devolução será aplicado como desconto no total desta venda. Esta ação substituirá qualquer desconto no total já aplicado.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botões */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowConfirmarDevolucaoModal(false)}
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => aplicarDevolucaoComoDesconto(devolucaoSelecionada)}
+                    className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Aplicar Desconto
                   </button>
                 </div>
               </div>

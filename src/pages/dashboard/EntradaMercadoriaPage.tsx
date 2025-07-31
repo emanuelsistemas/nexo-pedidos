@@ -678,17 +678,21 @@ const EntradaManualTab: React.FC<{
         setDataEntrada(entradaParaEditar.data_entrada);
         setObservacoes(entradaParaEditar.observacoes);
 
-        // Buscar o fornecedor_id na tabela de fornecedores
+        // Buscar o fornecedor_id na tabela de clientes (sistema usa clientes como fornecedores)
         const { data: fornecedorData } = await supabase
-          .from('fornecedores')
-          .select('id')
+          .from('clientes')
+          .select('id, nome, documento')
           .eq('empresa_id', empresaId)
-          .eq('nome', entradaParaEditar.fornecedor_nome)
+          .eq('is_fornecedor', true)
+          .or(`nome.eq.${entradaParaEditar.fornecedor_nome},documento.eq.${entradaParaEditar.fornecedor_cnpj}`)
           .eq('deletado', false)
           .single();
 
         if (fornecedorData) {
+          console.log('✅ Fornecedor encontrado:', fornecedorData);
           setFornecedorId(fornecedorData.id);
+        } else {
+          console.log('⚠️ Fornecedor não encontrado para:', entradaParaEditar.fornecedor_nome);
         }
 
         // Carregar produtos da entrada se existirem
@@ -948,6 +952,121 @@ const EntradaManualTab: React.FC<{
     }
   };
 
+  // Função para salvar alterações (edição)
+  const handleSalvarAlteracoes = async () => {
+    if (!empresaId || !usuarioId || !entradaParaEditar) {
+      showMessage('error', 'Dados necessários não encontrados');
+      return;
+    }
+
+    if (!fornecedorId) {
+      showMessage('error', 'Selecione um fornecedor');
+      return;
+    }
+
+    if (!numeroDocumento.trim()) {
+      showMessage('error', 'Número do documento é obrigatório');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Verificar se já existe outra entrada com o mesmo número (exceto a atual)
+      const { data: entradaExistente } = await supabase
+        .from('entrada_mercadoria')
+        .select('id, numero')
+        .eq('empresa_id', empresaId)
+        .eq('numero', numeroDocumento)
+        .neq('id', entradaParaEditar.id)
+        .eq('deletado', false)
+        .single();
+
+      if (entradaExistente) {
+        showMessage('error', `Já existe uma entrada com o número "${numeroDocumento}"`);
+        setIsLoading(false);
+        return;
+      }
+
+      // Log dos dados que serão salvos
+      console.log('📝 Dados para atualização:', {
+        fornecedor_id: fornecedorId,
+        fornecedor_nome: fornecedorNome,
+        fornecedor_documento: fornecedorDocumento,
+        numero_documento: numeroDocumento,
+        data_entrada: dataEntrada,
+        observacoes: observacoes,
+        entrada_id: entradaParaEditar.id
+      });
+
+      // Atualizar dados básicos da entrada
+      const { error: entradaError } = await supabase
+        .from('entrada_mercadoria')
+        .update({
+          fornecedor_id: fornecedorId,
+          fornecedor_nome: fornecedorNome,
+          fornecedor_documento: fornecedorDocumento,
+          numero_documento: numeroDocumento,
+          data_entrada: dataEntrada,
+          observacoes: observacoes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', entradaParaEditar.id);
+
+      if (entradaError) {
+        console.error('Erro ao atualizar entrada:', entradaError);
+        showMessage('error', 'Erro ao salvar alterações da entrada');
+        return;
+      }
+
+      // Remover produtos existentes (soft delete)
+      await supabase
+        .from('entrada_mercadoria_itens')
+        .update({
+          deletado: true,
+          deletado_em: new Date().toISOString(),
+          deletado_por_usuario_id: usuarioId
+        })
+        .eq('entrada_mercadoria_id', entradaParaEditar.id);
+
+      // Inserir produtos atualizados
+      if (produtos.length > 0) {
+        const itensParaInserir = produtos.map(produto => ({
+          entrada_mercadoria_id: entradaParaEditar.id,
+          empresa_id: empresaId,
+          produto_id: produto.id,
+          codigo_produto: produto.codigo,
+          nome_produto: produto.nome,
+          quantidade: produto.quantidade,
+          preco_custo: produto.preco_unitario || 0,
+          preco_unitario: produto.preco_unitario || 0,
+          preco_total: produto.preco_total || 0,
+          atualizar_estoque: true,
+          estoque_atualizado: false
+        }));
+
+        const { error: itensError } = await supabase
+          .from('entrada_mercadoria_itens')
+          .insert(itensParaInserir);
+
+        if (itensError) {
+          console.error('Erro ao salvar itens:', itensError);
+          showMessage('error', 'Erro ao salvar produtos da entrada');
+          return;
+        }
+      }
+
+      showMessage('success', `Alterações salvas com sucesso!`);
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error('Erro ao salvar alterações:', error);
+      showMessage('error', 'Erro ao salvar alterações');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="max-w-4xl mx-auto space-y-4">
@@ -1110,30 +1229,50 @@ const EntradaManualTab: React.FC<{
           <Button variant="secondary" onClick={onClose} disabled={isLoading}>
             Cancelar
           </Button>
-          <Button
-            variant="outline"
-            onClick={handleSalvarRascunho}
-            disabled={isLoading || !fornecedorId}
-          >
-            {isLoading ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            ) : (
-              <Save size={16} className="mr-2" />
-            )}
-            Salvar Rascunho
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleProcessarEntrada}
-            disabled={isLoading || !fornecedorId || produtos.length === 0}
-          >
-            {isLoading ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            ) : (
-              <Package size={16} className="mr-2" />
-            )}
-            Processar Entrada
-          </Button>
+
+          {entradaParaEditar ? (
+            // Modo edição - apenas botão Salvar Alterações
+            <Button
+              variant="primary"
+              onClick={handleSalvarAlteracoes}
+              disabled={isLoading || !fornecedorId}
+            >
+              {isLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              ) : (
+                <Save size={16} className="mr-2" />
+              )}
+              Salvar Alterações
+            </Button>
+          ) : (
+            // Modo criação - botões Salvar Rascunho e Processar Entrada
+            <>
+              <Button
+                variant="outline"
+                onClick={handleSalvarRascunho}
+                disabled={isLoading || !fornecedorId}
+              >
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <Save size={16} className="mr-2" />
+                )}
+                Salvar Rascunho
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleProcessarEntrada}
+                disabled={isLoading || !fornecedorId || produtos.length === 0}
+              >
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <Package size={16} className="mr-2" />
+                )}
+                Processar Entrada
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1178,7 +1317,8 @@ const EntradaManualTab: React.FC<{
             observacoes,
             usuarioId
           }}
-          onSaveRascunho={onSave}
+          onSaveRascunho={entradaParaEditar ? undefined : onSave}
+          modoEdicao={!!entradaParaEditar}
         />
       )}
     </div>
@@ -1202,7 +1342,8 @@ const ProdutoEntradaModal: React.FC<{
     usuarioId: string;
   };
   onSaveRascunho?: () => void;
-}> = ({ isOpen, onClose, onSave, produtosExistentes, empresaId, dadosEntrada, onSaveRascunho }) => {
+  modoEdicao?: boolean;
+}> = ({ isOpen, onClose, onSave, produtosExistentes, empresaId, dadosEntrada, onSaveRascunho, modoEdicao = false }) => {
   const [produtos, setProdutos] = useState<any[]>(produtosExistentes);
   const [showProdutoSeletor, setShowProdutoSeletor] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
@@ -2153,9 +2294,15 @@ const ProdutoEntradaModal: React.FC<{
             <Button variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button variant="primary" onClick={handleSalvarProgresso}>
+            <Button
+              variant="primary"
+              onClick={modoEdicao ? () => {
+                onSave(produtos);
+                onClose();
+              } : handleSalvarProgresso}
+            >
               <Save size={16} className="mr-2" />
-              Salvar
+              {modoEdicao ? 'Confirmar' : 'Salvar'}
             </Button>
           </div>
         </div>

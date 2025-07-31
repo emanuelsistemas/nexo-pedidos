@@ -112,12 +112,19 @@ const FornecedorDropdown: React.FC<FornecedorDropdownProps> = ({
     };
   }, []);
 
-  // Carregar fornecedores quando o dropdown abrir
+  // Carregar fornecedores quando o componente montar ou empresaId mudar
+  useEffect(() => {
+    if (empresaId && fornecedores.length === 0) {
+      loadFornecedores();
+    }
+  }, [empresaId]);
+
+  // Carregar fornecedores quando o dropdown abrir (fallback)
   useEffect(() => {
     if (isOpen && fornecedores.length === 0) {
       loadFornecedores();
     }
-  }, [isOpen, empresaId]);
+  }, [isOpen]);
 
   // Buscar fornecedor selecionado pelo value
   useEffect(() => {
