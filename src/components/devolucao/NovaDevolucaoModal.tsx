@@ -327,24 +327,39 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const getValorTotalSelecionado = () => {
     let total = 0;
 
-    // Somar vendas completas selecionadas (apenas itens válidos)
+    // Somar vendas completas selecionadas (apenas produtos, excluindo taxa de entrega)
     selectedVendas.forEach(vendaId => {
       const venda = vendas.find(v => v.id === vendaId);
       if (venda && venda.itens) {
-        // Somar apenas itens que têm produto_id (produtos reais)
+        // Somar apenas itens que têm produto_id e não são taxa de entrega
         venda.itens.forEach(item => {
-          if (item.produto_id !== null && item.produto_id !== undefined) {
+          const nome = item.produto_nome?.toLowerCase() || '';
+          const isNotTaxaEntrega = !nome.includes('taxa de entrega') &&
+                                  !nome.includes('taxa entrega') &&
+                                  !nome.includes('entrega');
+
+          if (item.produto_id !== null &&
+              item.produto_id !== undefined &&
+              isNotTaxaEntrega) {
             total += item.valor_total_item;
           }
         });
       }
     });
 
-    // Somar itens individuais selecionados (apenas os válidos)
+    // Somar itens individuais selecionados (apenas produtos válidos)
     selectedItens.forEach(itemId => {
       vendas.forEach(venda => {
         const item = venda.itens?.find(i => i.id === itemId);
-        if (item && item.produto_id !== null && item.produto_id !== undefined) {
+        const nome = item?.produto_nome?.toLowerCase() || '';
+        const isNotTaxaEntrega = !nome.includes('taxa de entrega') &&
+                                !nome.includes('taxa entrega') &&
+                                !nome.includes('entrega');
+
+        if (item &&
+            item.produto_id !== null &&
+            item.produto_id !== undefined &&
+            isNotTaxaEntrega) {
           total += item.valor_total_item;
         }
       });
@@ -888,7 +903,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [clienteId, setClienteId] = useState('');
   const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
 
-  // Função para obter todos os itens selecionados
+  // Função para obter todos os itens selecionados (excluindo taxa de entrega)
   const getItensSelecionados = () => {
     const itens: ItemVenda[] = [];
 
@@ -896,7 +911,16 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     selectedVendas.forEach(vendaId => {
       const venda = vendas.find(v => v.id === vendaId);
       if (venda?.itens) {
-        itens.push(...venda.itens);
+        // Filtrar apenas produtos, excluindo taxa de entrega
+        const produtosApenas = venda.itens.filter(item => {
+          const nome = item.produto_nome?.toLowerCase() || '';
+          return !nome.includes('taxa de entrega') &&
+                 !nome.includes('taxa entrega') &&
+                 !nome.includes('entrega') &&
+                 item.produto_id !== null &&
+                 item.produto_id !== undefined;
+        });
+        itens.push(...produtosApenas);
       }
     });
 
@@ -906,12 +930,20 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         .flatMap(v => v.itens || [])
         .find(i => i.id === itemId);
       if (item) {
-        // Verificar se não faz parte de uma venda completa selecionada
-        const itemVenda = vendas.find(venda =>
-          venda.itens?.some(i => i.id === itemId)
-        );
-        if (itemVenda && !selectedVendas.has(itemVenda.id)) {
-          itens.push(item);
+        // Verificar se não é taxa de entrega
+        const nome = item.produto_nome?.toLowerCase() || '';
+        const isNotTaxaEntrega = !nome.includes('taxa de entrega') &&
+                                !nome.includes('taxa entrega') &&
+                                !nome.includes('entrega');
+
+        if (isNotTaxaEntrega && item.produto_id !== null && item.produto_id !== undefined) {
+          // Verificar se não faz parte de uma venda completa selecionada
+          const itemVenda = vendas.find(venda =>
+            venda.itens?.some(i => i.id === itemId)
+          );
+          if (itemVenda && !selectedVendas.has(itemVenda.id)) {
+            itens.push(item);
+          }
         }
       }
     });
@@ -1027,7 +1059,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!clienteId || isLoading}
+            disabled={isLoading}
             className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
           >
             {isLoading ? 'Criando Devolução...' : 'Confirmar Devolução'}

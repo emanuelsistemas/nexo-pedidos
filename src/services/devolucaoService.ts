@@ -3,10 +3,7 @@ import { Devolucao, DevolucaoItem } from '../types';
 
 // Interface para dados de criação de devolução
 export interface CriarDevolucaoData {
-  clienteId?: string;
-  clienteNome?: string;
-  clienteTelefone?: string;
-  clienteEmail?: string;
+  clienteId?: string; // Apenas o ID do cliente - dados serão buscados via JOIN
   itens: {
     produto_id: string;
     produto_nome: string;
@@ -131,6 +128,22 @@ class DevolucaoService {
       const numeroDevol = await this.obterProximoNumero(empresaId);
       const codigoTroca = await this.gerarCodigoTroca(empresaId);
 
+      // Extrair dados da venda origem do primeiro item (todos os itens vêm da mesma venda)
+      const primeiroItem = dados.itens[0];
+      const vendaOrigemId = primeiroItem?.venda_origem_id || null;
+
+      // Buscar o número da venda na tabela pdv
+      let vendaOrigemNumero = null;
+      if (vendaOrigemId) {
+        const { data: vendaData } = await supabase
+          .from('pdv')
+          .select('numero_venda')
+          .eq('id', vendaOrigemId)
+          .single();
+
+        vendaOrigemNumero = vendaData?.numero_venda || null;
+      }
+
       // Preparar dados da devolução principal
       const devolucaoData = {
         numero: numeroDevol,
@@ -138,9 +151,8 @@ class DevolucaoService {
         empresa_id: empresaId,
         usuario_id: userData.user.id,
         cliente_id: dados.clienteId || null,
-        cliente_nome: dados.clienteNome || null,
-        cliente_telefone: dados.clienteTelefone || null,
-        cliente_email: dados.clienteEmail || null,
+        venda_origem_id: vendaOrigemId,
+        venda_origem_numero: vendaOrigemNumero,
         pedido_id: dados.pedidoId || null,
         pedido_numero: dados.pedidoNumero || null,
         pedido_tipo: dados.pedidoTipo || 'pdv',
@@ -223,7 +235,7 @@ class DevolucaoService {
         .select(`
           *,
           itens:devolucao_itens(*),
-          cliente:clientes(nome, telefone, email)
+          cliente:clientes(nome, telefone, emails)
         `)
         .eq('empresa_id', empresaId)
         .eq('deletado', false)
@@ -257,22 +269,17 @@ class DevolucaoService {
         throw new Error('Erro ao carregar devoluções: ' + error.message);
       }
 
-      // Processar dados para incluir nome do cliente do JOIN quando necessário
+      // Processar dados para incluir nome do cliente do JOIN
       const devolucoesProcesadas = (data || []).map((devolucao: any) => {
-        // Se não tem cliente_nome mas tem dados do cliente via JOIN, usar o nome do JOIN
-        if (!devolucao.cliente_nome && devolucao.cliente?.nome) {
+        // Usar dados do cliente via JOIN
+        if (devolucao.cliente?.nome) {
           devolucao.cliente_nome = devolucao.cliente.nome;
+          devolucao.cliente_telefone = devolucao.cliente.telefone;
+          devolucao.cliente_emails = devolucao.cliente.emails;
         }
 
-        // Processar itens para incluir número da venda
-        if (devolucao.itens && devolucao.itens.length > 0) {
-          // Para mostrar o número da venda, vamos buscar do primeiro item
-          // (todos os itens de uma devolução geralmente vêm da mesma venda)
-          const primeiroItem = devolucao.itens[0];
-          if (primeiroItem?.venda_origem_numero) {
-            devolucao.venda_origem_numero = primeiroItem.venda_origem_numero;
-          }
-        }
+        // O número da venda agora vem diretamente da tabela devolucoes
+        // Não precisa mais buscar dos itens
 
         return devolucao;
       });

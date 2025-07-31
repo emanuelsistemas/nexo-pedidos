@@ -476,20 +476,44 @@ const DevolucoesPage: React.FC = () => {
               <div className="flex items-start gap-3">
                 {/* Coluna Esquerda - Número e Cliente */}
                 <div className={`${isLargeScreen ? 'flex-[2]' : 'flex-1'} min-w-0`}>
+                  {/* Código de Troca */}
+                  {devolucao.codigo_troca && (
+                    <div className="mb-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30 font-mono">
+                          {devolucao.codigo_troca}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(devolucao.codigo_troca);
+                            // Toast de confirmação
+                            const toast = document.createElement('div');
+                            toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity';
+                            toast.textContent = 'Código copiado!';
+                            document.body.appendChild(toast);
+                            setTimeout(() => {
+                              toast.style.opacity = '0';
+                              setTimeout(() => document.body.removeChild(toast), 300);
+                            }, 2000);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 transition-colors p-1"
+                          title="Copiar código"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-white font-medium text-sm">#{devolucao.numero}</span>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${getStatusColor(devolucao.status)} bg-opacity-20 border`}>
                       {getStatusText(devolucao.status)}
                     </span>
                   </div>
-                  {/* Código de Troca */}
-                  {devolucao.codigo_troca && (
-                    <div className="mb-1">
-                      <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30 font-mono">
-                        {devolucao.codigo_troca}
-                      </span>
-                    </div>
-                  )}
                   <p className="text-gray-400 text-sm truncate">
                     {devolucao.cliente_nome || 'Sem Cliente'}
                   </p>

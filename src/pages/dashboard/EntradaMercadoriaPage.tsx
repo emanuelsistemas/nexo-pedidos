@@ -754,6 +754,7 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
               variant="primary"
               size="sm"
               onClick={() => setShowProdutoModal(true)}
+              disabled={!fornecedorId}
             >
               <Plus size={16} className="mr-2" />
               Adicionar Produto
@@ -765,7 +766,12 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
             <div className="text-center py-8 text-gray-400">
               <Package className="mx-auto h-12 w-12 mb-2" />
               <p>Nenhum produto adicionado</p>
-              <p className="text-sm">Clique em "Adicionar Produto" para começar</p>
+              <p className="text-sm">
+                {!fornecedorId
+                  ? "Selecione um fornecedor para adicionar produtos"
+                  : "Clique em \"Adicionar Produto\" para começar"
+                }
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -923,6 +929,11 @@ const ProdutoEntradaModal: React.FC<{
   const [abaPrecoAtiva, setAbaPrecoAtiva] = useState<string>('padrao');
   const [precosTabelas, setPrecosTabelas] = useState<{[key: string]: number}>({});
 
+  // Estados para formatação de valores monetários
+  const [custoFormatado, setCustoFormatado] = useState<string>('');
+  const [precoVendaFormatado, setPrecoVendaFormatado] = useState<string>('');
+  const [precosTabelaFormatados, setPrecosTabelaFormatados] = useState<{[key: string]: string}>({});
+
   // Função para carregar configurações de tabela de preços
   const carregarConfiguracoesTabelaPrecos = async () => {
     try {
@@ -968,6 +979,34 @@ const ProdutoEntradaModal: React.FC<{
     }
   };
 
+  // ✅ FUNÇÕES DE FORMATAÇÃO DE PREÇO (sem símbolo R$ - para campos com R$ fixo)
+  const formatarValorMonetario = (valor: string): string => {
+    // Remove todos os caracteres não numéricos
+    let valorLimpo = valor.replace(/\D/g, '');
+
+    // Se não houver valor, retorna vazio
+    if (!valorLimpo) return '';
+
+    // Converte para número (centavos)
+    const valorNumerico = parseInt(valorLimpo) / 100;
+
+    // Formata apenas o número, sem símbolo da moeda (pois o campo já tem R$ fixo)
+    return valorNumerico.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const desformatarValorMonetario = (valorFormatado: string): number => {
+    if (!valorFormatado) return 0;
+
+    // Remove pontos de milhares e substitui vírgula por ponto
+    const valorLimpo = valorFormatado.replace(/\./g, '').replace(',', '.');
+    const valorNumerico = parseFloat(valorLimpo);
+
+    return isNaN(valorNumerico) ? 0 : valorNumerico;
+  };
+
   // Funções de cálculo automático
   const calcularPrecoVenda = (custo: number, margem: number): number => {
     if (custo <= 0 || margem <= 0) return 0;
@@ -989,10 +1028,20 @@ const ProdutoEntradaModal: React.FC<{
 
       if (precosData) {
         const precosMap: {[key: string]: number} = {};
+        const precosFormatadosMap: {[key: string]: string} = {};
+
         precosData.forEach(item => {
           precosMap[item.tabela_preco_id] = item.preco;
+
+          // Formatar preço para exibição
+          if (item.preco > 0) {
+            const precoFormatado = formatarValorMonetario(Math.round(item.preco * 100).toString());
+            precosFormatadosMap[item.tabela_preco_id] = precoFormatado;
+          }
         });
+
         setPrecosTabelas(precosMap);
+        setPrecosTabelaFormatados(precosFormatadosMap);
       }
     } catch (error) {
       console.error('Erro ao carregar preços das tabelas:', error);
@@ -1075,10 +1124,30 @@ const ProdutoEntradaModal: React.FC<{
         preco_total: precoVenda
       });
 
+      // ✅ Formatar valores monetários
+      if (precoCusto > 0) {
+        const custoFormatadoValue = formatarValorMonetario(Math.round(precoCusto * 100).toString());
+        setCustoFormatado(custoFormatadoValue);
+      } else {
+        setCustoFormatado('');
+      }
+
+      if (precoVenda > 0) {
+        const precoFormatadoValue = formatarValorMonetario(Math.round(precoVenda * 100).toString());
+        setPrecoVendaFormatado(precoFormatadoValue);
+      } else {
+        setPrecoVendaFormatado('');
+      }
+
       // Carregar preços das tabelas para este produto
       if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
         carregarPrecosTabelas(produtoSelecionado.id);
       }
+    } else {
+      // Limpar formatação quando não há produto selecionado
+      setCustoFormatado('');
+      setPrecoVendaFormatado('');
+      setPrecosTabelaFormatados({});
     }
   }, [produtoSelecionado, trabalhaComTabelaPrecos, tabelasPrecos]);
 
@@ -1088,6 +1157,14 @@ const ProdutoEntradaModal: React.FC<{
     setProdutoForm(prev => ({ ...prev, preco_total: total }));
   }, [produtoForm.quantidade, produtoForm.preco_venda]);
 
+  // Ajustar quantidade inicial quando produto é selecionado
+  useEffect(() => {
+    if (produtoSelecionado) {
+      const quantidadeInicial = produtoSelecionado.unidade_medida?.fracionado ? 0.001 : 1;
+      setProdutoForm(prev => ({ ...prev, quantidade: quantidadeInicial }));
+    }
+  }, [produtoSelecionado]);
+
   // Buscar produto por código
   const buscarProdutoPorCodigo = async (codigo: string) => {
     if (!codigo.trim() || !empresaId) return;
@@ -1095,7 +1172,15 @@ const ProdutoEntradaModal: React.FC<{
     try {
       const { data: produto, error } = await supabase
         .from('produtos')
-        .select('*')
+        .select(`
+          *,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome,
+            fracionado
+          )
+        `)
         .eq('empresa_id', empresaId)
         .or(`codigo.eq.${codigo},ean.eq.${codigo}`)
         .eq('deletado', false)
@@ -1165,6 +1250,11 @@ const ProdutoEntradaModal: React.FC<{
     setPrecosTabelas({});
     setAbaPrecoAtiva('padrao');
 
+    // Limpar formatação
+    setCustoFormatado('');
+    setPrecoVendaFormatado('');
+    setPrecosTabelaFormatados({});
+
     showMessage('success', 'Produto adicionado com sucesso');
   };
 
@@ -1207,9 +1297,12 @@ const ProdutoEntradaModal: React.FC<{
                   {/* Aba Preço Padrão */}
                   <button
                     type="button"
-                    onClick={() => setAbaPrecoAtiva('padrao')}
+                    onClick={() => produtoSelecionado && setAbaPrecoAtiva('padrao')}
+                    disabled={!produtoSelecionado}
                     className={`flex-shrink-0 px-3 py-1 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                      abaPrecoAtiva === 'padrao'
+                      !produtoSelecionado
+                        ? 'border-transparent text-gray-600 cursor-not-allowed'
+                        : abaPrecoAtiva === 'padrao'
                         ? 'border-primary-500 text-primary-400'
                         : 'border-transparent text-gray-400 hover:text-gray-300'
                     }`}
@@ -1222,9 +1315,12 @@ const ProdutoEntradaModal: React.FC<{
                     <button
                       key={tabela.id}
                       type="button"
-                      onClick={() => setAbaPrecoAtiva(tabela.id)}
+                      onClick={() => produtoSelecionado && setAbaPrecoAtiva(tabela.id)}
+                      disabled={!produtoSelecionado}
                       className={`flex-shrink-0 px-3 py-1 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                        abaPrecoAtiva === tabela.id
+                        !produtoSelecionado
+                          ? 'border-transparent text-gray-600 cursor-not-allowed'
+                          : abaPrecoAtiva === tabela.id
                           ? 'border-primary-500 text-primary-400'
                           : 'border-transparent text-gray-400 hover:text-gray-300'
                       }`}
@@ -1287,11 +1383,27 @@ const ProdutoEntradaModal: React.FC<{
                 </label>
                 <input
                   type="number"
-                  min="0.001"
-                  step="0.001"
+                  min={produtoSelecionado?.unidade_medida?.fracionado ? "0.001" : "1"}
+                  step={produtoSelecionado?.unidade_medida?.fracionado ? "0.001" : "1"}
                   value={produtoForm.quantidade}
-                  onChange={(e) => setProdutoForm(prev => ({ ...prev, quantidade: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  onChange={(e) => {
+                    let valor = parseFloat(e.target.value) || 0;
+
+                    // Se não for fracionado, arredondar para inteiro
+                    if (produtoSelecionado && !produtoSelecionado.unidade_medida?.fracionado) {
+                      valor = Math.floor(valor);
+                    } else if (produtoSelecionado?.unidade_medida?.fracionado) {
+                      // Se for fracionado, limitar a 3 casas decimais
+                      valor = Math.round(valor * 1000) / 1000;
+                    }
+
+                    setProdutoForm(prev => ({ ...prev, quantidade: valor >= 0 ? valor : 0 }));
+                  }}
+                  className={`w-full px-1 py-1.5 border rounded text-sm ${
+                    !produtoSelecionado
+                      ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-800 border-gray-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent'
+                  }`}
                   disabled={!produtoSelecionado}
                 />
               </div>
@@ -1302,21 +1414,33 @@ const ProdutoEntradaModal: React.FC<{
                   Custo (R$)
                 </label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={produtoForm.preco_custo}
+                  type="text"
+                  value={custoFormatado}
                   onChange={(e) => {
-                    const custo = parseFloat(e.target.value) || 0;
+                    const valorFormatado = formatarValorMonetario(e.target.value);
+                    setCustoFormatado(valorFormatado);
+
+                    const custo = desformatarValorMonetario(valorFormatado);
                     setProdutoForm(prev => ({ ...prev, preco_custo: custo }));
 
                     // Se tem margem definida, calcular preço de venda
                     if (produtoForm.margem_percentual > 0) {
                       const precoVenda = calcularPrecoVenda(custo, produtoForm.margem_percentual);
                       setProdutoForm(prev => ({ ...prev, preco_venda: precoVenda }));
+
+                      // Atualizar formatação do preço de venda
+                      if (precoVenda > 0) {
+                        const precoFormatadoValue = formatarValorMonetario(Math.round(precoVenda * 100).toString());
+                        setPrecoVendaFormatado(precoFormatadoValue);
+                      }
                     }
                   }}
-                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  placeholder="0,00"
+                  className={`w-full px-1 py-1.5 border rounded text-sm ${
+                    !produtoSelecionado
+                      ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-800 border-gray-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent'
+                  }`}
                   disabled={!produtoSelecionado}
                 />
               </div>
@@ -1339,9 +1463,19 @@ const ProdutoEntradaModal: React.FC<{
                     if (produtoForm.preco_custo > 0) {
                       const precoVenda = calcularPrecoVenda(produtoForm.preco_custo, margem);
                       setProdutoForm(prev => ({ ...prev, preco_venda: precoVenda }));
+
+                      // Atualizar formatação do preço de venda
+                      if (precoVenda > 0) {
+                        const precoFormatadoValue = formatarValorMonetario(Math.round(precoVenda * 100).toString());
+                        setPrecoVendaFormatado(precoFormatadoValue);
+                      }
                     }
                   }}
-                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  className={`w-full px-1 py-1.5 border rounded text-sm ${
+                    !produtoSelecionado
+                      ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-800 border-gray-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent'
+                  }`}
                   disabled={!produtoSelecionado}
                 />
               </div>
@@ -1349,17 +1483,20 @@ const ProdutoEntradaModal: React.FC<{
               {/* Preço de Venda - Compacto */}
               <div className="w-20">
                 <label className="block text-xs font-medium text-gray-300 mb-1">
-                  {abaPrecoAtiva === 'padrao' ? 'Venda (R$)' : 'Preço (R$)'}
+                  {abaPrecoAtiva === 'padrao'
+                    ? 'Venda (R$)'
+                    : (tabelasPrecos.find(t => t.id === abaPrecoAtiva)?.nome || 'Preço (R$)')
+                  }
                 </label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={abaPrecoAtiva === 'padrao' ? produtoForm.preco_venda : (precosTabelas[abaPrecoAtiva] || 0)}
+                  type="text"
+                  value={abaPrecoAtiva === 'padrao' ? precoVendaFormatado : (precosTabelaFormatados[abaPrecoAtiva] || '')}
                   onChange={(e) => {
-                    const preco = parseFloat(e.target.value) || 0;
+                    const valorFormatado = formatarValorMonetario(e.target.value);
+                    const preco = desformatarValorMonetario(valorFormatado);
 
                     if (abaPrecoAtiva === 'padrao') {
+                      setPrecoVendaFormatado(valorFormatado);
                       setProdutoForm(prev => ({ ...prev, preco_venda: preco }));
 
                       // Se tem custo definido, calcular margem
@@ -1368,6 +1505,12 @@ const ProdutoEntradaModal: React.FC<{
                         setProdutoForm(prev => ({ ...prev, margem_percentual: Math.ceil(margem) }));
                       }
                     } else {
+                      // Atualizar preço da tabela formatado
+                      setPrecosTabelaFormatados(prev => ({
+                        ...prev,
+                        [abaPrecoAtiva]: valorFormatado
+                      }));
+
                       // Atualizar preço da tabela
                       setPrecosTabelas(prev => ({
                         ...prev,
@@ -1375,7 +1518,12 @@ const ProdutoEntradaModal: React.FC<{
                       }));
                     }
                   }}
-                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  placeholder="0,00"
+                  className={`w-full px-1 py-1.5 border rounded text-sm ${
+                    !produtoSelecionado
+                      ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-800 border-gray-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent'
+                  }`}
                   disabled={!produtoSelecionado}
                 />
               </div>
@@ -1388,7 +1536,11 @@ const ProdutoEntradaModal: React.FC<{
                 <input
                   type="text"
                   value={produtoForm.preco_total.toFixed(2)}
-                  className="w-full px-1 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                  className={`w-full px-1 py-1.5 border rounded text-sm ${
+                    !produtoSelecionado
+                      ? 'bg-gray-700 border-gray-600 text-gray-500'
+                      : 'bg-gray-700 border-gray-600 text-white'
+                  }`}
                   readOnly
                 />
               </div>
