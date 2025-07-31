@@ -184,7 +184,8 @@ class DevolucaoService {
         .from('devolucoes')
         .select(`
           *,
-          itens:devolucao_itens(*)
+          itens:devolucao_itens(*),
+          cliente:clientes(nome, telefone, email)
         `)
         .eq('empresa_id', empresaId)
         .eq('deletado', false)
@@ -218,7 +219,27 @@ class DevolucaoService {
         throw new Error('Erro ao carregar devoluções: ' + error.message);
       }
 
-      return data || [];
+      // Processar dados para incluir nome do cliente do JOIN quando necessário
+      const devolucoesProcesadas = (data || []).map((devolucao: any) => {
+        // Se não tem cliente_nome mas tem dados do cliente via JOIN, usar o nome do JOIN
+        if (!devolucao.cliente_nome && devolucao.cliente?.nome) {
+          devolucao.cliente_nome = devolucao.cliente.nome;
+        }
+
+        // Processar itens para incluir número da venda
+        if (devolucao.itens && devolucao.itens.length > 0) {
+          // Para mostrar o número da venda, vamos buscar do primeiro item
+          // (todos os itens de uma devolução geralmente vêm da mesma venda)
+          const primeiroItem = devolucao.itens[0];
+          if (primeiroItem?.venda_origem_numero) {
+            devolucao.venda_origem_numero = primeiroItem.venda_origem_numero;
+          }
+        }
+
+        return devolucao;
+      });
+
+      return devolucoesProcesadas;
 
     } catch (error) {
       console.error('Erro no serviço de listagem de devoluções:', error);

@@ -646,7 +646,9 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
           nome_produto: produto.nome,
           unidade_medida: produto.unidade_medida || 'UN',
           quantidade: produto.quantidade,
-          preco_unitario: produto.preco_unitario,
+          preco_custo: produto.preco_custo || 0,
+          margem_percentual: produto.margem_percentual || 0,
+          preco_unitario: produto.preco_venda || 0,
           preco_total: produto.preco_total,
           atualizar_estoque: true,
           estoque_atualizado: false
@@ -909,29 +911,45 @@ const ProdutoEntradaModal: React.FC<{
   const [codigoBusca, setCodigoBusca] = useState('');
   const [produtoForm, setProdutoForm] = useState({
     quantidade: 1,
-    preco_unitario: 0,
+    preco_custo: 0,
+    margem_percentual: 0,
+    preco_venda: 0,
     preco_total: 0
   });
+
+  // Funções de cálculo automático
+  const calcularPrecoVenda = (custo: number, margem: number): number => {
+    if (custo <= 0 || margem <= 0) return 0;
+    return custo * (1 + margem / 100);
+  };
+
+  const calcularMargem = (custo: number, precoVenda: number): number => {
+    if (custo <= 0 || precoVenda <= 0) return 0;
+    return ((precoVenda - custo) / custo) * 100;
+  };
 
   // Resetar form quando produto é selecionado
   useEffect(() => {
     if (produtoSelecionado) {
-      // Priorizar preço de custo, depois preço de venda, depois zero
-      const precoSugerido = produtoSelecionado.preco_custo || produtoSelecionado.preco_venda || 0;
+      const precoCusto = produtoSelecionado.preco_custo || 0;
+      const margemPercentual = produtoSelecionado.margem_percentual || 0;
+      const precoVenda = produtoSelecionado.preco_venda || produtoSelecionado.preco || 0;
 
       setProdutoForm({
         quantidade: 1,
-        preco_unitario: precoSugerido,
-        preco_total: precoSugerido
+        preco_custo: precoCusto,
+        margem_percentual: margemPercentual,
+        preco_venda: precoVenda,
+        preco_total: precoVenda
       });
     }
   }, [produtoSelecionado]);
 
-  // Calcular preço total quando quantidade ou preço unitário mudam
+  // Calcular preço total quando quantidade ou preço de venda mudam
   useEffect(() => {
-    const total = produtoForm.quantidade * produtoForm.preco_unitario;
+    const total = produtoForm.quantidade * produtoForm.preco_venda;
     setProdutoForm(prev => ({ ...prev, preco_total: total }));
-  }, [produtoForm.quantidade, produtoForm.preco_unitario]);
+  }, [produtoForm.quantidade, produtoForm.preco_venda]);
 
   // Buscar produto por código
   const buscarProdutoPorCodigo = async (codigo: string) => {
@@ -971,8 +989,8 @@ const ProdutoEntradaModal: React.FC<{
       return;
     }
 
-    if (produtoForm.preco_unitario < 0) {
-      showMessage('error', 'Preço unitário não pode ser negativo');
+    if (produtoForm.preco_venda < 0) {
+      showMessage('error', 'Preço de venda não pode ser negativo');
       return;
     }
 
@@ -983,7 +1001,9 @@ const ProdutoEntradaModal: React.FC<{
       nome: produtoSelecionado.nome,
       unidade_medida: produtoSelecionado.unidade_medida || 'UN',
       quantidade: produtoForm.quantidade,
-      preco_unitario: produtoForm.preco_unitario,
+      preco_custo: produtoForm.preco_custo,
+      margem_percentual: produtoForm.margem_percentual,
+      preco_venda: produtoForm.preco_venda,
       preco_total: produtoForm.preco_total
     };
 
@@ -994,7 +1014,9 @@ const ProdutoEntradaModal: React.FC<{
     setCodigoBusca('');
     setProdutoForm({
       quantidade: 1,
-      preco_unitario: 0,
+      preco_custo: 0,
+      margem_percentual: 0,
+      preco_venda: 0,
       preco_total: 0
     });
 
@@ -1078,7 +1100,7 @@ const ProdutoEntradaModal: React.FC<{
               </div>
 
               {/* Quantidade - Compacto */}
-              <div className="w-20">
+              <div className="w-16">
                 <label className="block text-xs font-medium text-gray-300 mb-1">
                   Qtd
                 </label>
@@ -1088,36 +1110,95 @@ const ProdutoEntradaModal: React.FC<{
                   step="0.001"
                   value={produtoForm.quantidade}
                   onChange={(e) => setProdutoForm(prev => ({ ...prev, quantidade: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                   disabled={!produtoSelecionado}
                 />
               </div>
 
-              {/* Preço Unitário - Compacto */}
-              <div className="w-24">
+              {/* Preço de Custo - Compacto */}
+              <div className="w-20">
                 <label className="block text-xs font-medium text-gray-300 mb-1">
-                  Preço Unit. (R$)
+                  Custo (R$)
                 </label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={produtoForm.preco_unitario}
-                  onChange={(e) => setProdutoForm(prev => ({ ...prev, preco_unitario: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  value={produtoForm.preco_custo}
+                  onChange={(e) => {
+                    const custo = parseFloat(e.target.value) || 0;
+                    setProdutoForm(prev => ({ ...prev, preco_custo: custo }));
+
+                    // Se tem margem definida, calcular preço de venda
+                    if (produtoForm.margem_percentual > 0) {
+                      const precoVenda = calcularPrecoVenda(custo, produtoForm.margem_percentual);
+                      setProdutoForm(prev => ({ ...prev, preco_venda: precoVenda }));
+                    }
+                  }}
+                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  disabled={!produtoSelecionado}
+                />
+              </div>
+
+              {/* Margem % - Compacto */}
+              <div className="w-16">
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Margem %
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={Math.ceil(produtoForm.margem_percentual || 0)}
+                  onChange={(e) => {
+                    const margem = Math.ceil(parseFloat(e.target.value) || 0);
+                    setProdutoForm(prev => ({ ...prev, margem_percentual: margem }));
+
+                    // Se tem custo definido, calcular preço de venda
+                    if (produtoForm.preco_custo > 0) {
+                      const precoVenda = calcularPrecoVenda(produtoForm.preco_custo, margem);
+                      setProdutoForm(prev => ({ ...prev, preco_venda: precoVenda }));
+                    }
+                  }}
+                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                  disabled={!produtoSelecionado}
+                />
+              </div>
+
+              {/* Preço de Venda - Compacto */}
+              <div className="w-20">
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Venda (R$)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={produtoForm.preco_venda}
+                  onChange={(e) => {
+                    const precoVenda = parseFloat(e.target.value) || 0;
+                    setProdutoForm(prev => ({ ...prev, preco_venda: precoVenda }));
+
+                    // Se tem custo definido, calcular margem
+                    if (produtoForm.preco_custo > 0) {
+                      const margem = calcularMargem(produtoForm.preco_custo, precoVenda);
+                      setProdutoForm(prev => ({ ...prev, margem_percentual: Math.ceil(margem) }));
+                    }
+                  }}
+                  className="w-full px-1 py-1.5 bg-gray-800 border border-gray-700 rounded text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
                   disabled={!produtoSelecionado}
                 />
               </div>
 
               {/* Preço Total - Compacto */}
-              <div className="w-24">
+              <div className="w-20">
                 <label className="block text-xs font-medium text-gray-300 mb-1">
                   Total (R$)
                 </label>
                 <input
                   type="text"
                   value={produtoForm.preco_total.toFixed(2)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                  className="w-full px-1 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
                   readOnly
                 />
               </div>
@@ -1162,7 +1243,7 @@ const ProdutoEntradaModal: React.FC<{
                         <div>
                           <h4 className="text-white font-medium">{produto.nome}</h4>
                           <p className="text-sm text-gray-400">
-                            Código: {produto.codigo} | Qtd: {produto.quantidade} | Unit: R$ {produto.preco_unitario.toFixed(2)}
+                            Código: {produto.codigo} | Qtd: {produto.quantidade} | Custo: R$ {produto.preco_custo?.toFixed(2) || '0,00'} | Margem: {produto.margem_percentual?.toFixed(0) || '0'}% | Venda: R$ {produto.preco_venda?.toFixed(2) || '0,00'}
                           </p>
                         </div>
                       </div>

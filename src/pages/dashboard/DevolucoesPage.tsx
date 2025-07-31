@@ -208,6 +208,9 @@ const DevolucoesPage: React.FC = () => {
       // Preparar dados para criação da devolução
       const dadosDevolucao: CriarDevolucaoData = {
         clienteId: vendaData.clienteId || undefined,
+        clienteNome: vendaData.clienteNome || undefined,
+        clienteTelefone: vendaData.clienteTelefone || undefined,
+        clienteEmail: vendaData.clienteEmail || undefined,
         itens: itensFormatados,
         valorTotal: valorTotalValido, // Usar apenas o valor dos produtos válidos
         tipoDevolucao: vendaData.vendasCompletas?.length > 0 ? 'total' : 'parcial',
@@ -480,7 +483,7 @@ const DevolucoesPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-gray-400 text-sm truncate">
-                    {devolucao.cliente_nome || 'Cliente não informado'}
+                    {devolucao.cliente_nome || 'Sem Cliente'}
                   </p>
                   {devolucao.pedido_numero && (
                     <p className="text-gray-500 text-xs">
