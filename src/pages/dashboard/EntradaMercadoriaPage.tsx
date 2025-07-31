@@ -119,7 +119,6 @@ const EntradaMercadoriaPage: React.FC = () => {
 
   // Função para editar entrada
   const handleEditarEntrada = (entrada: EntradaMercadoria) => {
-    console.log('🔄 Editando entrada:', entrada);
     setEntradaParaEditar(entrada);
     setShowModal(true);
   };
@@ -669,7 +668,6 @@ const EntradaManualTab: React.FC<{
       if (!entradaParaEditar || !empresaId) return;
 
       try {
-        console.log('🔄 Carregando dados da entrada para edição:', entradaParaEditar);
 
         // Carregar dados básicos da entrada
         setFornecedorNome(entradaParaEditar.fornecedor_nome);
@@ -689,7 +687,6 @@ const EntradaManualTab: React.FC<{
           .single();
 
         if (fornecedorData) {
-          console.log('✅ Fornecedor encontrado:', fornecedorData);
           setFornecedorId(fornecedorData.id);
         } else {
           console.log('⚠️ Fornecedor não encontrado para:', entradaParaEditar.fornecedor_nome);
@@ -994,16 +991,7 @@ const EntradaManualTab: React.FC<{
         return;
       }
 
-      // Log dos dados que serão salvos
-      console.log('📝 Dados para atualização:', {
-        fornecedor_id: fornecedorId,
-        fornecedor_nome: fornecedorNome,
-        fornecedor_documento: fornecedorDocumento,
-        numero_documento: numeroDocumento,
-        data_entrada: dataEntrada,
-        observacoes: observacoes,
-        entrada_id: entradaParaEditar.id
-      });
+
 
       // Atualizar dados básicos da entrada
       const { data: entradaAtualizada, error: entradaError } = await supabase
@@ -1021,7 +1009,7 @@ const EntradaManualTab: React.FC<{
         .eq('id', entradaParaEditar.id)
         .select();
 
-      console.log('📝 Resultado do UPDATE:', { entradaAtualizada, entradaError });
+
 
       if (entradaError) {
         console.error('Erro ao atualizar entrada:', entradaError);
@@ -1061,7 +1049,7 @@ const EntradaManualTab: React.FC<{
           estoque_atualizado: false
         }));
 
-        console.log('📦 Itens para inserir na edição:', itensParaInserir);
+
 
         const { error: itensError } = await supabase
           .from('entrada_mercadoria_itens')
