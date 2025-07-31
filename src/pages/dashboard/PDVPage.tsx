@@ -477,6 +477,8 @@ const PDVPage: React.FC = () => {
   const [loadingDevolucoes, setLoadingDevolucoes] = useState(false);
   const [showConfirmarDevolucaoModal, setShowConfirmarDevolucaoModal] = useState(false);
   const [devolucaoSelecionada, setDevolucaoSelecionada] = useState<any>(null);
+  const [isVendaComTroca, setIsVendaComTroca] = useState(false);
+  const [devolucaoAplicada, setDevolucaoAplicada] = useState<any>(null);
   const modalCardapioAbertoRef = useRef(false);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
   const [descontoTotal, setDescontoTotal] = useState(0);
@@ -529,14 +531,27 @@ const PDVPage: React.FC = () => {
     const totalAtual = carrinho.reduce((total, item) => total + item.subtotal, 0);
     const valorDevolucao = devolucao.valor_total;
 
-    if (valorDevolucao >= totalAtual) {
-      toast.error('O valor da devolução não pode ser maior ou igual ao total da venda');
+    // Verificar se é uma troca (valor igual)
+    const isTroca = Math.abs(valorDevolucao - totalAtual) < 0.01; // Tolerância de 1 centavo
+
+    if (valorDevolucao > totalAtual && !isTroca) {
+      toast.error('O valor da devolução não pode ser maior que o total da venda');
       return;
     }
 
     // Aplicar o valor da devolução como desconto global
     setDescontoGlobal(valorDevolucao);
-    toast.success(`Devolução #${devolucao.numero} aplicada como desconto (${formatCurrency(valorDevolucao)})`);
+
+    // Se for troca (valor igual), marcar como venda de troca
+    if (isTroca) {
+      setIsVendaComTroca(true);
+      setDevolucaoAplicada(devolucao);
+      toast.success(`Troca aplicada! Devolução #${devolucao.numero} (${formatCurrency(valorDevolucao)}) - Venda será finalizada como TROCA`);
+    } else {
+      setIsVendaComTroca(false);
+      setDevolucaoAplicada(null);
+      toast.success(`Devolução #${devolucao.numero} aplicada como desconto (${formatCurrency(valorDevolucao)})`);
+    }
 
     // Fechar modais
     setShowConfirmarDevolucaoModal(false);
@@ -1202,6 +1217,10 @@ const PDVPage: React.FC = () => {
 
     // ✅ NOVO: Limpar observação da venda
     setObservacaoVenda('');
+
+    // ✅ NOVO: Limpar estados de troca/devolução
+    setIsVendaComTroca(false);
+    setDevolucaoAplicada(null);
 
     // Limpar localStorage
     clearPDVState();
@@ -12741,7 +12760,14 @@ const PDVPage: React.FC = () => {
       const valorDescontoItens = Math.round(calcularDescontoItens() * 100) / 100;
       const valorDescontoTotal = Math.round(descontoGlobal * 100) / 100;
 
+      // ✅ NOVO: Preparar observação da venda incluindo informações de troca
+      let observacaoFinal = observacaoVenda || '';
 
+      // Se for venda com troca (valor zero), adicionar observação específica
+      if (isVendaComTroca && devolucaoAplicada && Math.abs(valorTotal) < 0.01) {
+        const observacaoTroca = `TROCA - Devolução #${devolucaoAplicada.numero}${devolucaoAplicada.codigo_troca ? ` (${devolucaoAplicada.codigo_troca})` : ''}`;
+        observacaoFinal = observacaoFinal ? `${observacaoFinal} | ${observacaoTroca}` : observacaoTroca;
+      }
 
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
@@ -12757,7 +12783,7 @@ const PDVPage: React.FC = () => {
         valor_total: valorTotal,
         desconto_prazo_id: descontoPrazoSelecionado,
         pedidos_importados: pedidosImportados.length > 0 ? pedidosImportados.map(p => p.id) : null,
-        observacao_venda: observacaoVenda || null, // ✅ NOVO: Incluir observação da venda
+        observacao_venda: observacaoFinal || null, // ✅ NOVO: Incluir observação da venda com informações de troca
         // ✅ NOVO: Incluir informações de nome do cliente, mesa e comanda
         nome_cliente: nomeCliente || null,
         mesa_numero: mesaNumero || null,
@@ -13993,6 +14019,11 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Limpar observação da venda
       setObservacaoVenda('');
+
+      // ✅ NOVO: Limpar estados de troca/devolução
+      setIsVendaComTroca(false);
+      setDevolucaoAplicada(null);
+      setDescontoGlobal(0);
 
       // ✅ NOVO: Limpar TODOS os estados dos modais para nova venda
       setNomeCliente('');

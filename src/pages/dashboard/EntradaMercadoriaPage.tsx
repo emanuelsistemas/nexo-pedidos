@@ -973,16 +973,22 @@ const EntradaManualTab: React.FC<{
       setIsLoading(true);
 
       // Verificar se já existe outra entrada com o mesmo número (exceto a atual)
-      const { data: entradaExistente } = await supabase
+      const { data: entradasExistentes, error: consultaError } = await supabase
         .from('entrada_mercadoria')
         .select('id, numero')
         .eq('empresa_id', empresaId)
         .eq('numero', numeroDocumento)
         .neq('id', entradaParaEditar.id)
-        .eq('deletado', false)
-        .single();
+        .eq('deletado', false);
 
-      if (entradaExistente) {
+      if (consultaError) {
+        console.error('Erro na consulta de validação:', consultaError);
+        showMessage('error', 'Erro ao validar número do documento');
+        setIsLoading(false);
+        return;
+      }
+
+      if (entradasExistentes && entradasExistentes.length > 0) {
         showMessage('error', `Já existe uma entrada com o número "${numeroDocumento}"`);
         setIsLoading(false);
         return;
@@ -1034,16 +1040,18 @@ const EntradaManualTab: React.FC<{
         const itensParaInserir = produtos.map(produto => ({
           entrada_mercadoria_id: entradaParaEditar.id,
           empresa_id: empresaId,
-          produto_id: produto.id,
+          produto_id: produto.produto_id, // Usar produto_id em vez de id temporário
           codigo_produto: produto.codigo,
           nome_produto: produto.nome,
           quantidade: produto.quantidade,
-          preco_custo: produto.preco_unitario || 0,
-          preco_unitario: produto.preco_unitario || 0,
+          preco_custo: produto.preco_custo || 0,
+          preco_unitario: produto.preco_venda || 0,
           preco_total: produto.preco_total || 0,
           atualizar_estoque: true,
           estoque_atualizado: false
         }));
+
+        console.log('📦 Itens para inserir na edição:', itensParaInserir);
 
         const { error: itensError } = await supabase
           .from('entrada_mercadoria_itens')
