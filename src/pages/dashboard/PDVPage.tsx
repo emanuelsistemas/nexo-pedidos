@@ -18541,6 +18541,15 @@ const PDVPage: React.FC = () => {
                           const temDescontoItens = descontoItens > 0;
                           const temDescontoTotal = descontoGlobal > 0;
 
+                          // Debug para verificar valores
+                          console.log('🔍 Debug Desconto Total:', {
+                            descontoGlobal,
+                            temDescontoTotal,
+                            pdvConfigDescontoTotal: pdvConfig?.desconto_no_total,
+                            isVendaComTroca,
+                            devolucaoAplicada
+                          });
+
                           return (temDescontoItens || temDescontoTotal) && (
                             <>
                               {/* Desconto no Item - Aparece sempre que houver desconto (manual ou automático) */}
