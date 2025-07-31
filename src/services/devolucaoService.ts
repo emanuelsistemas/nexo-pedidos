@@ -132,9 +132,19 @@ class DevolucaoService {
       const primeiroItem = dados.itens[0];
       const vendaOrigemId = primeiroItem?.venda_origem_id || null;
 
-      // Buscar o número da venda na tabela pdv
-      let vendaOrigemNumero = null;
-      if (vendaOrigemId) {
+      // Usar o número da venda que já vem do frontend, ou buscar se não vier
+      let vendaOrigemNumero = primeiroItem?.venda_origem_numero || null;
+
+      // Debug: Log dos dados recebidos
+      console.log('🔍 Debug devolução - Primeiro item:', {
+        venda_origem_id: vendaOrigemId,
+        venda_origem_numero: vendaOrigemNumero,
+        primeiroItem: primeiroItem
+      });
+
+      // Se não tiver o número, buscar na tabela pdv
+      if (!vendaOrigemNumero && vendaOrigemId) {
+        console.log('🔍 Buscando número da venda na tabela pdv...');
         const { data: vendaData } = await supabase
           .from('pdv')
           .select('numero_venda')
@@ -142,6 +152,7 @@ class DevolucaoService {
           .single();
 
         vendaOrigemNumero = vendaData?.numero_venda || null;
+        console.log('🔍 Número encontrado na tabela pdv:', vendaOrigemNumero);
       }
 
       // Preparar dados da devolução principal

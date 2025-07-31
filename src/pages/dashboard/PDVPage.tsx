@@ -48,6 +48,7 @@ import {
   Phone,
   Truck,
   MapPin,
+  RotateCcw,
   Edit
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -470,6 +471,10 @@ const PDVPage: React.FC = () => {
   const [showMovimentosModal, setShowMovimentosModal] = useState(false);
   const [showDescontoTotalModal, setShowDescontoTotalModal] = useState(false);
   const [showCardapioDigitalModal, setShowCardapioDigitalModal] = useState(false);
+  const [showDevolucoesModal, setShowDevolucoesModal] = useState(false);
+  const [devolucoesPendentes, setDevolucoesPendentes] = useState<any[]>([]);
+  const [searchDevolucoes, setSearchDevolucoes] = useState('');
+  const [loadingDevolucoes, setLoadingDevolucoes] = useState(false);
   const modalCardapioAbertoRef = useRef(false);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
   const [descontoTotal, setDescontoTotal] = useState(0);
@@ -1972,6 +1977,31 @@ const PDVPage: React.FC = () => {
         // Atualizar contador de NFC-e pendentes
         loadContadorNfcePendentes();
       }
+    },
+    {
+      id: 'devolucoes',
+      icon: RotateCcw,
+      label: 'Devoluções',
+      color: 'red',
+      onClick: async (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        try {
+          // Ativar fullscreen antes de abrir o modal
+          if (!isFullscreen) {
+            await enterFullscreen();
+          }
+        } catch (error) {
+          // Erro silencioso ao ativar fullscreen
+        }
+
+        setShowDevolucoesModal(true);
+        // Carregar devoluções pendentes quando abrir o modal
+        loadDevolucoesPendentes();
+      }
     }
   ];
 
@@ -2557,6 +2587,70 @@ const PDVPage: React.FC = () => {
         setContadorNfcePendentes(count || 0);
       } catch (error) {
         // Erro ao carregar contador de NFC-e pendentes
+      }
+    });
+  };
+
+  // Função para carregar devoluções pendentes
+  const loadDevolucoesPendentes = async () => {
+    await withSessionCheck(async () => {
+      try {
+        setLoadingDevolucoes(true);
+
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        // Buscar devoluções pendentes com JOIN para cliente
+        const { data: devolucoes, error } = await supabase
+          .from('devolucoes')
+          .select(`
+            id,
+            numero,
+            codigo_troca,
+            cliente_id,
+            valor_total,
+            created_at,
+            motivo_geral,
+            forma_reembolso,
+            observacoes,
+            venda_origem_numero,
+            clientes:cliente_id (
+              nome,
+              telefone,
+              emails
+            )
+          `)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('status', 'pendente')
+          .eq('deletado', false)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Erro ao carregar devoluções pendentes:', error);
+          return;
+        }
+
+        // Processar dados para incluir nome do cliente
+        const devolucoesProcesadas = (devolucoes || []).map((devolucao: any) => {
+          return {
+            ...devolucao,
+            cliente_nome: devolucao.clientes?.nome || 'Cliente não informado'
+          };
+        });
+
+        setDevolucoesPendentes(devolucoesProcesadas);
+      } catch (error) {
+        console.error('Erro ao carregar devoluções pendentes:', error);
+      } finally {
+        setLoadingDevolucoes(false);
       }
     });
   };
@@ -28431,6 +28525,225 @@ const PDVPage: React.FC = () => {
                 >
                   Selecionar Cliente
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Devoluções Pendentes */}
+      <AnimatePresence>
+        {showDevolucoesModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-0"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-800/95 backdrop-blur-md border border-gray-600/50 w-full h-full overflow-hidden shadow-2xl flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
+                <div className="flex items-center gap-3">
+                  <RotateCcw className="text-red-400" size={24} />
+                  <h2 className="text-xl font-semibold text-white">
+                    Devoluções Pendentes
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setShowDevolucoesModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-700/50"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Campo de Pesquisa */}
+              <div className="p-6 border-b border-gray-700/50">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Pesquisar por cliente, código de troca ou número da venda..."
+                    value={searchDevolucoes}
+                    onChange={(e) => setSearchDevolucoes(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50"
+                  />
+                </div>
+              </div>
+
+              {/* Lista de Devoluções */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {loadingDevolucoes ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-8 h-8 border-2 border-red-500/30 border-t-red-400 rounded-full animate-spin"></div>
+                      <p className="text-gray-400">Carregando devoluções...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {devolucoesPendentes.filter(devolucao =>
+                      !searchDevolucoes ||
+                      devolucao.cliente_nome?.toLowerCase().includes(searchDevolucoes.toLowerCase()) ||
+                      devolucao.codigo_troca?.toLowerCase().includes(searchDevolucoes.toLowerCase()) ||
+                      devolucao.numero?.toLowerCase().includes(searchDevolucoes.toLowerCase()) ||
+                      devolucao.venda_origem_numero?.toLowerCase().includes(searchDevolucoes.toLowerCase())
+                    ).length === 0 ? (
+                      <div className="text-center py-12">
+                        <RotateCcw className="mx-auto text-gray-500 mb-4" size={48} />
+                        <p className="text-gray-400 text-lg">
+                          {searchDevolucoes ? 'Nenhuma devolução encontrada' : 'Nenhuma devolução pendente'}
+                        </p>
+                        {searchDevolucoes && (
+                          <p className="text-gray-500 text-sm mt-2">
+                            Tente pesquisar por outro termo
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {devolucoesPendentes
+                          .filter(devolucao =>
+                            !searchDevolucoes ||
+                            devolucao.cliente_nome?.toLowerCase().includes(searchDevolucoes.toLowerCase()) ||
+                            devolucao.codigo_troca?.toLowerCase().includes(searchDevolucoes.toLowerCase()) ||
+                            devolucao.numero?.toLowerCase().includes(searchDevolucoes.toLowerCase()) ||
+                            devolucao.venda_origem_numero?.toLowerCase().includes(searchDevolucoes.toLowerCase())
+                          )
+                          .map((devolucao, index) => (
+                            <motion.div
+                              key={devolucao.id}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.05 }}
+                              className="p-2.5 bg-background-card rounded border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer"
+                              onClick={() => {
+                                // TODO: Implementar visualização de detalhes
+                                console.log('Ver detalhes da devolução:', devolucao.id);
+                              }}
+                            >
+                              {/* Layout em três colunas - Compacto */}
+                              <div className="flex items-start gap-3">
+                                {/* Coluna Esquerda - Número e Cliente */}
+                                <div className="flex-[2] min-w-0">
+                                  {/* Código de Troca */}
+                                  {devolucao.codigo_troca && (
+                                    <div className="mb-1">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30 font-mono">
+                                          {devolucao.codigo_troca}
+                                        </span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(devolucao.codigo_troca);
+                                            // Toast de confirmação simples
+                                            console.log('Código copiado:', devolucao.codigo_troca);
+                                          }}
+                                          className="text-blue-400 hover:text-blue-300 transition-colors p-1"
+                                          title="Copiar código"
+                                        >
+                                          <Copy size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="text-white font-medium text-sm">#{devolucao.numero}</span>
+                                    <span className="text-xs px-1.5 py-0.5 rounded-full text-yellow-400 border-yellow-400 bg-opacity-20 border">
+                                      Pendente
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-400 text-sm truncate">
+                                    {devolucao.cliente_nome || 'Sem Cliente'}
+                                  </p>
+                                  {devolucao.venda_origem_numero && (
+                                    <p className="text-gray-500 text-xs">
+                                      Pedido: #{devolucao.venda_origem_numero}
+                                    </p>
+                                  )}
+                                </div>
+
+                                {/* Coluna Central - Detalhes da Devolução */}
+                                <div className="flex-[2] min-w-0">
+                                  <div className="space-y-1">
+                                    {/* Data da devolução */}
+                                    <p className="text-gray-400 text-xs">
+                                      {new Date(devolucao.created_at).toLocaleDateString('pt-BR', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+
+                                    {/* Forma de reembolso */}
+                                    <p className="text-gray-500 text-xs capitalize">
+                                      {devolucao.forma_reembolso?.replace('_', ' ')}
+                                    </p>
+
+                                    {/* Motivo se houver */}
+                                    {devolucao.motivo_geral && (
+                                      <p className="text-gray-500 text-xs truncate" title={devolucao.motivo_geral}>
+                                        {devolucao.motivo_geral}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Coluna Direita - Valor e Ações */}
+                                <div className="flex-shrink-0 text-right">
+                                  <div className="flex items-center gap-1 mb-1">
+                                    <DollarSign size={12} className="text-green-400" />
+                                    <span className="text-white font-medium text-sm">
+                                      {new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                      }).format(devolucao.valor_total)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // TODO: Implementar processamento da devolução
+                                        console.log('Processar devolução:', devolucao.id);
+                                      }}
+                                      className="p-1 rounded text-green-400 hover:text-green-300 hover:bg-green-900/30 transition-colors"
+                                      title="Processar devolução"
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-gray-700/50">
+                <div className="flex items-center justify-between">
+                  <p className="text-gray-400 text-sm">
+                    {devolucoesPendentes.length} devolução(ões) pendente(s)
+                  </p>
+                  <button
+                    onClick={() => setShowDevolucoesModal(false)}
+                    className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

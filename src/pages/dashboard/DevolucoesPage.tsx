@@ -179,18 +179,23 @@ const DevolucoesPage: React.FC = () => {
 
       // Mapear itens válidos para o formato esperado pelo serviço
       const itensFormatados = itensValidos.map((item: any) => {
-        return {
+        const itemFormatado = {
           produto_id: item.produto_id,
           produto_nome: item.nome_produto,
           produto_codigo: item.codigo_produto || null,
           pdv_item_id: item.id, // ID do item original da venda
           venda_origem_id: item.pdv_id, // ID da venda original
-          venda_origem_numero: vendaData.numeroVenda || null, // Número da venda selecionada
+          venda_origem_numero: vendaData.vendaOrigem?.numero || vendaData.numeroVenda || null, // Número da venda selecionada
           quantidade: item.quantidade,
           preco_unitario: item.valor_unitario,
           preco_total: item.valor_total_item,
           motivo: 'Devolução solicitada pelo cliente'
         };
+
+        // Debug: Log do item formatado
+        console.log('🔍 Debug frontend - Item formatado:', itemFormatado);
+
+        return itemFormatado;
       });
 
       // Calcular valor total apenas dos itens válidos (produtos reais)
@@ -207,9 +212,21 @@ const DevolucoesPage: React.FC = () => {
         tipoDevolucao: vendaData.vendasCompletas?.length > 0 ? 'total' : 'parcial',
         formaReembolso: 'dinheiro', // Padrão - pode ser alterado depois
         motivoGeral: 'Devolução solicitada pelo cliente',
-        observacoes: `Itens selecionados: ${itensFormatados.length} produtos (Valor: R$ ${valorTotalValido.toFixed(2)})`,
-        pedidoTipo: 'pdv'
+        observacoes: `Itens selecionados: ${itensFormatados.length} produtos (Valor: R$ ${valorTotalValido.toFixed(2)})${vendaData.vendaOrigem ? ` - Venda origem: #${vendaData.vendaOrigem.numero}` : ''}`,
+        pedidoTipo: 'pdv',
+        // Adicionar informações da venda origem se disponível
+        ...(vendaData.vendaOrigem && {
+          pedidoId: vendaData.vendaOrigem.id,
+          pedidoNumero: vendaData.vendaOrigem.numero
+        })
       };
+
+      // Debug: Log dos dados completos da devolução
+      console.log('🔍 Debug frontend - Dados completos da devolução:', {
+        dadosDevolucao,
+        vendaData,
+        vendaOrigem: vendaData.vendaOrigem
+      });
 
       // Criar a devolução
       const novaDevolucao = await devolucaoService.criarDevolucao(dadosDevolucao);
@@ -554,11 +571,7 @@ const DevolucoesPage: React.FC = () => {
                   <p className="text-gray-400 text-sm truncate">
                     {devolucao.cliente_nome || 'Sem Cliente'}
                   </p>
-                  {devolucao.pedido_numero && (
-                    <p className="text-gray-500 text-xs">
-                      Pedido: #{devolucao.pedido_numero}
-                    </p>
-                  )}
+                  {/* Número do pedido removido conforme solicitado */}
                 </div>
 
                 {/* Coluna Central - Detalhes da Devolução */}
@@ -592,16 +605,7 @@ const DevolucoesPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditarDevolucao(devolucao);
-                      }}
-                      className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
-                      title="Editar devolução"
-                    >
-                      <Edit size={14} />
-                    </button>
+                    {/* Botão de editar removido conforme solicitado */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

@@ -824,10 +824,10 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-white">Qtd: {produto.quantidade}</p>
-                      <p className="text-sm text-gray-400">Unit: R$ {produto.preco_unitario.toFixed(2)}</p>
+                      <p className="text-sm text-gray-400">Unit: R$ {(produto.preco_unitario || 0).toFixed(2)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-white font-semibold">R$ {produto.preco_total.toFixed(2)}</p>
+                      <p className="text-white font-semibold">R$ {(produto.preco_total || 0).toFixed(2)}</p>
                     </div>
                     <button
                       onClick={() => {
@@ -848,7 +848,7 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
                 <div className="text-right">
                   <p className="text-gray-400">Total dos Produtos:</p>
                   <p className="text-xl font-bold text-white">
-                    R$ {produtos.reduce((total, produto) => total + produto.preco_total, 0).toFixed(2)}
+                    R$ {produtos.reduce((total, produto) => total + (produto.preco_total || 0), 0).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -932,6 +932,16 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
           }}
           produtosExistentes={produtos}
           empresaId={empresaId}
+          dadosEntrada={{
+            fornecedorId,
+            fornecedorNome,
+            fornecedorDocumento,
+            numeroDocumento,
+            dataEntrada,
+            observacoes,
+            usuarioId
+          }}
+          onSaveRascunho={onSave}
         />
       )}
     </div>
@@ -945,7 +955,17 @@ const ProdutoEntradaModal: React.FC<{
   onSave: (produtos: any[]) => void;
   produtosExistentes: any[];
   empresaId: string;
-}> = ({ isOpen, onClose, onSave, produtosExistentes, empresaId }) => {
+  dadosEntrada?: {
+    fornecedorId: string;
+    fornecedorNome: string;
+    fornecedorDocumento: string;
+    numeroDocumento: string;
+    dataEntrada: string;
+    observacoes: string;
+    usuarioId: string;
+  };
+  onSaveRascunho?: () => void;
+}> = ({ isOpen, onClose, onSave, produtosExistentes, empresaId, dadosEntrada, onSaveRascunho }) => {
   const [produtos, setProdutos] = useState<any[]>(produtosExistentes);
   const [showProdutoSeletor, setShowProdutoSeletor] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
@@ -1313,11 +1333,12 @@ const ProdutoEntradaModal: React.FC<{
       codigo: produtoSelecionado.codigo,
       nome: produtoSelecionado.nome,
       unidade_medida: produtoSelecionado.unidade_medida?.sigla || 'UN',
-      quantidade: produtoForm.quantidade,
-      preco_custo: produtoForm.preco_custo,
-      margem_percentual: produtoForm.margem_percentual,
-      preco_venda: produtoForm.preco_venda,
-      preco_total: produtoForm.preco_total,
+      quantidade: produtoForm.quantidade || 1,
+      preco_custo: produtoForm.preco_custo || 0,
+      margem_percentual: produtoForm.margem_percentual || 0,
+      preco_venda: produtoForm.preco_venda || 0,
+      preco_total: produtoForm.preco_total || 0,
+      preco_unitario: produtoForm.preco_venda || 0, // Para compatibilidade
       tabelas_precos: { ...precosTabelas } // Salvar preços das tabelas
     };
 
@@ -1350,11 +1371,159 @@ const ProdutoEntradaModal: React.FC<{
   };
 
   // Salvar progresso sem fechar modal
-  const handleSalvarProgresso = () => {
-    // Salvar produtos selecionados mas manter modal aberto
-    onSave(produtos);
-    // Mostrar mensagem de confirmação
-    showMessage('success', 'Progresso salvo! Você pode continuar adicionando produtos.');
+  const handleSalvarProgresso = async () => {
+    console.log('🔄 Iniciando salvamento de rascunho...');
+
+    if (!dadosEntrada || !dadosEntrada.fornecedorId) {
+      console.log('❌ Erro: Dados do fornecedor não encontrados');
+      showMessage('error', 'Dados do fornecedor são obrigatórios para salvar');
+      return;
+    }
+
+    if (produtos.length === 0) {
+      console.log('❌ Erro: Nenhum produto para salvar');
+      showMessage('error', 'Adicione pelo menos um produto para salvar');
+      return;
+    }
+
+    try {
+      console.log('📊 Produtos para salvar:', produtos);
+
+      // Calcular valor total
+      const valorTotal = produtos.reduce((total, produto) => total + (produto.preco_total || 0), 0);
+      console.log('💰 Valor total calculado:', valorTotal);
+
+      // Criar entrada de mercadoria como rascunho
+      const numeroEntrada = dadosEntrada.numeroDocumento || `RASCUNHO-${Date.now()}`;
+      console.log('📄 Número da entrada:', numeroEntrada);
+
+      const entradaParaSalvar = {
+        numero: numeroEntrada, // Campo obrigatório
+        empresa_id: empresaId,
+        usuario_id: dadosEntrada.usuarioId,
+        fornecedor_id: dadosEntrada.fornecedorId,
+        fornecedor_nome: dadosEntrada.fornecedorNome,
+        fornecedor_documento: dadosEntrada.fornecedorDocumento,
+        numero_documento: numeroEntrada,
+        data_entrada: dadosEntrada.dataEntrada,
+        valor_total: valorTotal,
+        status: 'rascunho',
+        observacoes: dadosEntrada.observacoes
+      };
+
+      console.log('📝 Dados da entrada para salvar:', entradaParaSalvar);
+
+      const { data: entradaData, error: entradaError } = await supabase
+        .from('entrada_mercadoria')
+        .insert(entradaParaSalvar)
+        .select()
+        .single();
+
+      if (entradaError) {
+        console.log('❌ Erro ao salvar entrada:', entradaError);
+        throw entradaError;
+      }
+
+      console.log('✅ Entrada salva com sucesso:', entradaData);
+
+      // Salvar itens da entrada
+      console.log('📦 Preparando itens para salvar...');
+
+      const itensParaSalvar = produtos.map((produto, index) => {
+        const item = {
+          entrada_mercadoria_id: entradaData.id,
+          empresa_id: empresaId,
+          produto_id: produto.produto_id,
+          codigo_produto: produto.codigo,
+          nome_produto: produto.nome,
+          unidade_medida: produto.unidade_medida,
+          quantidade: produto.quantidade || 1,
+          preco_unitario: produto.preco_venda || 0,
+          preco_total: produto.preco_total || 0,
+          preco_custo: produto.preco_custo || 0,
+          margem_percentual: produto.margem_percentual || 0,
+          preco_venda: produto.preco_venda || 0
+        };
+
+        console.log(`📦 Item ${index + 1}:`, item);
+        return item;
+      });
+
+      console.log('📦 Todos os itens preparados:', itensParaSalvar);
+      console.log('🔄 Salvando itens no banco...');
+
+      const { data: itensData, error: itensError } = await supabase
+        .from('entrada_mercadoria_itens')
+        .insert(itensParaSalvar)
+        .select();
+
+      if (itensError) {
+        console.log('❌ Erro ao salvar itens:', itensError);
+        throw itensError;
+      }
+
+      console.log('✅ Itens salvos com sucesso:', itensData);
+
+      // Salvar preços das tabelas se existirem
+      console.log('💰 Verificando preços das tabelas...');
+
+      if (itensData && itensData.length > 0) {
+        console.log('💰 Processando preços das tabelas para', itensData.length, 'itens');
+
+        for (let i = 0; i < produtos.length; i++) {
+          const produto = produtos[i];
+          const itemSalvo = itensData[i];
+
+          console.log(`💰 Produto ${i + 1} - Tabelas:`, produto.tabelas_precos);
+
+          if (produto.tabelas_precos && Object.keys(produto.tabelas_precos).length > 0) {
+            const precosTabelas = Object.entries(produto.tabelas_precos).map(([tabelaId, preco]) => ({
+              empresa_id: empresaId,
+              entrada_mercadoria_item_id: itemSalvo.id,
+              tabela_preco_id: tabelaId,
+              preco: preco as number
+            }));
+
+            console.log(`💰 Salvando preços para item ${itemSalvo.id}:`, precosTabelas);
+
+            if (precosTabelas.length > 0) {
+              const { error: precosError } = await supabase
+                .from('entrada_mercadoria_precos')
+                .insert(precosTabelas);
+
+              if (precosError) {
+                console.log('❌ Erro ao salvar preços das tabelas:', precosError);
+                throw precosError;
+              }
+
+              console.log('✅ Preços das tabelas salvos com sucesso');
+            }
+          }
+        }
+      }
+
+      console.log('🔄 Atualizando estado local...');
+
+      // Salvar produtos no estado local também
+      onSave(produtos);
+
+      // Atualizar lista principal
+      if (onSaveRascunho) {
+        console.log('🔄 Atualizando lista principal...');
+        onSaveRascunho();
+      }
+
+      console.log('✅ Rascunho salvo com sucesso!');
+      showMessage('success', 'Rascunho salvo com sucesso!');
+
+      // Fechar modal e retornar à listagem
+      console.log('🔄 Fechando modal e retornando à listagem...');
+      onClose();
+    } catch (error) {
+      console.error('❌ Erro detalhado ao salvar rascunho:', error);
+      console.error('❌ Stack trace:', error.stack);
+      showMessage('error', `Erro ao salvar rascunho: ${error.message}`);
+    }
   };
 
   if (!isOpen) return null;
@@ -1638,7 +1807,7 @@ const ProdutoEntradaModal: React.FC<{
                 </label>
                 <input
                   type="text"
-                  value={produtoForm.preco_total.toFixed(2)}
+                  value={(produtoForm.preco_total || 0).toFixed(2)}
                   className={`w-full px-1 py-1.5 border rounded text-sm ${
                     !produtoSelecionado
                       ? 'bg-gray-700 border-gray-600 text-gray-500'
@@ -1695,7 +1864,7 @@ const ProdutoEntradaModal: React.FC<{
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-white font-semibold">R$ {produto.preco_total.toFixed(2)}</p>
+                        <p className="text-white font-semibold">R$ {(produto.preco_total || 0).toFixed(2)}</p>
                       </div>
                       <button
                         onClick={() => removerProduto(index)}
@@ -1714,7 +1883,7 @@ const ProdutoEntradaModal: React.FC<{
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Total Geral:</span>
                       <span className="text-xl font-bold text-white">
-                        R$ {produtos.reduce((total, produto) => total + produto.preco_total, 0).toFixed(2)}
+                        R$ {produtos.reduce((total, produto) => total + (produto.preco_total || 0), 0).toFixed(2)}
                       </span>
                     </div>
                   </div>

@@ -933,6 +933,17 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [clienteId, setClienteId] = useState('');
   const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
 
+  // Função para formatar data (local do componente)
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   // Função para obter todos os itens selecionados (excluindo taxa de entrega)
   const getItensSelecionados = () => {
     const itens: ItemVenda[] = [];
@@ -981,7 +992,37 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     return itens;
   };
 
+  // Função para obter informações da venda origem
+  const getVendaOrigemInfo = () => {
+    // Primeiro, verificar se há vendas completas selecionadas
+    if (selectedVendas.size > 0) {
+      const vendaId = Array.from(selectedVendas)[0]; // Pegar a primeira venda selecionada
+      const venda = vendas.find(v => v.id === vendaId);
+      return venda ? {
+        id: venda.id,
+        numero: venda.numero_venda,
+        data: venda.data_venda || venda.created_at
+      } : null;
+    }
+
+    // Se não há vendas completas, verificar itens individuais
+    if (selectedItens.size > 0) {
+      const itemId = Array.from(selectedItens)[0]; // Pegar o primeiro item
+      const vendaDoItem = vendas.find(venda =>
+        venda.itens?.some(i => i.id === itemId)
+      );
+      return vendaDoItem ? {
+        id: vendaDoItem.id,
+        numero: vendaDoItem.numero_venda,
+        data: vendaDoItem.data_venda || vendaDoItem.created_at
+      } : null;
+    }
+
+    return null;
+  };
+
   const itensSelecionados = getItensSelecionados();
+  const vendaOrigemInfo = getVendaOrigemInfo();
 
   const handleConfirm = () => {
     const dadosDevolucao = {
@@ -989,7 +1030,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       itens: itensSelecionados,
       valorTotal,
       vendasCompletas: Array.from(selectedVendas),
-      itensIndividuais: Array.from(selectedItens)
+      itensIndividuais: Array.from(selectedItens),
+      vendaOrigem: vendaOrigemInfo // Adicionar informações da venda origem
     };
     onConfirm(dadosDevolucao);
   };
@@ -1019,6 +1061,28 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
         {/* Conteúdo */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Informações da Venda Origem */}
+          {vendaOrigemInfo && (
+            <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-blue-400 mb-2">
+                Venda de Origem
+              </h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-white font-medium">
+                    #{vendaOrigemInfo.numero}
+                  </div>
+                  <div className="text-gray-400 text-sm">
+                    {formatDate(vendaOrigemInfo.data)}
+                  </div>
+                </div>
+                <div className="text-blue-400 text-sm">
+                  Venda selecionada para devolução
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Seleção de Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-3">
