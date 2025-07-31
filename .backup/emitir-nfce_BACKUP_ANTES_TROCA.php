@@ -1316,38 +1316,6 @@ try {
 
     logDetalhado('140', 'Loop de produtos concluído', ['total_produtos_valor' => $totalProdutos]);
 
-    // ✅ NOVO: Detectar se é uma operação de TROCA EXATA (valor zero + observação de troca)
-    $isTrocaExata = false;
-    $observacaoTroca = '';
-
-    // Verificar se valor total é EXATAMENTE zero (tolerância de 1 centavo)
-    $valorTotalZero = abs($totalProdutos) < 0.01;
-
-    // Buscar observação da venda nos dados recebidos
-    $observacaoVenda = '';
-    if (isset($nfceData['observacao_venda'])) {
-        $observacaoVenda = $nfceData['observacao_venda'];
-    } elseif (isset($nfceData['venda']['observacao_venda'])) {
-        $observacaoVenda = $nfceData['venda']['observacao_venda'];
-    }
-
-    // Detectar se é TROCA EXATA (valor zero + observação contém "TROCA")
-    if ($valorTotalZero && !empty($observacaoVenda) && stripos($observacaoVenda, 'TROCA') !== false) {
-        $isTrocaExata = true;
-        $observacaoTroca = $observacaoVenda;
-        logDetalhado('140.1', 'TROCA EXATA DETECTADA: Valor zero + observação de troca', [
-            'valor_total' => $totalProdutos,
-            'observacao' => $observacaoTroca,
-            'regra_aplicada' => 'Pagamento 90 - Sem Pagamento'
-        ]);
-    } else if (!empty($observacaoVenda) && stripos($observacaoVenda, 'TROCA') !== false) {
-        logDetalhado('140.2', 'TROCA COM DIFERENÇA DETECTADA: Valor > 0 + observação de troca', [
-            'valor_total' => $totalProdutos,
-            'observacao' => $observacaoVenda,
-            'regra_aplicada' => 'Pagamento normal (há diferença de valor)'
-        ]);
-    }
-
     // Totais da NFC-e (MÉTODO NATIVO)
     logDetalhado('141', 'Iniciando criação dos totais da NFC-e');
     $std = new stdClass();
@@ -1438,36 +1406,23 @@ try {
     $std = new stdClass();
     $std->indPag = 0; // Pagamento à vista (padrão para NFC-e)
 
-    // ✅ NOVO: Aplicar regras especiais APENAS para TROCA EXATA (valor zero)
-    if ($isTrocaExata) {
-        // Para operações de TROCA EXATA, usar "90 - Sem Pagamento" conforme documentação SEFAZ
-        $std->tPag = '90'; // Sem pagamento (obrigatório para trocas exatas)
-        $std->vPag = 0.00; // Valor zero (obrigatório quando tPag=90)
-        logDetalhado('155.1', 'TROCA EXATA: Aplicando pagamento especial conforme SEFAZ', [
-            'tPag' => $std->tPag,
-            'vPag' => $std->vPag,
-            'observacao_troca' => $observacaoTroca,
-            'valor_total_nfce' => $totalProdutos
-        ]);
+    // ✅ USAR FORMA DE PAGAMENTO REAL (não hardcoded)
+    if (!empty($pagamento['forma_pagamento'])) {
+        $std->tPag = $pagamento['forma_pagamento']; // ✅ FORMA REAL do PDV
+        logDetalhado('155.2', 'Usando forma de pagamento real', ['forma' => $std->tPag]);
     } else {
-        // ✅ USAR FORMA DE PAGAMENTO REAL (não hardcoded) para vendas normais
-        if (!empty($pagamento['forma_pagamento'])) {
-            $std->tPag = $pagamento['forma_pagamento']; // ✅ FORMA REAL do PDV
-            logDetalhado('155.2', 'Usando forma de pagamento real', ['forma' => $std->tPag]);
-        } else {
-            // Fallback apenas se não informado
-            $std->tPag = '01'; // Dinheiro (fallback)
-            logDetalhado('155.3', 'Usando forma de pagamento fallback (dinheiro)', ['forma' => $std->tPag]);
-        }
+        // Fallback apenas se não informado
+        $std->tPag = '01'; // Dinheiro (fallback)
+        logDetalhado('155.3', 'Usando forma de pagamento fallback (dinheiro)', ['forma' => $std->tPag]);
+    }
 
-        // ✅ USAR VALOR REAL DO PAGAMENTO (pode ser diferente do total se houver troco)
-        if (!empty($pagamento['valor_pago'])) {
-            $std->vPag = (float)$pagamento['valor_pago']; // ✅ VALOR REAL pago
-            logDetalhado('155.4', 'Usando valor pago real', ['valor' => $std->vPag]);
-        } else {
-            $std->vPag = $totalProdutos; // Fallback = total dos produtos
-            logDetalhado('155.5', 'Usando valor pago fallback (total produtos)', ['valor' => $std->vPag]);
-        }
+    // ✅ USAR VALOR REAL DO PAGAMENTO (pode ser diferente do total se houver troco)
+    if (!empty($pagamento['valor_pago'])) {
+        $std->vPag = (float)$pagamento['valor_pago']; // ✅ VALOR REAL pago
+        logDetalhado('155.4', 'Usando valor pago real', ['valor' => $std->vPag]);
+    } else {
+        $std->vPag = $totalProdutos; // Fallback = total dos produtos
+        logDetalhado('155.5', 'Usando valor pago fallback (total produtos)', ['valor' => $std->vPag]);
     }
 
     try {
@@ -1482,19 +1437,7 @@ try {
     // Informações adicionais (MÉTODO NATIVO)
     logDetalhado('159', 'Criando informações adicionais');
     $std = new stdClass();
-
-    // ✅ NOVO: Informações específicas para TROCA EXATA
-    if ($isTrocaExata) {
-        $std->infCpl = $observacaoTroca . ' - NFC-e emitida pelo Sistema Nexo PDV';
-        logDetalhado('159.1', 'TROCA EXATA: Informações adicionais específicas', [
-            'infCpl' => $std->infCpl
-        ]);
-    } else {
-        $std->infCpl = 'NFC-e emitida pelo Sistema Nexo PDV';
-        logDetalhado('159.2', 'Venda normal: Informações adicionais padrão', [
-            'infCpl' => $std->infCpl
-        ]);
-    }
+    $std->infCpl = 'NFC-e emitida pelo Sistema Nexo PDV';
 
     try {
         logDetalhado('160', 'Executando make->taginfAdic()');
