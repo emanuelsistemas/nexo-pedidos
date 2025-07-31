@@ -178,17 +178,40 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
 
       if (error) throw error;
 
-      // Contar itens de cada venda
+      // Buscar produtos que já estão em devoluções pendentes
+      const { data: devolucoesPendentes } = await supabase
+        .from('devolucao_itens')
+        .select(`
+          produto_id,
+          venda_origem_id,
+          devolucoes!inner(status)
+        `)
+        .eq('devolucoes.status', 'pendente')
+        .eq('devolucoes.empresa_id', empresaIdToUse);
+
+      // Criar um Set com os produtos pendentes para busca rápida
+      const produtosPendentes = new Set(
+        (devolucoesPendentes || []).map(item => `${item.venda_origem_id}-${item.produto_id}`)
+      );
+
+      // Contar itens de cada venda e marcar produtos pendentes
       const vendasComItens = await Promise.all(
         (data || []).map(async (venda) => {
-          const { count } = await supabase
+          const { data: itens, count } = await supabase
             .from('pdv_itens')
-            .select('*', { count: 'exact', head: true })
+            .select('id, produto_id, nome_produto, quantidade, valor_unitario, valor_total_item')
             .eq('pdv_id', venda.id);
+
+          // Marcar itens que estão pendentes de devolução
+          const itensComStatus = (itens || []).map(item => ({
+            ...item,
+            devolucao_pendente: produtosPendentes.has(`${venda.id}-${item.produto_id}`)
+          }));
 
           return {
             ...venda,
-            itens_count: count || 0
+            itens_count: count || 0,
+            itens: itensComStatus
           };
         })
       );
@@ -271,9 +294,6 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
     // Coletar todos os itens selecionados
     const itensSelecionados = Array.from(selectedItens);
     const vendasSelecionadas = Array.from(selectedVendas);
-
-    console.log('Itens selecionados:', itensSelecionados);
-    console.log('Vendas completas selecionadas:', vendasSelecionadas);
 
     onConfirm(venda.id, venda);
     handleClose();
@@ -734,13 +754,16 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                         const isItemSelected = selectedItens.has(item.id);
                                         const isChecked = isVendaCompleteSelected || isItemSelected;
                                         const isItemValid = item.produto_id !== null && item.produto_id !== undefined;
-                                        const isDisabled = isVendaCompleteSelected || !isItemValid;
+                                        const hasDevolucaoPendente = item.devolucao_pendente;
+                                        const isDisabled = isVendaCompleteSelected || !isItemValid || hasDevolucaoPendente;
 
                                         return (
                                           <div
                                             key={item.id}
                                             className={`flex items-center gap-3 p-2 rounded border ${
-                                              isItemValid
+                                              hasDevolucaoPendente
+                                                ? 'bg-yellow-900/20 border-yellow-600/30 opacity-60'
+                                                : isItemValid
                                                 ? 'bg-gray-700/30 border-gray-600'
                                                 : 'bg-gray-800/50 border-gray-700 opacity-60'
                                             }`}
@@ -761,18 +784,25 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                             />
                                             <div className="flex-1">
                                               <div className="flex items-center justify-between">
-                                                <span className={`text-sm font-medium ${
-                                                  isItemValid ? 'text-white' : 'text-gray-500'
-                                                }`}>
-                                                  {item.nome_produto}
-                                                  {!isItemValid && (
-                                                    <span className="ml-2 text-xs text-orange-400">
+                                                <div className="flex items-center gap-2">
+                                                  <span className={`text-sm font-medium ${
+                                                    hasDevolucaoPendente ? 'text-gray-400' : isItemValid ? 'text-white' : 'text-gray-500'
+                                                  }`}>
+                                                    {item.nome_produto}
+                                                  </span>
+                                                  {hasDevolucaoPendente && (
+                                                    <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded border border-yellow-500/30">
+                                                      Pendente
+                                                    </span>
+                                                  )}
+                                                  {!isItemValid && !hasDevolucaoPendente && (
+                                                    <span className="text-xs text-orange-400">
                                                       (Não disponível para devolução)
                                                     </span>
                                                   )}
-                                                </span>
+                                                </div>
                                                 <span className={`font-medium ${
-                                                  isItemValid ? 'text-white' : 'text-gray-500'
+                                                  hasDevolucaoPendente ? 'text-gray-400' : isItemValid ? 'text-white' : 'text-gray-500'
                                                 }`}>
                                                   {formatCurrency(item.valor_total_item)}
                                                 </span>

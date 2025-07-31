@@ -648,20 +648,55 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
           quantidade: produto.quantidade,
           preco_custo: produto.preco_custo || 0,
           margem_percentual: produto.margem_percentual || 0,
-          preco_unitario: produto.preco_venda || 0,
+          preco_venda: produto.preco_venda || 0,
+          preco_unitario: produto.preco_venda || 0, // Manter compatibilidade
           preco_total: produto.preco_total,
           atualizar_estoque: true,
           estoque_atualizado: false
         }));
 
-        const { error: itensError } = await supabase
+        const { data: itensInseridos, error: itensError } = await supabase
           .from('entrada_mercadoria_itens')
-          .insert(itensParaInserir);
+          .insert(itensParaInserir)
+          .select();
 
         if (itensError) {
           console.error('Erro ao inserir itens:', itensError);
           showMessage('error', 'Erro ao inserir itens da entrada');
           return;
+        }
+
+        // ✅ SALVAR PREÇOS DAS TABELAS DE PREÇOS (se houver)
+        if (trabalhaComTabelaPrecos && itensInseridos) {
+          const precosParaInserir: any[] = [];
+
+          produtos.forEach((produto, index) => {
+            const itemInserido = itensInseridos[index];
+
+            if (produto.tabelas_precos && itemInserido) {
+              Object.entries(produto.tabelas_precos).forEach(([tabelaId, preco]) => {
+                if (preco && preco > 0) {
+                  precosParaInserir.push({
+                    empresa_id: empresaId,
+                    entrada_mercadoria_item_id: itemInserido.id,
+                    tabela_preco_id: tabelaId,
+                    preco: preco
+                  });
+                }
+              });
+            }
+          });
+
+          if (precosParaInserir.length > 0) {
+            const { error: precosError } = await supabase
+              .from('entrada_mercadoria_precos')
+              .insert(precosParaInserir);
+
+            if (precosError) {
+              console.error('Erro ao inserir preços das tabelas:', precosError);
+              showMessage('warning', 'Itens salvos, mas houve erro ao salvar preços das tabelas');
+            }
+          }
         }
       }
 
@@ -1018,6 +1053,50 @@ const ProdutoEntradaModal: React.FC<{
     return ((precoVenda - custo) / custo) * 100;
   };
 
+  // ✅ FUNÇÃO: Verificar se promoção está vencida
+  const verificarPromocaoVencida = (produto: any) => {
+    if (!produto.promocao_data_habilitada || !produto.promocao_data_fim) {
+      return false; // Sem data definida, promoção não vence
+    }
+
+    const [ano, mes, dia] = produto.promocao_data_fim.split('-');
+    const dataFim = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+    const hoje = new Date();
+
+    // Zerar as horas para comparar apenas as datas
+    hoje.setHours(0, 0, 0, 0);
+    dataFim.setHours(23, 59, 59, 999);
+
+    return hoje > dataFim;
+  };
+
+  // ✅ FUNÇÃO: Calcular preço final considerando promoção
+  const calcularPrecoFinalComPromocao = (produto: any): number => {
+    let precoFinal = produto.preco || 0;
+
+    // Verificar se produto tem promoção configurada e ativa
+    const temPromocao = produto.promocao &&
+                       produto.tipo_desconto &&
+                       produto.valor_desconto !== undefined &&
+                       produto.valor_desconto > 0;
+
+    if (temPromocao) {
+      // Verificar se a promoção não está vencida
+      const promocaoVencida = verificarPromocaoVencida(produto);
+
+      if (!promocaoVencida) {
+        // Aplicar promoção
+        if (produto.tipo_desconto === 'percentual') {
+          precoFinal = produto.preco * (1 - produto.valor_desconto / 100);
+        } else if (produto.tipo_desconto === 'valor') {
+          precoFinal = produto.preco - produto.valor_desconto;
+        }
+      }
+    }
+
+    return Math.max(precoFinal, 0); // Garantir que não seja negativo
+  };
+
   // Função para carregar preços das tabelas de um produto
   const carregarPrecosTabelas = async (produtoId: string) => {
     try {
@@ -1113,8 +1192,15 @@ const ProdutoEntradaModal: React.FC<{
   useEffect(() => {
     if (produtoSelecionado) {
       const precoCusto = produtoSelecionado.preco_custo || 0;
-      const margemPercentual = produtoSelecionado.margem_percentual || 0;
-      const precoVenda = produtoSelecionado.preco_venda || produtoSelecionado.preco || 0;
+
+      // ✅ USAR PREÇO CORRETO CONSIDERANDO PROMOÇÃO
+      const precoVenda = produtoSelecionado.preco_venda || calcularPrecoFinalComPromocao(produtoSelecionado);
+
+      // ✅ CALCULAR MARGEM AUTOMATICAMENTE quando há custo e preço de venda
+      let margemPercentual = produtoSelecionado.margem_percentual || 0;
+      if (precoCusto > 0 && precoVenda > 0) {
+        margemPercentual = calcularMargem(precoCusto, precoVenda);
+      }
 
       setProdutoForm({
         quantidade: 1,
@@ -1226,7 +1312,7 @@ const ProdutoEntradaModal: React.FC<{
       produto_id: produtoSelecionado.id,
       codigo: produtoSelecionado.codigo,
       nome: produtoSelecionado.nome,
-      unidade_medida: produtoSelecionado.unidade_medida || 'UN',
+      unidade_medida: produtoSelecionado.unidade_medida?.sigla || 'UN',
       quantidade: produtoForm.quantidade,
       preco_custo: produtoForm.preco_custo,
       margem_percentual: produtoForm.margem_percentual,
@@ -1263,9 +1349,12 @@ const ProdutoEntradaModal: React.FC<{
     setProdutos(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Salvar e fechar
-  const handleSalvar = () => {
+  // Salvar progresso sem fechar modal
+  const handleSalvarProgresso = () => {
+    // Salvar produtos selecionados mas manter modal aberto
     onSave(produtos);
+    // Mostrar mensagem de confirmação
+    showMessage('success', 'Progresso salvo! Você pode continuar adicionando produtos.');
   };
 
   if (!isOpen) return null;
@@ -1406,6 +1495,20 @@ const ProdutoEntradaModal: React.FC<{
                   }`}
                   disabled={!produtoSelecionado}
                 />
+              </div>
+
+              {/* Unidade de Medida - Compacto */}
+              <div className="w-12">
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Un
+                </label>
+                <div className={`w-full px-1 py-1.5 border rounded text-sm text-center ${
+                  !produtoSelecionado
+                    ? 'bg-gray-700 border-gray-600 text-gray-500'
+                    : 'bg-gray-800 border-gray-700 text-gray-300'
+                }`}>
+                  {produtoSelecionado?.unidade_medida?.sigla || 'UN'}
+                </div>
               </div>
 
               {/* Preço de Custo - Compacto */}
@@ -1585,7 +1688,7 @@ const ProdutoEntradaModal: React.FC<{
                         <div>
                           <h4 className="text-white font-medium">{produto.nome}</h4>
                           <p className="text-sm text-gray-400">
-                            Código: {produto.codigo} | Qtd: {produto.quantidade} | Custo: R$ {produto.preco_custo?.toFixed(2) || '0,00'} | Margem: {produto.margem_percentual?.toFixed(0) || '0'}% | Venda: R$ {produto.preco_venda?.toFixed(2) || '0,00'}
+                            Código: {produto.codigo} | Qtd: {produto.quantidade} {produto.unidade_medida || 'UN'} | Custo: R$ {produto.preco_custo?.toFixed(2) || '0,00'} | Margem: {produto.margem_percentual?.toFixed(0) || '0'}% | Venda: R$ {produto.preco_venda?.toFixed(2) || '0,00'}
                           </p>
                         </div>
                       </div>
@@ -1630,9 +1733,9 @@ const ProdutoEntradaModal: React.FC<{
             <Button variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button variant="primary" onClick={handleSalvar}>
+            <Button variant="primary" onClick={handleSalvarProgresso}>
               <Save size={16} className="mr-2" />
-              Salvar Produtos
+              Salvar
             </Button>
           </div>
         </div>

@@ -435,6 +435,59 @@ class DevolucaoService {
       throw error;
     }
   }
+
+  /**
+   * Deletar devolução (hard delete) - apenas para devoluções não processadas
+   */
+  async deletarDevolucao(id: string): Promise<void> {
+    try {
+      const empresaId = await this.obterEmpresaId();
+
+      // Primeiro, verificar se a devolução existe e não foi processada
+      const { data: devolucao, error: consultaError } = await supabase
+        .from('devolucoes')
+        .select('status')
+        .eq('id', id)
+        .eq('empresa_id', empresaId)
+        .single();
+
+      if (consultaError) {
+        console.error('Erro ao consultar devolução:', consultaError);
+        throw new Error('Devolução não encontrada');
+      }
+
+      if (devolucao.status === 'processada') {
+        throw new Error('Não é possível deletar uma devolução já processada');
+      }
+
+      // Deletar os itens da devolução primeiro (devido à foreign key)
+      const { error: itensError } = await supabase
+        .from('devolucao_itens')
+        .delete()
+        .eq('devolucao_id', id);
+
+      if (itensError) {
+        console.error('Erro ao deletar itens da devolução:', itensError);
+        throw new Error('Erro ao deletar itens da devolução: ' + itensError.message);
+      }
+
+      // Depois deletar a devolução
+      const { error: devolucaoError } = await supabase
+        .from('devolucoes')
+        .delete()
+        .eq('id', id)
+        .eq('empresa_id', empresaId);
+
+      if (devolucaoError) {
+        console.error('Erro ao deletar devolução:', devolucaoError);
+        throw new Error('Erro ao deletar devolução: ' + devolucaoError.message);
+      }
+
+    } catch (error) {
+      console.error('Erro no serviço de deleção de devolução:', error);
+      throw error;
+    }
+  }
 }
 
 // Exportar instância única do serviço

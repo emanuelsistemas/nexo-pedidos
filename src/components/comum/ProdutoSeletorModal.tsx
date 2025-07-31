@@ -7,6 +7,7 @@ interface Produto {
   id: string;
   nome: string;
   preco: number;
+  preco_custo?: number; // ✅ Preço de custo do produto
   codigo: string;
   codigo_barras?: string; // ✅ EAN/GTIN
   descricao?: string;
@@ -14,6 +15,10 @@ interface Produto {
   promocao?: boolean;
   tipo_desconto?: string;
   valor_desconto?: number;
+  // ✅ Campos adicionais de promoção
+  promocao_data_habilitada?: boolean;
+  promocao_data_fim?: string;
+  exibir_promocao_cardapio?: boolean;
   fotos?: ProdutoFoto[];
   // Campos adicionais para estoque e descontos por quantidade
   estoque_inicial?: number;
@@ -21,6 +26,7 @@ interface Produto {
   quantidade_minima?: number;
   tipo_desconto_quantidade?: 'percentual' | 'valor';
   valor_desconto_quantidade?: number;
+  percentual_desconto_quantidade?: number;
   unidade_medida_id?: string;
   unidade_medida?: {
     id: string;
@@ -174,6 +180,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           id,
           nome,
           preco,
+          preco_custo,
           codigo,
           codigo_barras,
           descricao,
@@ -181,11 +188,15 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           promocao,
           tipo_desconto,
           valor_desconto,
+          promocao_data_habilitada,
+          promocao_data_fim,
+          exibir_promocao_cardapio,
           estoque_inicial,
           desconto_quantidade,
           quantidade_minima,
           tipo_desconto_quantidade,
           valor_desconto_quantidade,
+          percentual_desconto_quantidade,
           unidade_medida_id,
           ncm,
           cfop,

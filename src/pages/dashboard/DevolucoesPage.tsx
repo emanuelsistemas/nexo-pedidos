@@ -6,6 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { isDesktopScreen } from '../../config/responsive';
 import { Devolucao } from '../../types';
 import NovaDevolucaoModal from '../../components/devolucao/NovaDevolucaoModal';
+import DetalhesDevolucaoModal from '../../components/devolucao/DetalhesDevolucaoModal';
 
 import EditarDevolucaoModal from '../../components/devolucao/EditarDevolucaoModal';
 import { devolucaoService, CriarDevolucaoData } from '../../services/devolucaoService';
@@ -25,6 +26,15 @@ const DevolucoesPage: React.FC = () => {
   const [isCreatingDevolucao, setIsCreatingDevolucao] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Estados para modal de detalhes
+  const [showDetalhesModal, setShowDetalhesModal] = useState(false);
+  const [devolucaoDetalhes, setDevolucaoDetalhes] = useState<Devolucao | null>(null);
+
+  // Estados para modal de exclusão
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [devolucaoParaDeletar, setDevolucaoParaDeletar] = useState<Devolucao | null>(null);
+  const [isDeletingDevolucao, setIsDeletingDevolucao] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -149,7 +159,6 @@ const DevolucoesPage: React.FC = () => {
   const handleConfirmDevolucao = async (vendaId: string, vendaData: any) => {
     try {
       setIsCreatingDevolucao(true);
-      console.log('Dados recebidos para devolução:', { vendaId, vendaData });
 
       // Verificar se temos dados válidos
       if (!vendaData || !vendaData.itens || vendaData.itens.length === 0) {
@@ -158,20 +167,10 @@ const DevolucoesPage: React.FC = () => {
         return;
       }
 
-      // Debug: Verificar estrutura dos dados recebidos
-      console.log('Dados completos da venda:', JSON.stringify(vendaData, null, 2));
-      console.log('Estrutura dos itens recebidos:', JSON.stringify(vendaData.itens, null, 2));
-
       // Filtrar apenas itens que são produtos reais (têm produto_id)
       const itensValidos = vendaData.itens.filter((item: any) => {
-        const isValid = item.produto_id !== null && item.produto_id !== undefined;
-        if (!isValid) {
-          console.log(`Item "${item.nome_produto}" ignorado - não é um produto (produto_id: ${item.produto_id})`);
-        }
-        return isValid;
+        return item.produto_id !== null && item.produto_id !== undefined;
       });
-
-      console.log('Itens válidos (com produto_id):', JSON.stringify(itensValidos, null, 2));
 
       if (itensValidos.length === 0) {
         alert('Erro: Nenhum produto válido selecionado para devolução.\n\nTaxas de entrega, serviços e outros itens sem produto não podem ser devolvidos.');
@@ -179,9 +178,8 @@ const DevolucoesPage: React.FC = () => {
       }
 
       // Mapear itens válidos para o formato esperado pelo serviço
-      const itensFormatados = itensValidos.map((item: any, index: number) => {
-        console.log(`Mapeando item válido ${index}:`, JSON.stringify(item, null, 2));
-        const itemFormatado = {
+      const itensFormatados = itensValidos.map((item: any) => {
+        return {
           produto_id: item.produto_id,
           produto_nome: item.nome_produto,
           produto_codigo: item.codigo_produto || null,
@@ -193,17 +191,10 @@ const DevolucoesPage: React.FC = () => {
           preco_total: item.valor_total_item,
           motivo: 'Devolução solicitada pelo cliente'
         };
-        console.log(`Item válido ${index} formatado:`, JSON.stringify(itemFormatado, null, 2));
-        return itemFormatado;
       });
-
-      console.log('Todos os itens formatados:', JSON.stringify(itensFormatados, null, 2));
 
       // Calcular valor total apenas dos itens válidos (produtos reais)
       const valorTotalValido = itensFormatados.reduce((total, item) => total + item.preco_total, 0);
-
-      console.log('Valor total original (incluindo taxas):', vendaData.valorTotal);
-      console.log('Valor total válido (apenas produtos):', valorTotalValido);
 
       // Preparar dados para criação da devolução
       const dadosDevolucao: CriarDevolucaoData = {
@@ -222,8 +213,6 @@ const DevolucoesPage: React.FC = () => {
 
       // Criar a devolução
       const novaDevolucao = await devolucaoService.criarDevolucao(dadosDevolucao);
-
-      console.log('Devolução criada com sucesso:', novaDevolucao);
 
       // Mostrar mensagem de sucesso
       setSuccessMessage(`Devolução #${novaDevolucao.numero} criada com sucesso!`);
@@ -251,6 +240,53 @@ const DevolucoesPage: React.FC = () => {
   const handleEditarDevolucao = (devolucao: Devolucao) => {
     setDevolucaoSelecionada(devolucao);
     setShowEditarModal(true);
+  };
+
+  const handleVerDetalhes = (devolucao: Devolucao) => {
+    setDevolucaoDetalhes(devolucao);
+    setShowDetalhesModal(true);
+  };
+
+  const handleDeletarDevolucao = (devolucao: Devolucao) => {
+    setDevolucaoParaDeletar(devolucao);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!devolucaoParaDeletar) return;
+
+    // Verificar se a devolução já foi processada
+    if (devolucaoParaDeletar.status === 'processada') {
+      alert('Esta devolução não pode ser cancelada pois já foi processada no PDV. Para cancelar, é necessário cancelar a venda no PDV primeiro.');
+      setShowDeleteModal(false);
+      setDevolucaoParaDeletar(null);
+      return;
+    }
+
+    try {
+      setIsDeletingDevolucao(true);
+
+      // Deletar a devolução usando o serviço
+      await devolucaoService.deletarDevolucao(devolucaoParaDeletar.id);
+
+      // Recarregar a lista de devoluções
+      await loadDevolucoes(false);
+
+      // Fechar o modal
+      setShowDeleteModal(false);
+      setDevolucaoParaDeletar(null);
+
+      // Mostrar mensagem de sucesso
+      setSuccessMessage('Devolução cancelada com sucesso!');
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+
+    } catch (error) {
+      console.error('Erro ao deletar devolução:', error);
+      alert(`Erro ao cancelar devolução: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsDeletingDevolucao(false);
+    }
   };
 
   const handleConfirmEdicao = async (dadosAtualizados: any) => {
@@ -471,6 +507,7 @@ const DevolucoesPage: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
               className="p-2.5 bg-background-card rounded border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer"
+              onClick={() => handleVerDetalhes(devolucao)}
             >
               {/* Layout em três colunas - Compacto */}
               <div className="flex items-start gap-3">
@@ -556,11 +593,24 @@ const DevolucoesPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => handleEditarDevolucao(devolucao)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditarDevolucao(devolucao);
+                      }}
                       className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
                       title="Editar devolução"
                     >
                       <Edit size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeletarDevolucao(devolucao);
+                      }}
+                      className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-colors"
+                      title="Deletar devolução"
+                    >
+                      <X size={14} />
                     </button>
                   </div>
                 </div>
@@ -578,7 +628,15 @@ const DevolucoesPage: React.FC = () => {
         isLoading={isCreatingDevolucao}
       />
 
-
+      {/* Modal Detalhes da Devolução */}
+      <DetalhesDevolucaoModal
+        isOpen={showDetalhesModal}
+        onClose={() => {
+          setShowDetalhesModal(false);
+          setDevolucaoDetalhes(null);
+        }}
+        devolucao={devolucaoDetalhes}
+      />
 
       {/* Modal Editar Devolução */}
       <EditarDevolucaoModal
@@ -590,6 +648,76 @@ const DevolucoesPage: React.FC = () => {
         devolucao={devolucaoSelecionada}
         onConfirm={handleConfirmEdicao}
       />
+
+      {/* Modal Confirmação de Exclusão */}
+      {showDeleteModal && devolucaoParaDeletar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-md">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-800">
+              <h2 className="text-xl font-semibold text-white">
+                Cancelar Devolução
+              </h2>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDevolucaoParaDeletar(null);
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+                disabled={isDeletingDevolucao}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <X size={24} className="text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium text-white mb-2">
+                    Tem certeza que deseja cancelar esta devolução?
+                  </h3>
+                  <div className="space-y-2 text-sm text-gray-400">
+                    <p><strong>Devolução:</strong> #{devolucaoParaDeletar.numero}</p>
+                    <p><strong>Código:</strong> {devolucaoParaDeletar.codigo_troca}</p>
+                    <p><strong>Status:</strong> {devolucaoParaDeletar.status}</p>
+                    <p><strong>Valor:</strong> R$ {devolucaoParaDeletar.valor_total?.toFixed(2)}</p>
+                  </div>
+                  <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                    <p className="text-yellow-400 text-sm">
+                      ⚠️ Esta ação não pode ser desfeita. Os produtos ficarão disponíveis para nova devolução.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-800">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDevolucaoParaDeletar(null);
+                }}
+                disabled={isDeletingDevolucao}
+                className="px-4 py-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeletingDevolucao}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                {isDeletingDevolucao ? 'Cancelando...' : 'Sim, Cancelar Devolução'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
