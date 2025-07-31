@@ -27,7 +27,7 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dados-gerais' | 'descontos' | 'financeiro' | 'observacao'>('dados-gerais');
+  const [activeTab, setActiveTab] = useState<'dados-gerais' | 'descontos' | 'financeiro' | 'observacao' | 'devolucoes' | 'faturamentos'>('dados-gerais');
   
   const [formData, setFormData] = useState({
     tipo_documento: 'CNPJ',
@@ -601,7 +601,7 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'tween', duration: 0.3 }}
-        className="fixed right-0 top-0 h-screen w-full max-w-lg bg-background-card border-l border-gray-800 z-50 overflow-y-auto custom-scrollbar"
+        className="fixed right-0 top-0 h-screen w-full max-w-4xl bg-background-card border-l border-gray-800 z-50 overflow-y-auto custom-scrollbar"
       >
         <div className="p-6">
           {/* Header */}

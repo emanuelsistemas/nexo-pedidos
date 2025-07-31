@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/comum/Button';
 import FornecedorDropdown from '../../components/comum/FornecedorDropdown';
 import ClienteFormCompleto from '../../components/comum/ClienteFormCompleto';
+import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -747,17 +748,69 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
               <Package size={18} />
               Produtos
             </h3>
-            <Button variant="primary" size="sm">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowProdutoModal(true)}
+            >
               <Plus size={16} className="mr-2" />
               Adicionar Produto
             </Button>
           </div>
 
-          <div className="text-center py-8 text-gray-400">
-            <Package className="mx-auto h-12 w-12 mb-2" />
-            <p>Nenhum produto adicionado</p>
-            <p className="text-sm">Clique em "Adicionar Produto" para começar</p>
-          </div>
+          {/* Lista de produtos ou estado vazio */}
+          {produtos.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <Package className="mx-auto h-12 w-12 mb-2" />
+              <p>Nenhum produto adicionado</p>
+              <p className="text-sm">Clique em "Adicionar Produto" para começar</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {produtos.map((produto, index) => (
+                <div key={produto.id || index} className="flex items-center justify-between p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-gray-400 font-mono">#{index + 1}</span>
+                      <div>
+                        <h4 className="text-white font-medium">{produto.nome}</h4>
+                        <p className="text-sm text-gray-400">Código: {produto.codigo}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-white">Qtd: {produto.quantidade}</p>
+                      <p className="text-sm text-gray-400">Unit: R$ {produto.preco_unitario.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-semibold">R$ {produto.preco_total.toFixed(2)}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const novosProdutos = produtos.filter((_, i) => i !== index);
+                        setProdutos(novosProdutos);
+                      }}
+                      className="text-red-400 hover:text-red-300 p-1"
+                      title="Remover produto"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Total */}
+              <div className="flex justify-end pt-3 border-t border-gray-700">
+                <div className="text-right">
+                  <p className="text-gray-400">Total dos Produtos:</p>
+                  <p className="text-xl font-bold text-white">
+                    R$ {produtos.reduce((total, produto) => total + produto.preco_total, 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Observações */}
@@ -824,6 +877,351 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
         }}
         fornecedorMode={true}
       />
+
+      {/* Modal de Produtos */}
+      {showProdutoModal && (
+        <ProdutoEntradaModal
+          isOpen={showProdutoModal}
+          onClose={() => setShowProdutoModal(false)}
+          onSave={(novosProdutos) => {
+            setProdutos(novosProdutos);
+            setShowProdutoModal(false);
+          }}
+          produtosExistentes={produtos}
+          empresaId={empresaId}
+        />
+      )}
+    </div>
+  );
+};
+
+// Modal de Produtos para Entrada de Mercadoria
+const ProdutoEntradaModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (produtos: any[]) => void;
+  produtosExistentes: any[];
+  empresaId: string;
+}> = ({ isOpen, onClose, onSave, produtosExistentes, empresaId }) => {
+  const [produtos, setProdutos] = useState<any[]>(produtosExistentes);
+  const [showProdutoSeletor, setShowProdutoSeletor] = useState(false);
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
+  const [codigoBusca, setCodigoBusca] = useState('');
+  const [produtoForm, setProdutoForm] = useState({
+    quantidade: 1,
+    preco_unitario: 0,
+    preco_total: 0
+  });
+
+  // Resetar form quando produto é selecionado
+  useEffect(() => {
+    if (produtoSelecionado) {
+      setProdutoForm({
+        quantidade: 1,
+        preco_unitario: produtoSelecionado.preco_venda || 0,
+        preco_total: produtoSelecionado.preco_venda || 0
+      });
+    }
+  }, [produtoSelecionado]);
+
+  // Calcular preço total quando quantidade ou preço unitário mudam
+  useEffect(() => {
+    const total = produtoForm.quantidade * produtoForm.preco_unitario;
+    setProdutoForm(prev => ({ ...prev, preco_total: total }));
+  }, [produtoForm.quantidade, produtoForm.preco_unitario]);
+
+  // Buscar produto por código
+  const buscarProdutoPorCodigo = async (codigo: string) => {
+    if (!codigo.trim() || !empresaId) return;
+
+    try {
+      const { data: produto, error } = await supabase
+        .from('produtos')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .or(`codigo.eq.${codigo},ean.eq.${codigo}`)
+        .eq('deletado', false)
+        .single();
+
+      if (error || !produto) {
+        showMessage('error', 'Produto não encontrado');
+        return;
+      }
+
+      setProdutoSelecionado(produto);
+      setCodigoBusca(produto.nome);
+    } catch (error) {
+      console.error('Erro ao buscar produto:', error);
+      showMessage('error', 'Erro ao buscar produto');
+    }
+  };
+
+  // Adicionar produto à lista
+  const adicionarProduto = () => {
+    if (!produtoSelecionado) {
+      showMessage('error', 'Selecione um produto');
+      return;
+    }
+
+    if (produtoForm.quantidade <= 0) {
+      showMessage('error', 'Quantidade deve ser maior que zero');
+      return;
+    }
+
+    if (produtoForm.preco_unitario < 0) {
+      showMessage('error', 'Preço unitário não pode ser negativo');
+      return;
+    }
+
+    const novoProduto = {
+      id: Date.now().toString(), // ID temporário
+      produto_id: produtoSelecionado.id,
+      codigo: produtoSelecionado.codigo,
+      nome: produtoSelecionado.nome,
+      unidade_medida: produtoSelecionado.unidade_medida || 'UN',
+      quantidade: produtoForm.quantidade,
+      preco_unitario: produtoForm.preco_unitario,
+      preco_total: produtoForm.preco_total
+    };
+
+    setProdutos(prev => [...prev, novoProduto]);
+
+    // Limpar formulário
+    setProdutoSelecionado(null);
+    setCodigoBusca('');
+    setProdutoForm({
+      quantidade: 1,
+      preco_unitario: 0,
+      preco_total: 0
+    });
+
+    showMessage('success', 'Produto adicionado com sucesso');
+  };
+
+  // Remover produto da lista
+  const removerProduto = (index: number) => {
+    setProdutos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Salvar e fechar
+  const handleSalvar = () => {
+    onSave(produtos);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+      <div className="w-full h-full bg-gray-900 flex flex-col">
+        {/* Cabeçalho */}
+        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-white">Produtos da Entrada</h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full bg-gray-800 text-gray-400 hover:text-white"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Conteúdo */}
+        <div className="flex-1 flex flex-col p-4 gap-4">
+          {/* Área de Busca de Produtos */}
+          <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-4">
+            <h3 className="text-lg font-medium text-white mb-4">Adicionar Produto</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Busca de Produto */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Buscar Produto
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={codigoBusca}
+                    onChange={(e) => setCodigoBusca(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        if (produtoSelecionado) {
+                          // Limpar produto selecionado
+                          setProdutoSelecionado(null);
+                          setCodigoBusca('');
+                        } else {
+                          buscarProdutoPorCodigo(codigoBusca);
+                        }
+                      }
+                    }}
+                    placeholder={produtoSelecionado ? produtoSelecionado.nome : "Digite código/EAN e pressione Enter"}
+                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    readOnly={!!produtoSelecionado}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (produtoSelecionado) {
+                        setProdutoSelecionado(null);
+                        setCodigoBusca('');
+                      } else {
+                        setShowProdutoSeletor(true);
+                      }
+                    }}
+                  >
+                    {produtoSelecionado ? <X size={16} /> : <Search size={16} />}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Quantidade */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Quantidade
+                </label>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  value={produtoForm.quantidade}
+                  onChange={(e) => setProdutoForm(prev => ({ ...prev, quantidade: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  disabled={!produtoSelecionado}
+                />
+              </div>
+
+              {/* Preço Unitário */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Preço Unitário (R$)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={produtoForm.preco_unitario}
+                  onChange={(e) => setProdutoForm(prev => ({ ...prev, preco_unitario: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  disabled={!produtoSelecionado}
+                />
+              </div>
+
+              {/* Preço Total */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Preço Total (R$)
+                </label>
+                <input
+                  type="text"
+                  value={`R$ ${produtoForm.preco_total.toFixed(2)}`}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  readOnly
+                />
+              </div>
+
+              {/* Botão Adicionar */}
+              <div className="md:col-span-2 flex justify-end">
+                <Button
+                  variant="primary"
+                  onClick={adicionarProduto}
+                  disabled={!produtoSelecionado}
+                >
+                  <Plus size={16} className="mr-2" />
+                  Adicionar Produto
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista de Produtos Adicionados */}
+          <div className="flex-1 bg-gray-800/50 rounded-lg border border-gray-700 p-4">
+            <h3 className="text-lg font-medium text-white mb-4">
+              Produtos Adicionados ({produtos.length})
+            </h3>
+
+            {produtos.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Package className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                <p>Nenhum produto adicionado</p>
+                <p className="text-sm">Use a área acima para adicionar produtos</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {produtos.map((produto, index) => (
+                  <div
+                    key={produto.id || index}
+                    className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg border border-gray-700"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-400 font-mono">#{index + 1}</span>
+                        <div>
+                          <h4 className="text-white font-medium">{produto.nome}</h4>
+                          <p className="text-sm text-gray-400">
+                            Código: {produto.codigo} | Qtd: {produto.quantidade} | Unit: R$ {produto.preco_unitario.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-white font-semibold">R$ {produto.preco_total.toFixed(2)}</p>
+                      </div>
+                      <button
+                        onClick={() => removerProduto(index)}
+                        className="text-red-400 hover:text-red-300 p-1"
+                        title="Remover produto"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Total Geral */}
+                {produtos.length > 0 && (
+                  <div className="pt-3 border-t border-gray-700">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Total Geral:</span>
+                      <span className="text-xl font-bold text-white">
+                        R$ {produtos.reduce((total, produto) => total + produto.preco_total, 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Rodapé com Botões */}
+        <div className="p-4 border-t border-gray-800 flex items-center justify-between">
+          <div className="text-gray-400">
+            {produtos.length} produto(s) adicionado(s)
+          </div>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={handleSalvar}>
+              <Save size={16} className="mr-2" />
+              Salvar Produtos
+            </Button>
+          </div>
+        </div>
+
+        {/* Modal de Seleção de Produto */}
+        {showProdutoSeletor && (
+          <ProdutoSeletorModal
+            isOpen={showProdutoSeletor}
+            onClose={() => setShowProdutoSeletor(false)}
+            onSelect={(produto) => {
+              setProdutoSelecionado(produto);
+              setCodigoBusca(produto.nome);
+              setShowProdutoSeletor(false);
+            }}
+            empresaId={empresaId}
+          />
+        )}
+      </div>
     </div>
   );
 };

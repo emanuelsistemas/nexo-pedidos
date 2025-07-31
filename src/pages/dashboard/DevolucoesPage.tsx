@@ -159,13 +159,13 @@ const DevolucoesPage: React.FC = () => {
       }
 
       // Debug: Verificar estrutura dos itens
-      console.log('Estrutura dos itens recebidos:', vendaData.itens);
-      console.log('Primeiro item:', vendaData.itens[0]);
+      console.log('Estrutura dos itens recebidos:', JSON.stringify(vendaData.itens, null, 2));
+      console.log('Primeiro item detalhado:', JSON.stringify(vendaData.itens[0], null, 2));
 
       // Mapear itens do modal para o formato esperado pelo serviço
-      const itensFormatados = vendaData.itens.map((item: any) => {
-        console.log('Mapeando item:', item);
-        return {
+      const itensFormatados = vendaData.itens.map((item: any, index: number) => {
+        console.log(`Mapeando item ${index}:`, JSON.stringify(item, null, 2));
+        const itemFormatado = {
           produto_id: item.produto_id,
           produto_nome: item.nome_produto,
           produto_codigo: item.codigo_produto || null,
@@ -177,9 +177,11 @@ const DevolucoesPage: React.FC = () => {
           preco_total: item.valor_total_item,
           motivo: 'Devolução solicitada pelo cliente'
         };
+        console.log(`Item ${index} formatado:`, JSON.stringify(itemFormatado, null, 2));
+        return itemFormatado;
       });
 
-      console.log('Itens formatados:', itensFormatados);
+      console.log('Todos os itens formatados:', JSON.stringify(itensFormatados, null, 2));
 
       // Preparar dados para criação da devolução
       const dadosDevolucao: CriarDevolucaoData = {
