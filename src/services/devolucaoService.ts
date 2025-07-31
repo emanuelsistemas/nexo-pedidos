@@ -184,8 +184,7 @@ class DevolucaoService {
         .from('devolucoes')
         .select(`
           *,
-          itens:devolucao_itens(*),
-          cliente:clientes(nome, telefone, email)
+          itens:devolucao_itens(*)
         `)
         .eq('empresa_id', empresaId)
         .eq('deletado', false)
@@ -238,8 +237,7 @@ class DevolucaoService {
         .from('devolucoes')
         .select(`
           *,
-          itens:devolucao_itens(*),
-          cliente:clientes(nome, telefone, email)
+          itens:devolucao_itens(*)
         `)
         .eq('id', id)
         .eq('empresa_id', empresaId)
@@ -277,8 +275,7 @@ class DevolucaoService {
         .eq('deletado', false)
         .select(`
           *,
-          itens:devolucao_itens(*),
-          cliente:clientes(nome, telefone, email)
+          itens:devolucao_itens(*)
         `)
         .single();
 
@@ -323,8 +320,7 @@ class DevolucaoService {
         .eq('deletado', false)
         .select(`
           *,
-          itens:devolucao_itens(*),
-          cliente:clientes(nome, telefone, email)
+          itens:devolucao_itens(*)
         `)
         .single();
 

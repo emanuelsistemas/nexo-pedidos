@@ -42,12 +42,14 @@ interface NovaDevolucaoModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (vendaId: string, vendaData: Venda) => void;
+  isLoading?: boolean;
 }
 
 const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   isOpen,
   onClose,
-  onConfirm
+  onConfirm,
+  isLoading: externalLoading = false
 }) => {
   // Estados do modal
   const [isLoading, setIsLoading] = useState(false);
@@ -785,17 +787,20 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
       {showFinalizarModal && (
         <FinalizarDevolucaoModal
           isOpen={showFinalizarModal}
-          onClose={() => setShowFinalizarModal(false)}
+          onClose={() => !externalLoading && setShowFinalizarModal(false)}
           selectedItens={selectedItens}
           selectedVendas={selectedVendas}
           vendas={vendas}
           empresaId={empresaId}
           valorTotal={getValorTotalSelecionado()}
+          isLoading={externalLoading}
           onConfirm={(dadosDevolucao) => {
             // Processar a devolução final
             onConfirm('', dadosDevolucao);
-            setShowFinalizarModal(false);
-            handleClose();
+            if (!externalLoading) {
+              setShowFinalizarModal(false);
+              handleClose();
+            }
           }}
         />
       )}
@@ -812,6 +817,7 @@ interface FinalizarDevolucaoModalProps {
   vendas: Venda[];
   empresaId: string;
   valorTotal: number;
+  isLoading?: boolean;
   onConfirm: (dadosDevolucao: any) => void;
 }
 
@@ -824,6 +830,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   vendas,
   empresaId,
   valorTotal,
+  isLoading = false,
   onConfirm
 }) => {
   const [clienteId, setClienteId] = useState('');
@@ -968,10 +975,10 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!clienteId}
+            disabled={!clienteId || isLoading}
             className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
           >
-            Confirmar Devolução
+            {isLoading ? 'Criando Devolução...' : 'Confirmar Devolução'}
           </button>
         </div>
       </motion.div>

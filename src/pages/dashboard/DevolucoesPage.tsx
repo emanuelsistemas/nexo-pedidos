@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, Edit, RotateCcw, Plus, DollarSign, Package } from 'lucide-react';
+import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, Edit, RotateCcw, Plus, DollarSign, Package, Play } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { isDesktopScreen } from '../../config/responsive';
 import { Devolucao } from '../../types';
 import NovaDevolucaoModal from '../../components/devolucao/NovaDevolucaoModal';
+import ProcessarDevolucaoModal from '../../components/devolucao/ProcessarDevolucaoModal';
+import EditarDevolucaoModal from '../../components/devolucao/EditarDevolucaoModal';
 import { devolucaoService, CriarDevolucaoData } from '../../services/devolucaoService';
 
 const DevolucoesPage: React.FC = () => {
@@ -17,6 +19,12 @@ const DevolucoesPage: React.FC = () => {
   const [dataFilter, setDataFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showNovaDevolucaoModal, setShowNovaDevolucaoModal] = useState(false);
+  const [showProcessarModal, setShowProcessarModal] = useState(false);
+  const [showEditarModal, setShowEditarModal] = useState(false);
+  const [devolucaoSelecionada, setDevolucaoSelecionada] = useState<Devolucao | null>(null);
+  const [isCreatingDevolucao, setIsCreatingDevolucao] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -140,23 +148,49 @@ const DevolucoesPage: React.FC = () => {
 
   const handleConfirmDevolucao = async (vendaId: string, vendaData: any) => {
     try {
+      setIsCreatingDevolucao(true);
       console.log('Dados recebidos para devolução:', { vendaId, vendaData });
 
       // Verificar se temos dados válidos
-      if (!vendaData || (!vendaData.itens && !vendaData.quantidadeItens)) {
+      if (!vendaData || !vendaData.itens || vendaData.itens.length === 0) {
         console.error('Dados de devolução inválidos:', vendaData);
+        alert('Erro: Nenhum item selecionado para devolução');
         return;
       }
+
+      // Debug: Verificar estrutura dos itens
+      console.log('Estrutura dos itens recebidos:', vendaData.itens);
+      console.log('Primeiro item:', vendaData.itens[0]);
+
+      // Mapear itens do modal para o formato esperado pelo serviço
+      const itensFormatados = vendaData.itens.map((item: any) => {
+        console.log('Mapeando item:', item);
+        return {
+          produto_id: item.produto_id,
+          produto_nome: item.nome_produto,
+          produto_codigo: item.codigo_produto || null,
+          pdv_item_id: item.id, // ID do item original da venda
+          venda_origem_id: item.pdv_id, // ID da venda original
+          venda_origem_numero: null, // Será preenchido se necessário
+          quantidade: item.quantidade,
+          preco_unitario: item.valor_unitario,
+          preco_total: item.valor_total_item,
+          motivo: 'Devolução solicitada pelo cliente'
+        };
+      });
+
+      console.log('Itens formatados:', itensFormatados);
 
       // Preparar dados para criação da devolução
       const dadosDevolucao: CriarDevolucaoData = {
         clienteId: vendaData.clienteId || undefined,
-        itens: vendaData.itens || [],
+        itens: itensFormatados,
         valorTotal: vendaData.valorTotal || 0,
         tipoDevolucao: vendaData.vendasCompletas?.length > 0 ? 'total' : 'parcial',
         formaReembolso: 'dinheiro', // Padrão - pode ser alterado depois
         motivoGeral: 'Devolução solicitada pelo cliente',
-        observacoes: `Itens selecionados: ${vendaData.quantidadeItens || vendaData.itens?.length || 0}`
+        observacoes: `Itens selecionados: ${vendaData.itens.length}`,
+        pedidoTipo: 'pdv'
       };
 
       // Criar a devolução
@@ -164,15 +198,81 @@ const DevolucoesPage: React.FC = () => {
 
       console.log('Devolução criada com sucesso:', novaDevolucao);
 
+      // Mostrar mensagem de sucesso
+      setSuccessMessage(`Devolução #${novaDevolucao.numero} criada com sucesso!`);
+      setShowSuccessMessage(true);
+
       // Recarregar a lista de devoluções
       await loadDevolucoes(false);
 
       // Fechar o modal
       setShowNovaDevolucaoModal(false);
 
+      // Esconder mensagem de sucesso após 3 segundos
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+      }, 3000);
+
     } catch (error) {
       console.error('Erro ao criar devolução:', error);
-      // TODO: Mostrar toast de erro para o usuário
+      alert(`Erro ao criar devolução: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsCreatingDevolucao(false);
+    }
+  };
+
+  const handleProcessarDevolucao = (devolucao: Devolucao) => {
+    setDevolucaoSelecionada(devolucao);
+    setShowProcessarModal(true);
+  };
+
+  const handleEditarDevolucao = (devolucao: Devolucao) => {
+    setDevolucaoSelecionada(devolucao);
+    setShowEditarModal(true);
+  };
+
+  const handleConfirmProcessamento = async (aprovar: boolean, observacoes?: string) => {
+    if (!devolucaoSelecionada) return;
+
+    try {
+      await devolucaoService.processarDevolucao(
+        devolucaoSelecionada.id,
+        aprovar,
+        observacoes
+      );
+
+      // Recarregar a lista de devoluções
+      await loadDevolucoes(false);
+
+      // Fechar o modal
+      setShowProcessarModal(false);
+      setDevolucaoSelecionada(null);
+
+    } catch (error) {
+      console.error('Erro ao processar devolução:', error);
+      // TODO: Mostrar toast de erro
+    }
+  };
+
+  const handleConfirmEdicao = async (dadosAtualizados: any) => {
+    if (!devolucaoSelecionada) return;
+
+    try {
+      await devolucaoService.atualizarDevolucao(
+        devolucaoSelecionada.id,
+        dadosAtualizados
+      );
+
+      // Recarregar a lista de devoluções
+      await loadDevolucoes(false);
+
+      // Fechar o modal
+      setShowEditarModal(false);
+      setDevolucaoSelecionada(null);
+
+    } catch (error) {
+      console.error('Erro ao editar devolução:', error);
+      // TODO: Mostrar toast de erro
     }
   };
 
@@ -228,6 +328,27 @@ const DevolucoesPage: React.FC = () => {
 
   return (
     <div className={`${isLargeScreen ? 'h-full flex flex-col space-y-4' : 'space-y-2'}`}>
+      {/* Mensagem de Sucesso */}
+      <AnimatePresence>
+        {showSuccessMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-green-600 text-white p-3 rounded-lg border border-green-500 flex items-center gap-2"
+          >
+            <CheckCircle size={20} />
+            <span>{successMessage}</span>
+            <button
+              onClick={() => setShowSuccessMessage(false)}
+              className="ml-auto p-1 hover:bg-green-700 rounded"
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white">Devoluções</h1>
         <div className="flex items-center gap-2">
@@ -397,7 +518,17 @@ const DevolucoesPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
+                    {devolucao.status === 'pendente' && (
+                      <button
+                        onClick={() => handleProcessarDevolucao(devolucao)}
+                        className="p-1 rounded text-blue-400 hover:text-blue-300 hover:bg-gray-700 transition-colors"
+                        title="Processar devolução"
+                      >
+                        <Play size={14} />
+                      </button>
+                    )}
                     <button
+                      onClick={() => handleEditarDevolucao(devolucao)}
                       className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
                       title="Editar devolução"
                     >
@@ -414,8 +545,31 @@ const DevolucoesPage: React.FC = () => {
       {/* Modal Nova Devolução */}
       <NovaDevolucaoModal
         isOpen={showNovaDevolucaoModal}
-        onClose={() => setShowNovaDevolucaoModal(false)}
+        onClose={() => !isCreatingDevolucao && setShowNovaDevolucaoModal(false)}
         onConfirm={handleConfirmDevolucao}
+        isLoading={isCreatingDevolucao}
+      />
+
+      {/* Modal Processar Devolução */}
+      <ProcessarDevolucaoModal
+        isOpen={showProcessarModal}
+        onClose={() => {
+          setShowProcessarModal(false);
+          setDevolucaoSelecionada(null);
+        }}
+        devolucao={devolucaoSelecionada}
+        onConfirm={handleConfirmProcessamento}
+      />
+
+      {/* Modal Editar Devolução */}
+      <EditarDevolucaoModal
+        isOpen={showEditarModal}
+        onClose={() => {
+          setShowEditarModal(false);
+          setDevolucaoSelecionada(null);
+        }}
+        devolucao={devolucaoSelecionada}
+        onConfirm={handleConfirmEdicao}
       />
     </div>
   );

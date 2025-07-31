@@ -14,7 +14,7 @@ interface EntradaMercadoria {
   fornecedor_cnpj: string;
   data_entrada: string;
   valor_total: number;
-  status: 'pendente' | 'processada' | 'cancelada';
+  status: 'rascunho' | 'pendente' | 'processada' | 'cancelada';
   observacoes?: string;
   created_at: string;
   updated_at: string;
@@ -43,7 +43,7 @@ const EntradaMercadoriaPage: React.FC = () => {
   const loadEntradas = async () => {
     try {
       setIsLoading(true);
-      
+
       // Obter empresa_id do usuário logado
       const { data: userData } = await supabase.auth.getUser();
       const { data: usuarioData } = await supabase
@@ -57,35 +57,46 @@ const EntradaMercadoriaPage: React.FC = () => {
         return;
       }
 
-      // Por enquanto, vamos simular dados até implementar a tabela no banco
-      const mockData: EntradaMercadoria[] = [
-        {
-          id: '1',
-          numero_documento: 'ENT-001',
-          fornecedor_nome: 'Fornecedor ABC Ltda',
-          fornecedor_cnpj: '12.345.678/0001-90',
-          data_entrada: '2025-01-28',
-          valor_total: 1500.00,
-          status: 'processada',
-          observacoes: 'Entrada de produtos diversos',
-          created_at: '2025-01-28T10:00:00',
-          updated_at: '2025-01-28T10:00:00'
-        },
-        {
-          id: '2',
-          numero_documento: 'ENT-002',
-          fornecedor_nome: 'Distribuidora XYZ S.A.',
-          fornecedor_cnpj: '98.765.432/0001-10',
-          data_entrada: '2025-01-29',
-          valor_total: 2800.50,
-          status: 'pendente',
-          observacoes: 'Aguardando conferência',
-          created_at: '2025-01-29T14:30:00',
-          updated_at: '2025-01-29T14:30:00'
-        }
-      ];
+      // Buscar entradas de mercadoria da empresa
+      const { data: entradasData, error } = await supabase
+        .from('entrada_mercadoria')
+        .select(`
+          id,
+          numero,
+          fornecedor_nome,
+          fornecedor_documento,
+          data_entrada,
+          valor_total,
+          status,
+          observacoes,
+          created_at,
+          updated_at
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false)
+        .order('created_at', { ascending: false });
 
-      setEntradas(mockData);
+      if (error) {
+        console.error('Erro ao carregar entradas:', error);
+        showMessage('error', 'Erro ao carregar entradas de mercadoria');
+        return;
+      }
+
+      // Mapear dados para o formato esperado pela interface
+      const entradasFormatadas: EntradaMercadoria[] = (entradasData || []).map(entrada => ({
+        id: entrada.id,
+        numero_documento: entrada.numero,
+        fornecedor_nome: entrada.fornecedor_nome || 'Fornecedor não informado',
+        fornecedor_cnpj: entrada.fornecedor_documento || '',
+        data_entrada: entrada.data_entrada,
+        valor_total: entrada.valor_total || 0,
+        status: entrada.status as 'pendente' | 'processada' | 'cancelada',
+        observacoes: entrada.observacoes || '',
+        created_at: entrada.created_at,
+        updated_at: entrada.updated_at
+      }));
+
+      setEntradas(entradasFormatadas);
     } catch (error) {
       console.error('Erro ao carregar entradas:', error);
       showMessage('error', 'Erro ao carregar entradas de mercadoria');
@@ -119,13 +130,14 @@ const EntradaMercadoriaPage: React.FC = () => {
   // Função para formatar status
   const getStatusBadge = (status: string) => {
     const statusConfig = {
+      rascunho: { color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', label: 'Rascunho' },
       pendente: { color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', label: 'Pendente' },
       processada: { color: 'bg-green-500/20 text-green-400 border-green-500/30', label: 'Processada' },
       cancelada: { color: 'bg-red-500/20 text-red-400 border-red-500/30', label: 'Cancelada' }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pendente;
-    
+
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>
         {config.label}
@@ -208,6 +220,7 @@ const EntradaMercadoriaPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
                   <option value="todos">Todos os Status</option>
+                  <option value="rascunho">Rascunho</option>
                   <option value="pendente">Pendente</option>
                   <option value="processada">Processada</option>
                   <option value="cancelada">Cancelada</option>
@@ -431,6 +444,7 @@ const EntradaMercadoriaModal: React.FC<{ onClose: () => void; onSave: () => void
 const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = ({ onClose, onSave }) => {
   // Estados do formulário
   const [empresaId, setEmpresaId] = useState('');
+  const [usuarioId, setUsuarioId] = useState('');
   const [fornecedorId, setFornecedorId] = useState('');
   const [fornecedorNome, setFornecedorNome] = useState('');
   const [fornecedorDocumento, setFornecedorDocumento] = useState('');
@@ -441,29 +455,33 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
   });
   const [observacoes, setObservacoes] = useState('');
   const [showNovoFornecedorModal, setShowNovoFornecedorModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [produtos, setProdutos] = useState<any[]>([]);
+  const [showProdutoModal, setShowProdutoModal] = useState(false);
 
-  // Carregar empresa do usuário
+  // Carregar empresa e usuário
   useEffect(() => {
-    const loadEmpresaId = async () => {
+    const loadUserData = async () => {
       try {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) return;
 
         const { data: usuarioData } = await supabase
           .from('usuarios')
-          .select('empresa_id')
+          .select('empresa_id, id')
           .eq('id', userData.user.id)
           .single();
 
         if (usuarioData?.empresa_id) {
           setEmpresaId(usuarioData.empresa_id);
+          setUsuarioId(usuarioData.id);
         }
       } catch (error) {
-        console.error('Erro ao carregar empresa:', error);
+        console.error('Erro ao carregar dados do usuário:', error);
       }
     };
 
-    loadEmpresaId();
+    loadUserData();
   }, []);
 
   const handleFornecedorChange = (
@@ -486,6 +504,173 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
     setFornecedorNome(fornecedorNome);
     setFornecedorDocumento(fornecedorDocumento || '');
     setShowNovoFornecedorModal(false);
+  };
+
+  // Função para gerar próximo número
+  const gerarProximoNumero = async (): Promise<string> => {
+    try {
+      const { data, error } = await supabase.rpc('get_proximo_numero_entrada_mercadoria', {
+        p_empresa_id: empresaId
+      });
+
+      if (error) {
+        console.error('Erro ao gerar próximo número:', error);
+        return '000001';
+      }
+
+      return data || '000001';
+    } catch (error) {
+      console.error('Erro ao gerar próximo número:', error);
+      return '000001';
+    }
+  };
+
+  // Função para salvar rascunho
+  const handleSalvarRascunho = async () => {
+    if (!empresaId || !usuarioId) {
+      showMessage('error', 'Dados do usuário não encontrados');
+      return;
+    }
+
+    if (!fornecedorId) {
+      showMessage('error', 'Selecione um fornecedor');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Gerar próximo número
+      const proximoNumero = await gerarProximoNumero();
+
+      // Inserir entrada de mercadoria
+      const { data: entradaData, error: entradaError } = await supabase
+        .from('entrada_mercadoria')
+        .insert({
+          numero: proximoNumero,
+          empresa_id: empresaId,
+          usuario_id: usuarioId,
+          fornecedor_id: fornecedorId,
+          fornecedor_nome: fornecedorNome,
+          fornecedor_documento: fornecedorDocumento,
+          tipo_entrada: 'manual',
+          numero_documento: numeroDocumento,
+          data_entrada: dataEntrada,
+          status: 'rascunho',
+          observacoes: observacoes,
+          valor_total: 0
+        })
+        .select()
+        .single();
+
+      if (entradaError) {
+        console.error('Erro ao salvar entrada:', entradaError);
+        showMessage('error', 'Erro ao salvar entrada de mercadoria');
+        return;
+      }
+
+      showMessage('success', `Rascunho salvo com sucesso! Número: ${proximoNumero}`);
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error('Erro ao salvar rascunho:', error);
+      showMessage('error', 'Erro ao salvar rascunho');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Função para processar entrada
+  const handleProcessarEntrada = async () => {
+    if (!empresaId || !usuarioId) {
+      showMessage('error', 'Dados do usuário não encontrados');
+      return;
+    }
+
+    if (!fornecedorId) {
+      showMessage('error', 'Selecione um fornecedor');
+      return;
+    }
+
+    if (produtos.length === 0) {
+      showMessage('error', 'Adicione pelo menos um produto à entrada');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Gerar próximo número
+      const proximoNumero = await gerarProximoNumero();
+
+      // Calcular valor total dos produtos
+      const valorTotalProdutos = produtos.reduce((total, produto) => total + produto.preco_total, 0);
+
+      // Inserir entrada de mercadoria
+      const { data: entradaData, error: entradaError } = await supabase
+        .from('entrada_mercadoria')
+        .insert({
+          numero: proximoNumero,
+          empresa_id: empresaId,
+          usuario_id: usuarioId,
+          fornecedor_id: fornecedorId,
+          fornecedor_nome: fornecedorNome,
+          fornecedor_documento: fornecedorDocumento,
+          tipo_entrada: 'manual',
+          numero_documento: numeroDocumento,
+          data_entrada: dataEntrada,
+          status: 'processada',
+          observacoes: observacoes,
+          valor_produtos: valorTotalProdutos,
+          valor_total: valorTotalProdutos,
+          processada_em: new Date().toISOString(),
+          processada_por_usuario_id: usuarioId
+        })
+        .select()
+        .single();
+
+      if (entradaError) {
+        console.error('Erro ao processar entrada:', entradaError);
+        showMessage('error', 'Erro ao processar entrada de mercadoria');
+        return;
+      }
+
+      // Inserir itens da entrada
+      if (produtos.length > 0) {
+        const itensParaInserir = produtos.map(produto => ({
+          entrada_mercadoria_id: entradaData.id,
+          empresa_id: empresaId,
+          produto_id: produto.produto_id,
+          codigo_produto: produto.codigo,
+          nome_produto: produto.nome,
+          unidade_medida: produto.unidade_medida || 'UN',
+          quantidade: produto.quantidade,
+          preco_unitario: produto.preco_unitario,
+          preco_total: produto.preco_total,
+          atualizar_estoque: true,
+          estoque_atualizado: false
+        }));
+
+        const { error: itensError } = await supabase
+          .from('entrada_mercadoria_itens')
+          .insert(itensParaInserir);
+
+        if (itensError) {
+          console.error('Erro ao inserir itens:', itensError);
+          showMessage('error', 'Erro ao inserir itens da entrada');
+          return;
+        }
+      }
+
+      showMessage('success', `Entrada processada com sucesso! Número: ${proximoNumero}`);
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error('Erro ao processar entrada:', error);
+      showMessage('error', 'Erro ao processar entrada');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -589,15 +774,31 @@ const EntradaManualTab: React.FC<{ onClose: () => void; onSave: () => void }> = 
 
         {/* Botões de Ação */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-700">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
             Cancelar
           </Button>
-          <Button variant="outline">
-            <Save size={16} className="mr-2" />
+          <Button
+            variant="outline"
+            onClick={handleSalvarRascunho}
+            disabled={isLoading || !fornecedorId}
+          >
+            {isLoading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            ) : (
+              <Save size={16} className="mr-2" />
+            )}
             Salvar Rascunho
           </Button>
-          <Button variant="primary">
-            <Package size={16} className="mr-2" />
+          <Button
+            variant="primary"
+            onClick={handleProcessarEntrada}
+            disabled={isLoading || !fornecedorId || produtos.length === 0}
+          >
+            {isLoading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            ) : (
+              <Package size={16} className="mr-2" />
+            )}
             Processar Entrada
           </Button>
         </div>
