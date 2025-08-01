@@ -5575,13 +5575,123 @@ const PDVPage: React.FC = () => {
         };
       });
 
-      // ✅ CORREÇÃO: Usar apenas os itens reais da venda (não criar itens sintéticos)
-      console.log('🔍 [DEVOLUÇÃO DEBUG] ===== RESULTADO FINAL =====');
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens processados:', itensProcessados.length);
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens com isDevolucao=true:', itensProcessados.filter(item => item.isDevolucao).length);
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Todos os itens:', itensProcessados);
+      // ✅ RESTAURAR: Criar itens sintéticos de devolução com dados fiscais corretos
+      let itensDevolucao: any[] = [];
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Verificando devolução associada...');
 
-      setItensVenda(itensProcessados);
+      if (dadosVenda?.devolucao_origem_codigo) {
+        try {
+          console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando devolução com código:', dadosVenda.devolucao_origem_codigo);
+          const { data: devolucaoData, error: devolucaoError } = await supabase
+            .from('devolucoes')
+            .select(`
+              numero,
+              codigo_troca,
+              tipo_devolucao,
+              valor_total,
+              devolucao_itens!inner(
+                produto_id,
+                produto_nome,
+                produto_codigo,
+                quantidade,
+                preco_unitario,
+                preco_total,
+                motivo
+              )
+            `)
+            .eq('codigo_troca', dadosVenda.devolucao_origem_codigo)
+            .single();
+
+          if (devolucaoData && !devolucaoError) {
+            console.log('🔍 [DEVOLUÇÃO DEBUG] Devolução encontrada:', devolucaoData);
+
+            // ✅ CRIAR itens sintéticos de devolução com dados fiscais reais
+            const itensDevolucaoComDados = await Promise.all(
+              (devolucaoData.devolucao_itens || []).map(async (item: any, index: number) => {
+                console.log(`🔍 [DEVOLUÇÃO DEBUG] Processando item devolução ${index + 1}:`, item);
+
+                // Buscar dados fiscais reais do produto
+                let dadosProduto = null;
+                if (item.produto_id) {
+                  const { data: produtoData, error: produtoError } = await supabase
+                    .from('produtos')
+                    .select(`
+                      id, codigo, nome, ncm, cest, cfop, cst_icms, csosn_icms,
+                      aliquota_icms, margem_st, origem_produto, aliquota_pis,
+                      aliquota_cofins, cst_pis, cst_cofins,
+                      unidade_medida:unidade_medida(sigla)
+                    `)
+                    .eq('id', item.produto_id)
+                    .single();
+
+                  if (produtoData && !produtoError) {
+                    dadosProduto = produtoData;
+                    console.log(`🔍 [DEVOLUÇÃO DEBUG] ✅ Dados fiscais do produto carregados`);
+                  }
+                }
+
+                // ✅ CRIAR item sintético de devolução com dados fiscais reais
+                return {
+                  id: `devolucao_${index}`,
+                  produto_id: item.produto_id,
+                  codigo_produto: dadosProduto?.codigo || item.produto_codigo,
+                  nome_produto: item.produto_nome,
+                  descricao_produto: item.produto_nome,
+                  quantidade: item.quantidade,
+                  valor_unitario: -Math.abs(parseFloat(item.preco_unitario)), // ✅ NEGATIVO
+                  valor_subtotal: -Math.abs(parseFloat(item.preco_total)),
+                  valor_total_item: -Math.abs(parseFloat(item.preco_total)), // ✅ NEGATIVO
+                  origem_item: 'devolucao',
+                  observacao_item: item.motivo,
+                  // ✅ DADOS FISCAIS REAIS do produto
+                  cfop: dadosProduto?.cfop,
+                  cst_icms: dadosProduto?.cst_icms,
+                  csosn_icms: dadosProduto?.csosn_icms,
+                  ncm: dadosProduto?.ncm,
+                  cest: dadosProduto?.cest,
+                  margem_st: dadosProduto?.margem_st,
+                  aliquota_icms: dadosProduto?.aliquota_icms,
+                  origem_produto: dadosProduto?.origem_produto,
+                  unidade: dadosProduto?.unidade_medida?.sigla,
+                  sequencia: itensProcessados.length + index + 1,
+                  // ✅ DADOS FISCAIS EDITÁVEIS REAIS
+                  cfop_editavel: dadosProduto?.cfop,
+                  cst_editavel: dadosProduto?.cst_icms,
+                  csosn_editavel: dadosProduto?.csosn_icms,
+                  ncm_editavel: dadosProduto?.ncm,
+                  cest_editavel: dadosProduto?.cest,
+                  margem_st_editavel: dadosProduto?.margem_st,
+                  aliquota_icms_editavel: dadosProduto?.aliquota_icms,
+                  regime_tributario: regimeTributario,
+                  editando_cfop: false,
+                  editando_cst: false,
+                  editando_csosn: false,
+                  editando_ncm: false,
+                  editando_cest: false,
+                  editando_margem_st: false,
+                  editando_aliquota_icms: false,
+                  isDevolucao: true // ✅ Marcar como devolução
+                };
+              })
+            );
+
+            itensDevolucao = itensDevolucaoComDados;
+            console.log('🔍 [DEVOLUÇÃO DEBUG] Itens de devolução criados:', itensDevolucao.length);
+          }
+        } catch (error) {
+          console.error('🔍 [DEVOLUÇÃO DEBUG] Erro ao carregar devolução:', error);
+        }
+      }
+
+      // ✅ COMBINAR itens da venda + itens de devolução sintéticos
+      const todosItens = [...itensProcessados, ...itensDevolucao];
+      console.log('🔍 [DEVOLUÇÃO DEBUG] ===== RESULTADO FINAL =====');
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens da venda:', itensProcessados.length);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens de devolução:', itensDevolucao.length);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Total de itens:', todosItens.length);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens com isDevolucao=true:', todosItens.filter(item => item.isDevolucao).length);
+
+      setItensVenda(todosItens);
 
     } catch (error) {
       console.error('🔍 [DEVOLUÇÃO DEBUG] Erro geral:', error);
