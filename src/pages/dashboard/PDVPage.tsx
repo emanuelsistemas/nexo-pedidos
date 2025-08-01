@@ -5370,6 +5370,11 @@ const PDVPage: React.FC = () => {
     try {
       setLoadingItensVenda(true);
 
+      // ✅ DEBUG: Log inicial
+      console.log('🔍 [DEVOLUÇÃO DEBUG] ===== INICIANDO CARREGAMENTO DE ITENS =====');
+      console.log('🔍 [DEVOLUÇÃO DEBUG] vendaId:', vendaId);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] vendaParaExibirItens:', vendaParaExibirItens);
+
       // ✅ NOVO: Buscar regime tributário da empresa para exibição correta dos campos
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Usuário não autenticado');
@@ -5382,6 +5387,8 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
+      console.log('🔍 [DEVOLUÇÃO DEBUG] empresa_id:', usuarioData.empresa_id);
+
       const { data: empresaData } = await supabase
         .from('empresas')
         .select('regime_tributario')
@@ -5391,6 +5398,7 @@ const PDVPage: React.FC = () => {
       const regimeTributario = empresaData?.regime_tributario || 1;
 
       // ✅ CORREÇÃO: Carregar itens da venda com dados fiscais da tabela pdv_itens (igual ao modal Editar NFCe)
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando itens da venda...');
       const { data: itensData, error: itensError } = await supabase
         .from('pdv_itens')
         .select(`
@@ -5453,36 +5461,55 @@ const PDVPage: React.FC = () => {
         .order('created_at', { ascending: true });
 
       if (itensError) {
+        console.error('🔍 [DEVOLUÇÃO DEBUG] Erro ao carregar itens:', itensError);
         throw itensError;
       }
 
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens carregados:', itensData?.length || 0);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens detalhados:', itensData);
+
       // ✅ CORREÇÃO: Processar itens usando dados fiscais da tabela pdv_itens (igual ao modal Editar NFCe)
-      const itensProcessados = (itensData || []).map((item, index) => ({
-        ...item,
-        sequencia: index + 1,
-        cfop_editavel: item.cfop || '5102', // CFOP da pdv_itens
-        cst_editavel: item.cst_icms || '00', // CST da pdv_itens
-        csosn_editavel: item.csosn_icms, // ✅ SEM FALLBACK: CSOSN real da pdv_itens
-        ncm_editavel: item.ncm || '00000000', // ✅ CORREÇÃO: NCM da pdv_itens
-        cest_editavel: item.cest || '', // ✅ CORREÇÃO: CEST da pdv_itens
-        margem_st_editavel: item.margem_st || '0', // ✅ CORREÇÃO: Margem ST da pdv_itens
-        aliquota_icms_editavel: item.aliquota_icms || '0', // ✅ CORREÇÃO: Alíquota ICMS da pdv_itens
-        regime_tributario: regimeTributario,
-        editando_cfop: false,
-        editando_cst: false,
-        editando_csosn: false,
-        editando_ncm: false,
-        editando_cest: false,
-        editando_margem_st: false,
-        editando_aliquota_icms: false,
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Processando itens...');
+      const itensProcessados = (itensData || []).map((item, index) => {
         // ✅ ETAPA 1: Identificar itens de devolução
-        isDevolucao: item.origem_item === 'devolucao' || (item.valor_unitario < 0 && item.valor_total_item < 0)
-      }));
+        const isDevolucao = item.origem_item === 'devolucao' || (item.valor_unitario < 0 && item.valor_total_item < 0);
+
+        console.log(`🔍 [DEVOLUÇÃO DEBUG] Item ${index + 1}: ${item.nome_produto}`);
+        console.log(`🔍 [DEVOLUÇÃO DEBUG] - origem_item: ${item.origem_item}`);
+        console.log(`🔍 [DEVOLUÇÃO DEBUG] - valor_unitario: ${item.valor_unitario}`);
+        console.log(`🔍 [DEVOLUÇÃO DEBUG] - valor_total_item: ${item.valor_total_item}`);
+        console.log(`🔍 [DEVOLUÇÃO DEBUG] - isDevolucao: ${isDevolucao}`);
+
+        return {
+          ...item,
+          sequencia: index + 1,
+          cfop_editavel: item.cfop || '5102', // CFOP da pdv_itens
+          cst_editavel: item.cst_icms || '00', // CST da pdv_itens
+          csosn_editavel: item.csosn_icms, // ✅ SEM FALLBACK: CSOSN real da pdv_itens
+          ncm_editavel: item.ncm || '00000000', // ✅ CORREÇÃO: NCM da pdv_itens
+          cest_editavel: item.cest || '', // ✅ CORREÇÃO: CEST da pdv_itens
+          margem_st_editavel: item.margem_st || '0', // ✅ CORREÇÃO: Margem ST da pdv_itens
+          aliquota_icms_editavel: item.aliquota_icms || '0', // ✅ CORREÇÃO: Alíquota ICMS da pdv_itens
+          regime_tributario: regimeTributario,
+          editando_cfop: false,
+          editando_cst: false,
+          editando_csosn: false,
+          editando_ncm: false,
+          editando_cest: false,
+          editando_margem_st: false,
+          editando_aliquota_icms: false,
+          isDevolucao
+        };
+      });
 
       // ✅ NOVO: Carregar itens de devolução se a venda tiver devolução associada
       let itensDevolucao: any[] = [];
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Verificando devolução associada...');
+      console.log('🔍 [DEVOLUÇÃO DEBUG] devolucao_origem_codigo:', vendaParaExibirItens?.devolucao_origem_codigo);
+
       if (vendaParaExibirItens?.devolucao_origem_codigo) {
         try {
+          console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando devolução com código:', vendaParaExibirItens.devolucao_origem_codigo);
           const { data: devolucaoData, error: devolucaoError } = await supabase
             .from('devolucoes')
             .select(`
@@ -5503,74 +5530,97 @@ const PDVPage: React.FC = () => {
             .eq('devolucao_itens.deletado', false)
             .single();
 
+          console.log('🔍 [DEVOLUÇÃO DEBUG] Resultado da consulta devolução:', { devolucaoData, devolucaoError });
+
           if (devolucaoData && !devolucaoError) {
-            itensDevolucao = (devolucaoData.devolucao_itens || []).map((item: any, index: number) => ({
-              id: `devolucao_${index}`,
-              produto_id: null,
-              codigo_produto: item.produto_codigo || '',
-              nome_produto: item.produto_nome,
-              descricao_produto: item.produto_nome,
-              quantidade: item.quantidade,
-              valor_unitario: -Math.abs(parseFloat(item.preco_unitario)), // Valor negativo para devolução
-              valor_subtotal: -Math.abs(parseFloat(item.preco_total)),
-              valor_total_item: -Math.abs(parseFloat(item.preco_total)),
-              tem_desconto: false,
-              tipo_desconto: null,
-              percentual_desconto: 0,
-              valor_desconto_aplicado: 0,
-              origem_item: 'devolucao',
-              pedido_origem_numero: null,
-              observacao_item: item.motivo || 'Item devolvido',
-              vendedor_id: null,
-              vendedor_nome: null,
-              cfop: '5102',
-              cst_icms: '00',
-              csosn_icms: null,
-              ncm: '00000000',
-              cest: '',
-              margem_st: '0',
-              aliquota_icms: '0',
-              origem_produto: '0',
-              aliquota_pis: '0',
-              aliquota_cofins: '0',
-              cst_pis: '01',
-              cst_cofins: '01',
-              unidade: 'Un',
-              sabores_json: null,
-              descricao_sabores: null,
-              tabela_preco_id: null,
-              tabela_preco_nome: null,
-              produto: null,
-              pdv_itens_adicionais: [],
-              sequencia: itensProcessados.length + index + 1,
-              cfop_editavel: '5102',
-              cst_editavel: '00',
-              csosn_editavel: null,
-              ncm_editavel: '00000000',
-              cest_editavel: '',
-              margem_st_editavel: '0',
-              aliquota_icms_editavel: '0',
-              regime_tributario: regimeTributario,
-              editando_cfop: false,
-              editando_cst: false,
-              editando_csosn: false,
-              editando_ncm: false,
-              editando_cest: false,
-              editando_margem_st: false,
-              editando_aliquota_icms: false,
-              isDevolucao: true // ✅ Marcar como item de devolução
-            }));
+            console.log('🔍 [DEVOLUÇÃO DEBUG] Devolução encontrada:', devolucaoData);
+            console.log('🔍 [DEVOLUÇÃO DEBUG] Itens da devolução:', devolucaoData.devolucao_itens?.length || 0);
+
+            itensDevolucao = (devolucaoData.devolucao_itens || []).map((item: any, index: number) => {
+              console.log(`🔍 [DEVOLUÇÃO DEBUG] Processando item devolução ${index + 1}:`, item);
+
+              return {
+                id: `devolucao_${index}`,
+                produto_id: null,
+                codigo_produto: item.produto_codigo || '',
+                nome_produto: item.produto_nome,
+                descricao_produto: item.produto_nome,
+                quantidade: item.quantidade,
+                valor_unitario: -Math.abs(parseFloat(item.preco_unitario)), // Valor negativo para devolução
+                valor_subtotal: -Math.abs(parseFloat(item.preco_total)),
+                valor_total_item: -Math.abs(parseFloat(item.preco_total)),
+                tem_desconto: false,
+                tipo_desconto: null,
+                percentual_desconto: 0,
+                valor_desconto_aplicado: 0,
+                origem_item: 'devolucao',
+                pedido_origem_numero: null,
+                observacao_item: item.motivo || 'Item devolvido',
+                vendedor_id: null,
+                vendedor_nome: null,
+                cfop: '5102',
+                cst_icms: '00',
+                csosn_icms: null,
+                ncm: '00000000',
+                cest: '',
+                margem_st: '0',
+                aliquota_icms: '0',
+                origem_produto: '0',
+                aliquota_pis: '0',
+                aliquota_cofins: '0',
+                cst_pis: '01',
+                cst_cofins: '01',
+                unidade: 'Un',
+                sabores_json: null,
+                descricao_sabores: null,
+                tabela_preco_id: null,
+                tabela_preco_nome: null,
+                produto: null,
+                pdv_itens_adicionais: [],
+                sequencia: itensProcessados.length + index + 1,
+                cfop_editavel: '5102',
+                cst_editavel: '00',
+                csosn_editavel: null,
+                ncm_editavel: '00000000',
+                cest_editavel: '',
+                margem_st_editavel: '0',
+                aliquota_icms_editavel: '0',
+                regime_tributario: regimeTributario,
+                editando_cfop: false,
+                editando_cst: false,
+                editando_csosn: false,
+                editando_ncm: false,
+                editando_cest: false,
+                editando_margem_st: false,
+                editando_aliquota_icms: false,
+                isDevolucao: true // ✅ Marcar como item de devolução
+              };
+            });
+
+            console.log('🔍 [DEVOLUÇÃO DEBUG] Itens de devolução processados:', itensDevolucao.length);
+          } else {
+            console.log('🔍 [DEVOLUÇÃO DEBUG] Nenhuma devolução encontrada ou erro:', devolucaoError);
           }
         } catch (devolucaoError) {
-          console.error('Erro ao carregar itens de devolução:', devolucaoError);
+          console.error('🔍 [DEVOLUÇÃO DEBUG] Erro ao carregar itens de devolução:', devolucaoError);
         }
+      } else {
+        console.log('🔍 [DEVOLUÇÃO DEBUG] Venda não possui código de devolução associado');
       }
 
       // ✅ Combinar itens da venda com itens de devolução
       const todosItens = [...itensProcessados, ...itensDevolucao];
+      console.log('🔍 [DEVOLUÇÃO DEBUG] ===== RESULTADO FINAL =====');
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens processados:', itensProcessados.length);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens de devolução:', itensDevolucao.length);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Total de itens:', todosItens.length);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens com isDevolucao=true:', todosItens.filter(item => item.isDevolucao).length);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] Todos os itens:', todosItens);
+
       setItensVenda(todosItens);
 
     } catch (error) {
+      console.error('🔍 [DEVOLUÇÃO DEBUG] Erro geral:', error);
       toast.error('Erro ao carregar itens da venda');
     } finally {
       setLoadingItensVenda(false);
