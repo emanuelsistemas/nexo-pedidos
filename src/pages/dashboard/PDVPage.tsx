@@ -5537,11 +5537,10 @@ const PDVPage: React.FC = () => {
       }
 
       const itensProcessados = (itensData || []).map((item, index) => {
-        // ✅ CORREÇÃO: Identificar itens de devolução/troca corretamente
+        // ✅ CORREÇÃO: Apenas itens com valores negativos são devolução
         const isItemDeTroca = produtosDaTroca.has(item.produto_id) || produtosDaTroca.has(item.codigo_produto);
         const isDevolucao = item.origem_item === 'devolucao' ||
-                           (item.valor_unitario < 0 && item.valor_total_item < 0) ||
-                           isItemDeTroca;
+                           (item.valor_unitario < 0 && item.valor_total_item < 0);
 
         console.log(`🔍 [DEVOLUÇÃO DEBUG] Item ${index + 1}: ${item.nome_produto}`);
         console.log(`🔍 [DEVOLUÇÃO DEBUG] - produto_id: ${item.produto_id}`);
