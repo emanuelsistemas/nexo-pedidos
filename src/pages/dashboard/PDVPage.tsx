@@ -14001,8 +14001,33 @@ const PDVPage: React.FC = () => {
       // ✅ MARCAR PEDIDO DO CARDÁPIO DIGITAL COMO FATURADO
       await marcarPedidoCardapioComoFaturado(vendaId, numeroVenda);
 
-      // ✅ NOVO: PROCESSAR DEVOLUÇÕES PENDENTES RELACIONADAS À VENDA
-      await processarDevolucoesPendentes(vendaId, usuarioData.empresa_id, userData.user.id);
+      // ✅ NOVO: PROCESSAR TROCA PENDENTE (se aplicável)
+      if (isVendaComTroca && devolucaoAplicada && devolucaoAplicada.codigo_troca) {
+        setEtapaProcessamento('Processando troca pendente...');
+        try {
+          const { error: updateTrocaError } = await supabase
+            .from('devolucoes')
+            .update({
+              status: 'processada',
+              processada_em: new Date().toISOString(),
+              processada_por_usuario_id: userData.user.id,
+              observacoes: `Troca processada automaticamente - Venda #${numeroVenda}`
+            })
+            .eq('codigo_troca', devolucaoAplicada.codigo_troca)
+            .eq('empresa_id', usuarioData.empresa_id)
+            .eq('status', 'pendente');
+
+          if (updateTrocaError) {
+            console.error('❌ Erro ao processar troca:', updateTrocaError);
+            // Não interrompe o processo, apenas loga o erro
+          } else {
+            console.log('✅ Troca processada com sucesso:', devolucaoAplicada.codigo_troca);
+          }
+        } catch (trocaError) {
+          console.error('❌ Erro inesperado ao processar troca:', trocaError);
+          // Não interrompe o processo
+        }
+      }
 
       // ✅ NOVO: Limpar venda em andamento (adaptado do sistema de rascunhos NFe)
       setVendaEmAndamento(null);
