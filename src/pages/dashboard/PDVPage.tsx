@@ -22953,10 +22953,10 @@ const PDVPage: React.FC = () => {
             onClick={fecharModalItens}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl mx-4 max-h-[85vh] flex flex-col"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card w-full h-full flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Cabeçalho */}
