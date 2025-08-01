@@ -5066,7 +5066,12 @@ const PDVPage: React.FC = () => {
           valor_troco,
           parcelas,
           observacao_venda,
-          ambiente
+          ambiente,
+          devolucao_origem_id,
+          devolucao_origem_numero,
+          devolucao_origem_codigo,
+          venda_origem_troca_id,
+          venda_origem_troca_numero
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .or('modelo_documento.is.null,modelo_documento.eq.65'); // ✅ Mostrar apenas vendas PDV (null) e NFC-e (65) - excluir NFe (55)
@@ -22404,6 +22409,13 @@ const PDVPage: React.FC = () => {
                                 HOMOLOG.
                               </span>
                             )}
+
+                            {/* ✅ NOVO: Tag de Devolução - Quando há devolução aplicada */}
+                            {venda.devolucao_origem_numero && (
+                              <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 text-xs font-medium rounded-full border border-cyan-500/30">
+                                Troca #{venda.devolucao_origem_numero}
+                              </span>
+                            )}
                           </div>
 
                           {/* Valor Total */}
@@ -23691,6 +23703,19 @@ const PDVPage: React.FC = () => {
                                 </div>
                               )}
                             </>
+                          )}
+
+                          {/* ✅ NOVO: Devolução - Quando há devolução aplicada */}
+                          {vendaParaExibirItens.devolucao_origem_numero && (
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-cyan-400">Devolução #{vendaParaExibirItens.devolucao_origem_numero}:</span>
+                              <span className="text-cyan-400">
+                                -{formatCurrency(
+                                  // Calcular valor da devolução baseado na diferença entre subtotal e total
+                                  Math.max(0, subtotalSemDescontos - (vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final || 0) - descontoItens - descontoPrazo)
+                                )}
+                              </span>
+                            </div>
                           )}
 
                           {/* Linha separadora */}
