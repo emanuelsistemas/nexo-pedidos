@@ -23172,9 +23172,11 @@ const PDVPage: React.FC = () => {
                               <tr className="border-b border-gray-700">
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Item</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Código</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Cód. Barras</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Nome</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Qtd</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Preço</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Total</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">NCM</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CFOP</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CEST</th>
@@ -23192,9 +23194,11 @@ const PDVPage: React.FC = () => {
                                 <tr key={item.id} className="border-b border-gray-800/50">
                                   <td className="py-3 px-2 text-white font-medium">{index + 1}</td>
                                   <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
+                                  <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
                                   <td className="py-3 px-2 text-white">{item.nome_produto}</td>
                                   <td className="py-3 px-2 text-gray-300">{item.quantidade}</td>
                                   <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
+                                  <td className="py-3 px-2 text-primary-400 font-medium">{formatCurrency(item.valor_total_item)}</td>
 
                                   {/* NCM */}
                                   <td className="py-3 px-2">
