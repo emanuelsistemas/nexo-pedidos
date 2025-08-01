@@ -14001,6 +14001,9 @@ const PDVPage: React.FC = () => {
       // ✅ MARCAR PEDIDO DO CARDÁPIO DIGITAL COMO FATURADO
       await marcarPedidoCardapioComoFaturado(vendaId, numeroVenda);
 
+      // ✅ NOVO: PROCESSAR DEVOLUÇÕES PENDENTES RELACIONADAS À VENDA
+      await processarDevolucoesPendentes(vendaId, usuarioData.empresa_id, userData.user.id);
+
       // ✅ NOVO: Limpar venda em andamento (adaptado do sistema de rascunhos NFe)
       setVendaEmAndamento(null);
       setIsEditingVenda(false);
@@ -16527,7 +16530,7 @@ const PDVPage: React.FC = () => {
           )}
         </div>
         <div className="text-4xl font-bold text-primary-400">
-          {formatCurrencyWithoutSymbol(calcularTotal())}
+          {formatCurrencyWithoutSymbol(calcularTotalComDesconto())}
         </div>
         <div className="text-right">
           <div className="text-xs text-gray-400 flex items-center justify-end gap-1 mb-0.5">
