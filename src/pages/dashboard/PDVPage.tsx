@@ -5473,10 +5473,101 @@ const PDVPage: React.FC = () => {
         editando_ncm: false,
         editando_cest: false,
         editando_margem_st: false,
-        editando_aliquota_icms: false
+        editando_aliquota_icms: false,
+        // ✅ ETAPA 1: Identificar itens de devolução
+        isDevolucao: item.origem_item === 'devolucao' || (item.valor_unitario < 0 && item.valor_total_item < 0)
       }));
 
-      setItensVenda(itensProcessados);
+      // ✅ NOVO: Carregar itens de devolução se a venda tiver devolução associada
+      let itensDevolucao: any[] = [];
+      if (vendaParaExibirItens?.devolucao_origem_codigo) {
+        try {
+          const { data: devolucaoData, error: devolucaoError } = await supabase
+            .from('devolucoes')
+            .select(`
+              numero,
+              codigo_troca,
+              tipo_devolucao,
+              valor_total,
+              devolucao_itens!inner(
+                produto_nome,
+                produto_codigo,
+                quantidade,
+                preco_unitario,
+                preco_total,
+                motivo
+              )
+            `)
+            .eq('codigo_troca', vendaParaExibirItens.devolucao_origem_codigo)
+            .eq('devolucao_itens.deletado', false)
+            .single();
+
+          if (devolucaoData && !devolucaoError) {
+            itensDevolucao = (devolucaoData.devolucao_itens || []).map((item: any, index: number) => ({
+              id: `devolucao_${index}`,
+              produto_id: null,
+              codigo_produto: item.produto_codigo || '',
+              nome_produto: item.produto_nome,
+              descricao_produto: item.produto_nome,
+              quantidade: item.quantidade,
+              valor_unitario: -Math.abs(parseFloat(item.preco_unitario)), // Valor negativo para devolução
+              valor_subtotal: -Math.abs(parseFloat(item.preco_total)),
+              valor_total_item: -Math.abs(parseFloat(item.preco_total)),
+              tem_desconto: false,
+              tipo_desconto: null,
+              percentual_desconto: 0,
+              valor_desconto_aplicado: 0,
+              origem_item: 'devolucao',
+              pedido_origem_numero: null,
+              observacao_item: item.motivo || 'Item devolvido',
+              vendedor_id: null,
+              vendedor_nome: null,
+              cfop: '5102',
+              cst_icms: '00',
+              csosn_icms: null,
+              ncm: '00000000',
+              cest: '',
+              margem_st: '0',
+              aliquota_icms: '0',
+              origem_produto: '0',
+              aliquota_pis: '0',
+              aliquota_cofins: '0',
+              cst_pis: '01',
+              cst_cofins: '01',
+              unidade: 'Un',
+              sabores_json: null,
+              descricao_sabores: null,
+              tabela_preco_id: null,
+              tabela_preco_nome: null,
+              produto: null,
+              pdv_itens_adicionais: [],
+              sequencia: itensProcessados.length + index + 1,
+              cfop_editavel: '5102',
+              cst_editavel: '00',
+              csosn_editavel: null,
+              ncm_editavel: '00000000',
+              cest_editavel: '',
+              margem_st_editavel: '0',
+              aliquota_icms_editavel: '0',
+              regime_tributario: regimeTributario,
+              editando_cfop: false,
+              editando_cst: false,
+              editando_csosn: false,
+              editando_ncm: false,
+              editando_cest: false,
+              editando_margem_st: false,
+              editando_aliquota_icms: false,
+              isDevolucao: true // ✅ Marcar como item de devolução
+            }));
+          }
+        } catch (devolucaoError) {
+          console.error('Erro ao carregar itens de devolução:', devolucaoError);
+        }
+      }
+
+      // ✅ Combinar itens da venda com itens de devolução
+      const todosItens = [...itensProcessados, ...itensDevolucao];
+      setItensVenda(todosItens);
 
     } catch (error) {
       toast.error('Erro ao carregar itens da venda');
@@ -22859,13 +22950,21 @@ const PDVPage: React.FC = () => {
               {/* Cabeçalho */}
               <div className="flex-shrink-0 p-6 border-b border-gray-800">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      Itens da Venda #{vendaParaExibirItens.numero_venda}
-                    </h3>
-                    <p className="text-sm text-gray-400">
-                      {vendaParaExibirItens.created_at} • Total: {formatCurrency(vendaParaExibirItens.valor_final)}
-                    </p>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">
+                        Itens da Venda #{vendaParaExibirItens.numero_venda}
+                      </h3>
+                      <p className="text-sm text-gray-400">
+                        {vendaParaExibirItens.created_at} • Total: {formatCurrency(vendaParaExibirItens.valor_final)}
+                      </p>
+                    </div>
+                    {/* ✅ ETAPA 1: Indicador de itens de devolução */}
+                    {itensVenda.some(item => item.isDevolucao) && (
+                      <div className="px-3 py-1.5 bg-red-500/20 text-red-400 text-sm font-medium rounded-full border border-red-500/30">
+                        Contém Devoluções
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={fecharModalItens}
