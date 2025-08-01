@@ -5389,6 +5389,36 @@ const PDVPage: React.FC = () => {
 
       console.log('🔍 [DEVOLUÇÃO DEBUG] empresa_id:', usuarioData.empresa_id);
 
+      // ✅ CORREÇÃO: Carregar dados da venda primeiro se não estiver disponível
+      let dadosVenda = vendaParaExibirItens;
+      if (!dadosVenda) {
+        console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando dados da venda...');
+        const { data: vendaData, error: vendaError } = await supabase
+          .from('pdv')
+          .select(`
+            id,
+            valor_total,
+            valor_desconto,
+            devolucao_origem_id,
+            devolucao_origem_numero,
+            devolucao_origem_codigo,
+            venda_origem_troca_id,
+            venda_origem_troca_numero,
+            tipo_pagamento,
+            forma_pagamento_id
+          `)
+          .eq('id', vendaId)
+          .single();
+
+        if (vendaError) {
+          console.error('🔍 [DEVOLUÇÃO DEBUG] Erro ao carregar venda:', vendaError);
+          throw vendaError;
+        }
+
+        dadosVenda = vendaData;
+        console.log('🔍 [DEVOLUÇÃO DEBUG] Dados da venda carregados:', dadosVenda);
+      }
+
       const { data: empresaData } = await supabase
         .from('empresas')
         .select('regime_tributario')
@@ -5505,11 +5535,11 @@ const PDVPage: React.FC = () => {
       // ✅ NOVO: Carregar itens de devolução se a venda tiver devolução associada
       let itensDevolucao: any[] = [];
       console.log('🔍 [DEVOLUÇÃO DEBUG] Verificando devolução associada...');
-      console.log('🔍 [DEVOLUÇÃO DEBUG] devolucao_origem_codigo:', vendaParaExibirItens?.devolucao_origem_codigo);
+      console.log('🔍 [DEVOLUÇÃO DEBUG] devolucao_origem_codigo:', dadosVenda?.devolucao_origem_codigo);
 
-      if (vendaParaExibirItens?.devolucao_origem_codigo) {
+      if (dadosVenda?.devolucao_origem_codigo) {
         try {
-          console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando devolução com código:', vendaParaExibirItens.devolucao_origem_codigo);
+          console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando devolução com código:', dadosVenda.devolucao_origem_codigo);
           const { data: devolucaoData, error: devolucaoError } = await supabase
             .from('devolucoes')
             .select(`
@@ -5526,7 +5556,7 @@ const PDVPage: React.FC = () => {
                 motivo
               )
             `)
-            .eq('codigo_troca', vendaParaExibirItens.devolucao_origem_codigo)
+            .eq('codigo_troca', dadosVenda.devolucao_origem_codigo)
             .eq('devolucao_itens.deletado', false)
             .single();
 
