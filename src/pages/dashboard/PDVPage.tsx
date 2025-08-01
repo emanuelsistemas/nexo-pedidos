@@ -9289,11 +9289,11 @@ const PDVPage: React.FC = () => {
         setEtapaProcessamento('Verificando baixa de estoque...');
 
         // Agrupar itens do carrinho por produto para calcular quantidade total esperada
-        // ✅ EXCEÇÃO: Filtrar produtos de venda sem produto (código 999999)
+        // ✅ EXCEÇÃO: Filtrar produtos de venda sem produto (código 999999) e itens de devolução
         const produtosAgrupados = carrinho.reduce((acc, item) => {
-          // Pular produtos de venda sem produto
-          if (item.vendaSemProduto || item.produto.codigo === '999999') {
-            // Pulando verificação de estoque para venda sem produto
+          // Pular produtos de venda sem produto e devoluções
+          if (item.vendaSemProduto || item.produto.codigo === '999999' || item.isDevolucao) {
+            // Pulando verificação de estoque para venda sem produto e devoluções
             return acc;
           }
 
@@ -12714,14 +12714,22 @@ const PDVPage: React.FC = () => {
       const numeroVenda = await gerarNumeroVenda(usuarioData.empresa_id);
       setNumeroVendaProcessada(numeroVenda);
 
-      // Calcular valores
+      // Calcular valores (excluindo itens de devolução dos cálculos principais)
       setEtapaProcessamento('Calculando valores da venda...');
-      const valorSubtotal = carrinho.reduce((acc, item) => acc + item.subtotal, 0);
+      const itensVenda = carrinho.filter(item => !item.isDevolucao);
+      const itensDevolucao = carrinho.filter(item => item.isDevolucao);
+
+      // Subtotal apenas dos itens de venda (sem devoluções)
+      const valorSubtotal = itensVenda.reduce((acc, item) => acc + item.subtotal, 0);
+
+      // Valor das devoluções (será aplicado como desconto no total)
+      const valorDevolucoes = itensDevolucao.reduce((acc, item) => acc + Math.abs(item.subtotal), 0);
+
       const valorDescontoPrazo = descontoPrazoSelecionado ? calcularDescontoPrazo() : 0;
 
-      // Calcular valor total considerando desconto por prazo
+      // Calcular valor total considerando desconto por prazo e devoluções
       // Se valorDescontoPrazo for negativo, significa que é acréscimo
-      const valorTotal = valorSubtotal - valorDescontoPrazo;
+      const valorTotal = valorSubtotal - valorDescontoPrazo - valorDevolucoes;
 
       // Para salvar no banco, o valor do desconto deve ser sempre positivo
       const valorDesconto = Math.abs(valorDescontoPrazo);
@@ -12918,12 +12926,42 @@ const PDVPage: React.FC = () => {
       // Converter para array de IDs
       const vendedoresIds = Array.from(vendedoresUnicos.keys());
 
-      // ✅ NOVO: Calcular valores de desconto detalhados (com arredondamento para 2 casas decimais)
-      const valorDescontoItens = Math.round(calcularDescontoItens() * 100) / 100;
-      const valorDescontoTotal = Math.round(descontoGlobal * 100) / 100;
+      // ✅ NOVO: Calcular valores de desconto detalhados (com arredondamento para 2 casas decimais, excluindo devoluções)
+      const valorDescontoItens = Math.round(
+        itensVenda
+          .filter(item => item.desconto)
+          .reduce((total, item) => total + (item.desconto?.valorDesconto || 0), 0) * 100
+      ) / 100;
+
+      // Desconto total inclui desconto global + valor das devoluções
+      const valorDescontoTotal = Math.round((descontoGlobal + valorDevolucoes) * 100) / 100;
 
       // ✅ NOVO: Preparar observação da venda incluindo informações de troca
       let observacaoFinal = observacaoVenda || '';
+
+      // ✅ NOVO: Identificar informações de devolução no carrinho
+      const itensDevolucaoInfo = itensDevolucao.map(item => ({
+        devolucao_origem_id: item.devolucao_origem_id,
+        devolucao_codigo: item.devolucao_codigo
+      })).filter(info => info.devolucao_origem_id);
+
+      // Dados de devolução para a tabela pdv
+      let dadosDevolucao = {};
+      if (itensDevolucaoInfo.length > 0) {
+        // Usar a primeira devolução encontrada (caso principal)
+        const primeiraDevolucao = itensDevolucaoInfo[0];
+
+        dadosDevolucao = {
+          devolucao_origem_id: primeiraDevolucao.devolucao_origem_id,
+          devolucao_origem_numero: primeiraDevolucao.devolucao_codigo,
+          devolucao_origem_codigo: primeiraDevolucao.devolucao_codigo,
+          venda_origem_troca_id: null, // Será preenchido se necessário
+          venda_origem_troca_numero: null // Será preenchido se necessário
+        };
+
+        // Log para debug
+        console.log('🔄 Dados de devolução para tabela PDV:', dadosDevolucao);
+      }
 
       // Se for venda com troca (valor zero), adicionar observação específica
       if (isVendaComTroca && devolucaoAplicada && Math.abs(valorTotal) < 0.01) {
@@ -12962,6 +13000,8 @@ const PDVPage: React.FC = () => {
         delivery_local: tipoFinalizacao.startsWith('delivery_'),
         // ✅ NOVO: CONTROLE DE FIADO - Marcar se a venda é fiado
         fiado: isVendaFiado,
+        // ✅ NOVO: Dados de devolução/troca
+        ...dadosDevolucao,
         ...clienteData,
         ...pagamentoData
       };
@@ -13107,9 +13147,15 @@ const PDVPage: React.FC = () => {
       // Preparar itens para inserção
       setEtapaProcessamento('Preparando itens da venda...');
 
-      // ✅ CORREÇÃO: Filtrar apenas itens que ainda não foram salvos (sem pdv_item_id)
-      const itensNaoSalvos = carrinho.filter(item => !item.pdv_item_id);
-      const itensJaSalvos = carrinho.filter(item => item.pdv_item_id);
+      // ✅ CORREÇÃO: Filtrar apenas itens que ainda não foram salvos (sem pdv_item_id) E que não são devoluções
+      const itensNaoSalvos = carrinho.filter(item => !item.pdv_item_id && !item.isDevolucao);
+      const itensJaSalvos = carrinho.filter(item => item.pdv_item_id && !item.isDevolucao);
+
+      // ✅ NOVO: Log para debug - mostrar itens excluídos
+      const itensExcluidos = carrinho.filter(item => item.isDevolucao);
+      if (itensExcluidos.length > 0) {
+        console.log('🔄 Itens de devolução excluídos do processamento:', itensExcluidos.map(item => item.produto.nome));
+      }
 
       const itensParaInserir = itensNaoSalvos.map(item => {
         const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
@@ -13217,8 +13263,10 @@ const PDVPage: React.FC = () => {
 
         // Itens encontrados para processamento
 
-        // ✅ CORREÇÃO: Processar cada item do carrinho individualmente
-        for (const [index, item] of carrinho.entries()) {
+        // ✅ CORREÇÃO: Processar cada item do carrinho individualmente (excluindo devoluções)
+        const itensParaProcessar = carrinho.filter(item => !item.isDevolucao);
+
+        for (const [index, item] of itensParaProcessar.entries()) {
 
           // ✅ CORREÇÃO CIRÚRGICA: Buscar itemData apenas se o item não foi salvo ainda
           let itemData = null;
@@ -13318,8 +13366,8 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // ✅ CORREÇÃO: Processar opções adicionais com verificação de duplicação
-      const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0);
+      // ✅ CORREÇÃO: Processar opções adicionais com verificação de duplicação (excluindo devoluções)
+      const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0 && !item.isDevolucao);
       if (itensComAdicionais.length > 0) {
         setEtapaProcessamento('Salvando opções adicionais...');
 
@@ -13433,9 +13481,9 @@ const PDVPage: React.FC = () => {
         // Iniciando baixa de estoque
 
         for (const item of carrinho) {
-          // ✅ EXCEÇÃO: Pular controle de estoque para venda sem produto (código 999999)
-          if (item.vendaSemProduto || item.produto.codigo === '999999') {
-            // Pulando controle de estoque para venda sem produto
+          // ✅ EXCEÇÃO: Pular controle de estoque para venda sem produto (código 999999) e itens de devolução
+          if (item.vendaSemProduto || item.produto.codigo === '999999' || item.isDevolucao) {
+            // Pulando controle de estoque para venda sem produto e devoluções
             continue;
           }
 
@@ -13465,8 +13513,8 @@ const PDVPage: React.FC = () => {
         setEtapaProcessamento('Processando baixa de insumos...');
 
         for (const item of carrinho) {
-          // ✅ EXCEÇÃO: Pular insumos para venda sem produto (código 999999)
-          if (item.vendaSemProduto || item.produto.codigo === '999999') {
+          // ✅ EXCEÇÃO: Pular insumos para venda sem produto (código 999999) e itens de devolução
+          if (item.vendaSemProduto || item.produto.codigo === '999999' || item.isDevolucao) {
             continue;
           }
 
