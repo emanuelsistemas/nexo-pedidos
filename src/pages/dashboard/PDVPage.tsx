@@ -478,6 +478,15 @@ const PDVPage: React.FC = () => {
   const [loadingDevolucoes, setLoadingDevolucoes] = useState(false);
   const [showConfirmarDevolucaoModal, setShowConfirmarDevolucaoModal] = useState(false);
   const [devolucaoSelecionada, setDevolucaoSelecionada] = useState<any>(null);
+
+  // ✅ NOVO: Estados para modal de valor negativo
+  const [showValorNegativoModal, setShowValorNegativoModal] = useState(false);
+  const [valorNegativoInfo, setValorNegativoInfo] = useState<{
+    itemRemovido: string;
+    valorDevolucoes: number;
+    valorItensPositivos: number;
+    totalResultante: number;
+  } | null>(null);
   const [isVendaComTroca, setIsVendaComTroca] = useState(false);
   const [devolucaoAplicada, setDevolucaoAplicada] = useState<any>(null);
   const modalCardapioAbertoRef = useRef(false);
@@ -8254,6 +8263,39 @@ const PDVPage: React.FC = () => {
 
     // Atualizar carrinho removendo o item
     const novoCarrinho = carrinho.filter(item => item.id !== itemId);
+
+    // ✅ NOVO: Verificar se há itens de devolução no carrinho
+    const temItensDevolucao = novoCarrinho.some(item => item.isDevolucao);
+
+    if (temItensDevolucao) {
+      // Calcular o total do carrinho após a remoção
+      const totalAposRemocao = novoCarrinho.reduce((total, item) => total + item.subtotal, 0);
+
+      if (totalAposRemocao < 0) {
+        // Calcular valores para mostrar no modal
+        const valorDevolucoes = novoCarrinho
+          .filter(item => item.isDevolucao)
+          .reduce((total, item) => total + Math.abs(item.subtotal), 0);
+
+        const valorItensPositivos = novoCarrinho
+          .filter(item => !item.isDevolucao)
+          .reduce((total, item) => total + item.subtotal, 0);
+
+        // Mostrar modal de aviso
+        setValorNegativoInfo({
+          itemRemovido: itemRemovido?.produto?.nome || 'Item',
+          valorDevolucoes,
+          valorItensPositivos,
+          totalResultante: totalAposRemocao
+        });
+        setShowValorNegativoModal(true);
+
+        // Fechar modal de confirmação
+        setShowConfirmModal(false);
+        setItemParaRemover(null);
+        return; // Não remover o item
+      }
+    }
 
     // ✅ NOVO: Se é o último item e há venda em andamento, mostrar modal especial
     if (novoCarrinho.length === 0 && vendaEmAndamento) {
@@ -29105,6 +29147,112 @@ const PDVPage: React.FC = () => {
                     Aplicar Desconto
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Valor Negativo */}
+      <AnimatePresence>
+        {showValorNegativoModal && valorNegativoInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-xl border border-red-500/30 p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Carrinho Ficaria Negativo
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Não é possível remover este item
+                  </p>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="space-y-4 mb-6">
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                  <p className="text-gray-300 mb-3">
+                    Ao remover <span className="font-medium text-white">"{valorNegativoInfo.itemRemovido}"</span>,
+                    o carrinho ficaria com valor negativo devido às devoluções aplicadas.
+                  </p>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Valor das devoluções:</span>
+                      <span className="text-red-400 font-medium">
+                        -{new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(valorNegativoInfo.valorDevolucoes)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Valor dos itens restantes:</span>
+                      <span className="text-green-400 font-medium">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(valorNegativoInfo.valorItensPositivos)}
+                      </span>
+                    </div>
+                    <div className="border-t border-gray-600 pt-2 flex justify-between">
+                      <span className="text-gray-300 font-medium">Total resultante:</span>
+                      <span className="text-red-400 font-bold">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(valorNegativoInfo.totalResultante)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                  <h4 className="text-blue-400 font-medium mb-2">💡 Para remover este item:</h4>
+                  <ul className="text-sm text-gray-300 space-y-1">
+                    <li>• Remova primeiro as devoluções aplicadas, ou</li>
+                    <li>• Adicione mais itens para manter o valor positivo</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowValorNegativoModal(false);
+                    setValorNegativoInfo(null);
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Entendi
+                </button>
+                <button
+                  onClick={() => {
+                    setShowValorNegativoModal(false);
+                    setValorNegativoInfo(null);
+                    setShowDevolucoesModal(true);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Ver Devoluções
+                </button>
               </div>
             </motion.div>
           </motion.div>
