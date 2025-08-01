@@ -5370,10 +5370,7 @@ const PDVPage: React.FC = () => {
     try {
       setLoadingItensVenda(true);
 
-      // ✅ DEBUG: Log inicial
-      console.log('🔍 [DEVOLUÇÃO DEBUG] ===== INICIANDO CARREGAMENTO DE ITENS =====');
-      console.log('🔍 [DEVOLUÇÃO DEBUG] vendaId:', vendaId);
-      console.log('🔍 [DEVOLUÇÃO DEBUG] vendaParaExibirItens:', vendaParaExibirItens);
+
 
       // ✅ NOVO: Buscar regime tributário da empresa para exibição correta dos campos
       const { data: userData } = await supabase.auth.getUser();
@@ -5387,12 +5384,12 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      console.log('🔍 [DEVOLUÇÃO DEBUG] empresa_id:', usuarioData.empresa_id);
+
 
       // ✅ CORREÇÃO: Carregar dados da venda primeiro se não estiver disponível
       let dadosVenda = vendaParaExibirItens;
       if (!dadosVenda) {
-        console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando dados da venda...');
+
         const { data: vendaData, error: vendaError } = await supabase
           .from('pdv')
           .select(`
@@ -5416,7 +5413,7 @@ const PDVPage: React.FC = () => {
         }
 
         dadosVenda = vendaData;
-        console.log('🔍 [DEVOLUÇÃO DEBUG] Dados da venda carregados:', dadosVenda);
+
       }
 
       const { data: empresaData } = await supabase
@@ -5428,7 +5425,6 @@ const PDVPage: React.FC = () => {
       const regimeTributario = empresaData?.regime_tributario || 1;
 
       // ✅ CORREÇÃO: Carregar itens da venda com dados fiscais da tabela pdv_itens (igual ao modal Editar NFCe)
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando itens da venda...');
       const { data: itensData, error: itensError } = await supabase
         .from('pdv_itens')
         .select(`
@@ -5495,17 +5491,14 @@ const PDVPage: React.FC = () => {
         throw itensError;
       }
 
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens carregados:', itensData?.length || 0);
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens detalhados:', itensData);
+
 
       // ✅ CORREÇÃO: Identificar itens que vieram de troca/devolução
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Processando itens...');
 
       // Buscar quais produtos estão na devolução associada para marcar como troca
       let produtosDaTroca = new Set();
       if (dadosVenda?.devolucao_origem_codigo) {
         try {
-          console.log('🔍 [DEVOLUÇÃO DEBUG] Buscando produtos da troca:', dadosVenda.devolucao_origem_codigo);
           const { data: devolucaoData, error: devolucaoError } = await supabase
             .from('devolucoes')
             .select(`
@@ -5520,7 +5513,6 @@ const PDVPage: React.FC = () => {
             .single();
 
           if (devolucaoData && !devolucaoError) {
-            console.log('🔍 [DEVOLUÇÃO DEBUG] Produtos da troca encontrados:', devolucaoData.devolucao_itens);
             devolucaoData.devolucao_itens.forEach(itemTroca => {
               if (itemTroca.produto_id) {
                 produtosDaTroca.add(itemTroca.produto_id);
@@ -5529,10 +5521,9 @@ const PDVPage: React.FC = () => {
                 produtosDaTroca.add(itemTroca.produto_codigo);
               }
             });
-            console.log('🔍 [DEVOLUÇÃO DEBUG] IDs/Códigos de produtos da troca:', Array.from(produtosDaTroca));
           }
         } catch (error) {
-          console.error('🔍 [DEVOLUÇÃO DEBUG] Erro ao buscar produtos da troca:', error);
+          console.error('Erro ao buscar produtos da troca:', error);
         }
       }
 
@@ -5542,15 +5533,7 @@ const PDVPage: React.FC = () => {
         const isDevolucao = item.origem_item === 'devolucao' ||
                            (item.valor_unitario < 0 && item.valor_total_item < 0);
 
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] Item ${index + 1}: ${item.nome_produto}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - produto_id: ${item.produto_id}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - codigo_produto: ${item.codigo_produto}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - origem_item: ${item.origem_item}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - valor_unitario: ${item.valor_unitario}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - valor_total_item: ${item.valor_total_item}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - isItemDeTroca: ${isItemDeTroca}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - isDevolucao: ${isDevolucao}`);
-        console.log(`🔍 [DEVOLUÇÃO DEBUG] - ITEM COMPLETO:`, item);
+
 
         return {
           ...item,
@@ -5576,11 +5559,9 @@ const PDVPage: React.FC = () => {
 
       // ✅ RESTAURAR: Criar itens sintéticos de devolução com dados fiscais corretos
       let itensDevolucao: any[] = [];
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Verificando devolução associada...');
 
       if (dadosVenda?.devolucao_origem_codigo) {
         try {
-          console.log('🔍 [DEVOLUÇÃO DEBUG] Carregando devolução com código:', dadosVenda.devolucao_origem_codigo);
           const { data: devolucaoData, error: devolucaoError } = await supabase
             .from('devolucoes')
             .select(`
@@ -5602,12 +5583,10 @@ const PDVPage: React.FC = () => {
             .single();
 
           if (devolucaoData && !devolucaoError) {
-            console.log('🔍 [DEVOLUÇÃO DEBUG] Devolução encontrada:', devolucaoData);
 
             // ✅ CRIAR itens sintéticos de devolução com dados fiscais reais
             const itensDevolucaoComDados = await Promise.all(
               (devolucaoData.devolucao_itens || []).map(async (item: any, index: number) => {
-                console.log(`🔍 [DEVOLUÇÃO DEBUG] Processando item devolução ${index + 1}:`, item);
 
                 // Buscar dados fiscais reais do produto
                 let dadosProduto = null;
@@ -5625,7 +5604,6 @@ const PDVPage: React.FC = () => {
 
                   if (produtoData && !produtoError) {
                     dadosProduto = produtoData;
-                    console.log(`🔍 [DEVOLUÇÃO DEBUG] ✅ Dados fiscais do produto carregados`);
                   }
                 }
 
@@ -5675,20 +5653,14 @@ const PDVPage: React.FC = () => {
             );
 
             itensDevolucao = itensDevolucaoComDados;
-            console.log('🔍 [DEVOLUÇÃO DEBUG] Itens de devolução criados:', itensDevolucao.length);
           }
         } catch (error) {
-          console.error('🔍 [DEVOLUÇÃO DEBUG] Erro ao carregar devolução:', error);
+          console.error('Erro ao carregar devolução:', error);
         }
       }
 
       // ✅ COMBINAR itens da venda + itens de devolução sintéticos
       const todosItens = [...itensProcessados, ...itensDevolucao];
-      console.log('🔍 [DEVOLUÇÃO DEBUG] ===== RESULTADO FINAL =====');
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens da venda:', itensProcessados.length);
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens de devolução:', itensDevolucao.length);
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Total de itens:', todosItens.length);
-      console.log('🔍 [DEVOLUÇÃO DEBUG] Itens com isDevolucao=true:', todosItens.filter(item => item.isDevolucao).length);
 
       setItensVenda(todosItens);
 
