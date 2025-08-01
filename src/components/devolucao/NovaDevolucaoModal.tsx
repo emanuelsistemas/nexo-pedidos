@@ -180,33 +180,44 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
 
       if (error) throw error;
 
-      // Buscar produtos que já estão em devoluções pendentes
+      // Buscar produtos que já estão em devoluções pendentes OU processadas
       const { data: devolucoesPendentes, error: errorPendentes } = await supabase
         .from('devolucao_itens')
         .select(`
           produto_id,
           venda_origem_id,
           pdv_item_id,
-          devolucoes!inner(status, empresa_id)
+          devolucoes!inner(status, empresa_id, codigo_troca)
         `)
-        .eq('devolucoes.status', 'pendente')
+        .in('devolucoes.status', ['pendente', 'processada'])
         .eq('devolucoes.empresa_id', empresaIdToUse);
 
-      // Debug: Log dos produtos pendentes
-      console.log('🔍 Debug - Produtos em devoluções pendentes:', {
+      // Debug: Log dos produtos pendentes/processados
+      console.log('🔍 Debug - Produtos em devoluções pendentes/processadas:', {
         devolucoesPendentes,
         errorPendentes,
         empresaId: empresaIdToUse
       });
 
-      // Criar um Set com os produtos pendentes para busca rápida
-      // Usar tanto produto_id quanto pdv_item_id para maior precisão
-      const produtosPendentes = new Set(
-        (devolucoesPendentes || []).flatMap(item => [
-          `${item.venda_origem_id}-${item.produto_id}`,
-          `pdv_item-${item.pdv_item_id}`
-        ]).filter(Boolean)
-      );
+      // Criar um Map com os produtos devolvidos para busca rápida
+      // Incluir informações sobre status e código da troca
+      const produtosDevolvidos = new Map();
+      (devolucoesPendentes || []).forEach(item => {
+        const chaveItem = `pdv_item-${item.pdv_item_id}`;
+        const chaveProduto = `${item.venda_origem_id}-${item.produto_id}`;
+
+        const infoItem = {
+          status: item.devolucoes.status,
+          codigo_troca: item.devolucoes.codigo_troca,
+          isPendente: item.devolucoes.status === 'pendente',
+          isProcessada: item.devolucoes.status === 'processada'
+        };
+
+        if (item.pdv_item_id) {
+          produtosDevolvidos.set(chaveItem, infoItem);
+        }
+        produtosDevolvidos.set(chaveProduto, infoItem);
+      });
 
       // Contar itens de cada venda e marcar produtos pendentes
       const vendasComItens = await Promise.all(
@@ -216,27 +227,37 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
             .select('id, produto_id, nome_produto, quantidade, valor_unitario, valor_total_item')
             .eq('pdv_id', venda.id);
 
-          // Marcar itens que estão pendentes de devolução
+          // Marcar itens que estão em devolução (pendente ou processada)
           const itensComStatus = (itens || []).map(item => {
-            const isPendentePorProduto = produtosPendentes.has(`${venda.id}-${item.produto_id}`);
-            const isPendentePorItem = produtosPendentes.has(`pdv_item-${item.id}`);
-            const devolucao_pendente = isPendentePorProduto || isPendentePorItem;
+            const infoPorItem = produtosDevolvidos.get(`pdv_item-${item.id}`);
+            const infoPorProduto = produtosDevolvidos.get(`${venda.id}-${item.produto_id}`);
+            const infoItem = infoPorItem || infoPorProduto;
 
-            // Debug: Log de itens marcados como pendentes
-            if (devolucao_pendente) {
-              console.log('🔍 Debug - Item marcado como pendente:', {
+            const devolucao_pendente = infoItem?.isPendente || false;
+            const devolucao_processada = infoItem?.isProcessada || false;
+            const codigo_troca = infoItem?.codigo_troca || null;
+            const tem_devolucao = devolucao_pendente || devolucao_processada;
+
+            // Debug: Log de itens marcados como devolvidos
+            if (tem_devolucao) {
+              console.log('🔍 Debug - Item com devolução:', {
                 item: item.nome_produto,
                 produto_id: item.produto_id,
                 pdv_item_id: item.id,
                 venda_id: venda.id,
-                isPendentePorProduto,
-                isPendentePorItem
+                status: infoItem?.status,
+                codigo_troca,
+                devolucao_pendente,
+                devolucao_processada
               });
             }
 
             return {
               ...item,
-              devolucao_pendente
+              devolucao_pendente,
+              devolucao_processada,
+              codigo_troca,
+              tem_devolucao
             };
           });
 
@@ -339,12 +360,12 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
         await loadItensVenda(vendaId);
       }
 
-      // Verificar se há itens pendentes na venda
+      // Verificar se há itens com devolução (pendente ou processada) na venda
       const vendaAtualizada = vendas.find(v => v.id === vendaId);
-      const temItensPendentes = vendaAtualizada?.itens?.some(item => item.devolucao_pendente);
+      const temItensComDevolucao = vendaAtualizada?.itens?.some(item => item.tem_devolucao);
 
-      if (temItensPendentes) {
-        setAvisoMensagem('Esta venda contém itens que já estão em processo de devolução e não pode ser selecionada completamente.');
+      if (temItensComDevolucao) {
+        setAvisoMensagem('Esta venda contém itens que já foram devolvidos ou estão em processo de devolução e não pode ser selecionada completamente.');
         setShowAvisoModal(true);
         return;
       }
@@ -797,7 +818,9 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                         const isChecked = isVendaCompleteSelected || isItemSelected;
                                         const isItemValid = item.produto_id !== null && item.produto_id !== undefined;
                                         const hasDevolucaoPendente = item.devolucao_pendente;
-                                        const isDisabled = isVendaCompleteSelected || !isItemValid || hasDevolucaoPendente;
+                                        const hasDevolucaoProcessada = item.devolucao_processada;
+                                        const temDevolucao = item.tem_devolucao;
+                                        const isDisabled = isVendaCompleteSelected || !isItemValid || temDevolucao;
 
                                         return (
                                           <div
@@ -805,6 +828,8 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                             className={`flex items-center gap-3 p-2 rounded border ${
                                               hasDevolucaoPendente
                                                 ? 'bg-yellow-900/20 border-yellow-600/30 opacity-60'
+                                                : hasDevolucaoProcessada
+                                                ? 'bg-green-900/20 border-green-600/30 opacity-60'
                                                 : isItemValid
                                                 ? 'bg-gray-700/30 border-gray-600'
                                                 : 'bg-gray-800/50 border-gray-700 opacity-60'
@@ -828,7 +853,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                               <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                   <span className={`text-sm font-medium ${
-                                                    hasDevolucaoPendente ? 'text-gray-400' : isItemValid ? 'text-white' : 'text-gray-500'
+                                                    temDevolucao ? 'text-gray-400' : isItemValid ? 'text-white' : 'text-gray-500'
                                                   }`}>
                                                     {item.nome_produto}
                                                   </span>
@@ -837,14 +862,19 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                                       Pendente
                                                     </span>
                                                   )}
-                                                  {!isItemValid && !hasDevolucaoPendente && (
+                                                  {hasDevolucaoProcessada && item.codigo_troca && (
+                                                    <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded border border-green-500/30">
+                                                      Devolvido troca {item.codigo_troca}
+                                                    </span>
+                                                  )}
+                                                  {!isItemValid && !temDevolucao && (
                                                     <span className="text-xs text-orange-400">
                                                       (Não disponível para devolução)
                                                     </span>
                                                   )}
                                                 </div>
                                                 <span className={`font-medium ${
-                                                  hasDevolucaoPendente ? 'text-gray-400' : isItemValid ? 'text-white' : 'text-gray-500'
+                                                  temDevolucao ? 'text-gray-400' : isItemValid ? 'text-white' : 'text-gray-500'
                                                 }`}>
                                                   {formatCurrency(item.valor_total_item)}
                                                 </span>
