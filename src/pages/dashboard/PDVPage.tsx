@@ -627,7 +627,9 @@ const PDVPage: React.FC = () => {
         observacao: `DEVOLUÇÃO - ${devolucao.codigo_troca || devolucao.numero}`,
         isDevolucao: true, // Flag para identificar como item de devolução
         devolucao_origem_id: devolucao.id,
-        devolucao_codigo: devolucao.codigo_troca || devolucao.numero
+        devolucao_codigo: devolucao.codigo_troca || devolucao.numero,
+        venda_origem_id: devolucao.venda_origem_id, // ID da venda original
+        venda_origem_numero: devolucao.venda_origem_numero // Número da venda original
       }));
 
       // Validar itens antes de adicionar ao carrinho
@@ -2782,6 +2784,7 @@ const PDVPage: React.FC = () => {
             motivo_geral,
             forma_reembolso,
             observacoes,
+            venda_origem_id,
             venda_origem_numero,
             clientes:cliente_id (
               nome,
@@ -12947,25 +12950,45 @@ const PDVPage: React.FC = () => {
       // ✅ NOVO: Identificar informações de devolução no carrinho
       const itensDevolucaoInfo = itensDevolucao.map(item => ({
         devolucao_origem_id: item.devolucao_origem_id,
-        devolucao_codigo: item.devolucao_codigo
+        devolucao_codigo: item.devolucao_codigo,
+        venda_origem_id: item.venda_origem_id,
+        venda_origem_numero: item.venda_origem_numero
       })).filter(info => info.devolucao_origem_id);
 
       // Dados de devolução para a tabela pdv
       let dadosDevolucao = {};
       if (itensDevolucaoInfo.length > 0) {
-        // Usar a primeira devolução encontrada (caso principal)
+        // Usar a primeira devolução encontrada (caso principal - compatibilidade)
         const primeiraDevolucao = itensDevolucaoInfo[0];
 
+        // ✅ NOVO: Preparar listas de múltiplas devoluções
+        const devolucaoIds = [...new Set(itensDevolucaoInfo.map(item => item.devolucao_origem_id).filter(Boolean))];
+        const devolucaoCodigos = [...new Set(itensDevolucaoInfo.map(item => item.devolucao_codigo).filter(Boolean))];
+        const vendaOrigemIds = [...new Set(itensDevolucaoInfo.map(item => item.venda_origem_id).filter(Boolean))];
+        const vendaOrigemNumeros = [...new Set(itensDevolucaoInfo.map(item => item.venda_origem_numero).filter(Boolean))];
+
         dadosDevolucao = {
+          // ✅ Campos principais (primeira devolução - compatibilidade)
           devolucao_origem_id: primeiraDevolucao.devolucao_origem_id,
           devolucao_origem_numero: primeiraDevolucao.devolucao_codigo,
           devolucao_origem_codigo: primeiraDevolucao.devolucao_codigo,
-          venda_origem_troca_id: null, // Será preenchido se necessário
-          venda_origem_troca_numero: null // Será preenchido se necessário
+          venda_origem_troca_id: primeiraDevolucao.venda_origem_id,
+          venda_origem_troca_numero: primeiraDevolucao.venda_origem_numero,
+
+          // ✅ NOVO: Listas completas (múltiplas devoluções)
+          devolucoes_origem_ids: devolucaoIds.length > 1 ? devolucaoIds : null,
+          devolucoes_origem_codigos: devolucaoCodigos.length > 1 ? devolucaoCodigos : null,
+          vendas_origem_troca_ids: vendaOrigemIds.length > 1 ? vendaOrigemIds : null,
+          vendas_origem_troca_numeros: vendaOrigemNumeros.length > 1 ? vendaOrigemNumeros : null
         };
 
         // Log para debug
-        console.log('🔄 Dados de devolução para tabela PDV:', dadosDevolucao);
+        console.log('🔄 Dados de devolução para tabela PDV:', {
+          ...dadosDevolucao,
+          totalDevolucoesEncontradas: itensDevolucaoInfo.length,
+          devolucaoIds,
+          vendaOrigemIds
+        });
       }
 
       // Se for venda com troca (valor zero), adicionar observação específica
