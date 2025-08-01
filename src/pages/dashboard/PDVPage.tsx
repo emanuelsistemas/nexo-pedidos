@@ -2179,9 +2179,10 @@ const PDVPage: React.FC = () => {
       if (item.id === 'pedidos' || item.id === 'movimentos') {
         return carrinho.length === 0; // Só mostra se carrinho estiver vazio
       }
-      // ✅ NOVO: Ocultar "Devoluções" quando o carrinho estiver vazio
+      // ✅ NOVO: Ocultar "Devoluções" quando o carrinho estiver vazio OU quando já há devolução no carrinho
       if (item.id === 'devolucoes') {
-        return carrinho.length > 0; // Só mostra se carrinho tiver itens
+        const temDevolucaoNoCarrinho = carrinho.some(item => item.isDevolucao);
+        return carrinho.length > 0 && !temDevolucaoNoCarrinho; // Só mostra se carrinho tiver itens E não tiver devolução
       }
       // Se for o item 'comandas', só mostrar se a configuração estiver habilitada
       if (item.id === 'comandas') {
@@ -8365,6 +8366,10 @@ const PDVPage: React.FC = () => {
     setCarrinho(novoCarrinho);
     setShowRemoverTrocasModal(false);
 
+    // ✅ NOVO: Limpar estados de devolução quando todas as trocas forem removidas
+    setIsVendaComTroca(false);
+    setDevolucaoAplicada(null);
+
     const quantidadeTrocasRemovidas = carrinho.filter(item => item.isDevolucao).length;
     toast.success(`${quantidadeTrocasRemovidas} troca(s) removida(s) do carrinho`);
   };
@@ -8418,6 +8423,13 @@ const PDVPage: React.FC = () => {
     }
 
     setCarrinho(novoCarrinho);
+
+    // ✅ NOVO: Verificar se não há mais itens de devolução e limpar estados relacionados
+    const temDevolucaoAposRemocao = novoCarrinho.some(item => item.isDevolucao);
+    if (!temDevolucaoAposRemocao && (isVendaComTroca || devolucaoAplicada)) {
+      setIsVendaComTroca(false);
+      setDevolucaoAplicada(null);
+    }
 
     // Se o carrinho ficou vazio, limpar área lateral
     if (novoCarrinho.length === 0) {
