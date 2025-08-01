@@ -23191,11 +23191,22 @@ const PDVPage: React.FC = () => {
                             </thead>
                             <tbody>
                               {itensVenda.map((item, index) => (
-                                <tr key={item.id} className="border-b border-gray-800/50">
+                                <tr key={item.id} className={`border-b border-gray-800/50 ${
+                                  item.isDevolucao ? 'bg-red-900/20 border-red-600/30' : ''
+                                }`}>
                                   <td className="py-3 px-2 text-white font-medium">{index + 1}</td>
                                   <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
                                   <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
-                                  <td className="py-3 px-2 text-white">{item.nome_produto}</td>
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-white">{item.nome_produto}</span>
+                                      {item.isDevolucao && (
+                                        <span className="px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded border border-red-500/30">
+                                          DEVOLUÇÃO
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td className="py-3 px-2 text-gray-300">{item.quantidade}</td>
                                   <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
                                   <td className="py-3 px-2 text-primary-400 font-medium">{formatCurrency(item.valor_total_item)}</td>
