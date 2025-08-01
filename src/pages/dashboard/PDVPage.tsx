@@ -5551,6 +5551,7 @@ const PDVPage: React.FC = () => {
         console.log(`🔍 [DEVOLUÇÃO DEBUG] - valor_total_item: ${item.valor_total_item}`);
         console.log(`🔍 [DEVOLUÇÃO DEBUG] - isItemDeTroca: ${isItemDeTroca}`);
         console.log(`🔍 [DEVOLUÇÃO DEBUG] - isDevolucao: ${isDevolucao}`);
+        console.log(`🔍 [DEVOLUÇÃO DEBUG] - ITEM COMPLETO:`, item);
 
         return {
           ...item,
