@@ -521,42 +521,111 @@ const PDVPage: React.FC = () => {
     toast.info('Desconto no total removido');
   };
 
-  // Função para aplicar devolução como desconto
-  const aplicarDevolucaoComoDesconto = (devolucao: any) => {
+  // Função para aplicar devolução (nova implementação com itens negativos)
+  const aplicarDevolucaoComoDesconto = async (devolucao: any) => {
     if (!devolucao || !devolucao.valor_total) {
       toast.error('Devolução inválida');
       return;
     }
 
-    const totalAtual = carrinho.reduce((total, item) => total + item.subtotal, 0);
-    const valorDevolucao = devolucao.valor_total;
+    try {
+      // Buscar os itens da devolução
+      const { data: itensDevolucao, error } = await supabase
+        .from('devolucao_itens')
+        .select(`
+          id,
+          produto_id,
+          produto_nome,
+          produto_codigo,
+          quantidade,
+          preco_unitario,
+          preco_total,
+          produtos!inner(
+            id,
+            nome,
+            codigo,
+            codigo_barras,
+            descricao,
+            unidade_medida_id,
+            grupo_id,
+            unidade_medida:unidade_medida_id(sigla)
+          )
+        `)
+        .eq('devolucao_id', devolucao.id)
+        .eq('deletado', false);
 
-    // Verificar se é uma troca (valor igual)
-    const isTroca = Math.abs(valorDevolucao - totalAtual) < 0.01; // Tolerância de 1 centavo
+      if (error) {
+        console.error('Erro ao buscar itens da devolução:', error);
+        toast.error('Erro ao carregar itens da devolução');
+        return;
+      }
 
-    if (valorDevolucao > totalAtual && !isTroca) {
-      toast.error('O valor da devolução não pode ser maior que o total da venda');
-      return;
-    }
+      if (!itensDevolucao || itensDevolucao.length === 0) {
+        toast.error('Nenhum item encontrado na devolução');
+        return;
+      }
 
-    // Aplicar o valor da devolução como desconto global
-    setDescontoGlobal(valorDevolucao);
+      // Converter itens da devolução para formato do carrinho (com valores negativos)
+      const itensCarrinho = itensDevolucao.map((item: any) => ({
+        id: `devolucao-${item.id}`, // ID único para identificar como item de devolução
+        produto: {
+          id: item.produto_id,
+          nome: item.produto_nome || 'Produto da Devolução',
+          codigo: item.produto_codigo || item.produtos?.codigo || 'DEV',
+          codigo_barras: item.produtos?.codigo_barras || null,
+          descricao: item.produtos?.descricao || '',
+          unidade_medida: item.produtos?.unidade_medida || { sigla: 'UN' },
+          grupo_id: item.produtos?.grupo_id || null,
+          unidade_medida_id: item.produtos?.unidade_medida_id || null,
+          preco: Math.abs(parseFloat(item.preco_unitario) || 0) // Preço positivo para referência
+        },
+        quantidade: parseFloat(item.quantidade) || 1,
+        preco: -Math.abs(parseFloat(item.preco_unitario) || 0), // Valor negativo
+        subtotal: -Math.abs(parseFloat(item.preco_total) || 0), // Valor negativo
+        observacao: `DEVOLUÇÃO - ${devolucao.codigo_troca || devolucao.numero}`,
+        isDevolucao: true, // Flag para identificar como item de devolução
+        devolucao_origem_id: devolucao.id,
+        devolucao_codigo: devolucao.codigo_troca || devolucao.numero
+      }));
 
-    // Se for troca (valor igual), marcar como venda de troca
-    if (isTroca) {
+      // Validar itens antes de adicionar ao carrinho
+      const itensValidos = itensCarrinho.filter(item => {
+        const isValid = item.produto.id &&
+                       item.produto.nome &&
+                       !isNaN(item.quantidade) &&
+                       !isNaN(item.preco) &&
+                       !isNaN(item.subtotal);
+
+        if (!isValid) {
+          console.warn('Item de devolução inválido ignorado:', item);
+        }
+
+        return isValid;
+      });
+
+      if (itensValidos.length === 0) {
+        toast.error('Nenhum item válido encontrado na devolução');
+        return;
+      }
+
+      // Adicionar itens válidos da devolução ao carrinho
+      setCarrinho(prev => [...prev, ...itensValidos]);
+
+      // Marcar como venda com troca
       setIsVendaComTroca(true);
       setDevolucaoAplicada(devolucao);
-      toast.success(`Troca aplicada! Devolução #${devolucao.numero} (${formatCurrency(valorDevolucao)}) - Venda será finalizada como TROCA`);
-    } else {
-      setIsVendaComTroca(false);
-      setDevolucaoAplicada(null);
-      toast.success(`Devolução #${devolucao.numero} aplicada como desconto (${formatCurrency(valorDevolucao)})`);
-    }
 
-    // Fechar modais
-    setShowConfirmarDevolucaoModal(false);
-    setShowDevolucoesModal(false);
-    setDevolucaoSelecionada(null);
+      toast.success(`Troca aplicada! ${itensValidos.length} item(ns) da devolução #${devolucao.numero} adicionado(s) ao carrinho`);
+
+      // Fechar modais
+      setShowConfirmarDevolucaoModal(false);
+      setShowDevolucoesModal(false);
+      setDevolucaoSelecionada(null);
+
+    } catch (error) {
+      console.error('Erro ao aplicar devolução:', error);
+      toast.error('Erro ao aplicar devolução');
+    }
   };
 
   // Estados para o modal de movimentos
@@ -13013,7 +13082,7 @@ const PDVPage: React.FC = () => {
           percentual_desconto: item.desconto?.percentualDesconto || null,
           valor_desconto_aplicado: item.desconto?.valorDesconto || 0,
           origem_desconto: item.desconto ? 'manual' : null,
-          origem_item: item.pedido_origem_numero ? 'pedido_importado' : 'manual',
+          origem_item: item.isDevolucao ? 'devolucao' : (item.pedido_origem_numero ? 'pedido_importado' : 'manual'),
           pedido_origem_id: item.pedido_origem_id || null,
           pedido_origem_numero: item.pedido_origem_numero || null,
           // ✅ NOVO: Incluir dados do vendedor do item
@@ -13023,6 +13092,9 @@ const PDVPage: React.FC = () => {
           // ✅ NOVO: Incluir dados da tabela de preços
           tabela_preco_id: item.tabela_preco_id || null,
           tabela_preco_nome: item.tabela_preco_nome || null,
+          // ✅ NOVO: Incluir dados de devolução (se aplicável)
+          devolucao_origem_id: item.devolucao_origem_id || null,
+          devolucao_codigo: item.devolucao_codigo || null,
           // ✅ CORREÇÃO: Incluir dados fiscais
           ...dadosFiscais
         };
@@ -16743,7 +16815,11 @@ const PDVPage: React.FC = () => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className="bg-gray-800/50 rounded p-2.5"
+                        className={`rounded p-2.5 ${
+                          item.isDevolucao
+                            ? 'bg-red-900/20 border border-red-600/30'
+                            : 'bg-gray-800/50'
+                        }`}
                       >
                         {/* Layout responsivo baseado na largura da tela - Compacto */}
                         <div className="flex gap-2.5">
@@ -16840,6 +16916,11 @@ const PDVPage: React.FC = () => {
                                               {!item.vendaSemProduto && item.produto.unidade_medida?.sigla && (
                                                 <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
                                                   {item.produto.unidade_medida.sigla}
+                                                </span>
+                                              )}
+                                              {item.isDevolucao && (
+                                                <span className="px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded border border-red-500/30">
+                                                  DEVOLUÇÃO
                                                 </span>
                                               )}
                                             </div>
