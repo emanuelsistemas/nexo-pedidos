@@ -529,7 +529,7 @@ const PDVPage: React.FC = () => {
     }
 
     try {
-      // Buscar os itens da devolução
+      // Buscar os itens da devolução com dados completos do produto
       const { data: itensDevolucao, error } = await supabase
         .from('devolucao_itens')
         .select(`
@@ -546,8 +546,22 @@ const PDVPage: React.FC = () => {
             codigo,
             codigo_barras,
             descricao,
+            preco,
             unidade_medida_id,
             grupo_id,
+            ncm,
+            cfop,
+            origem_produto,
+            cst_icms,
+            csosn_icms,
+            cest,
+            margem_st,
+            aliquota_icms,
+            aliquota_pis,
+            aliquota_cofins,
+            cst_pis,
+            cst_cofins,
+            produto_fotos(url, principal),
             unidade_medida:unidade_medida_id(sigla)
           )
         `)
@@ -570,14 +584,29 @@ const PDVPage: React.FC = () => {
         id: `devolucao-${item.id}`, // ID único para identificar como item de devolução
         produto: {
           id: item.produto_id,
-          nome: item.produto_nome || 'Produto da Devolução',
-          codigo: item.produto_codigo || item.produtos?.codigo || 'DEV',
+          nome: item.produtos?.nome || item.produto_nome || 'Produto da Devolução',
+          codigo: item.produtos?.codigo || item.produto_codigo || 'DEV',
           codigo_barras: item.produtos?.codigo_barras || null,
           descricao: item.produtos?.descricao || '',
+          preco: item.produtos?.preco || Math.abs(parseFloat(item.preco_unitario) || 0),
           unidade_medida: item.produtos?.unidade_medida || { sigla: 'UN' },
           grupo_id: item.produtos?.grupo_id || null,
           unidade_medida_id: item.produtos?.unidade_medida_id || null,
-          preco: Math.abs(parseFloat(item.preco_unitario) || 0) // Preço positivo para referência
+          // ✅ DADOS FISCAIS COMPLETOS DO PRODUTO ATUAL
+          ncm: item.produtos?.ncm || null,
+          cfop: item.produtos?.cfop || null,
+          origem_produto: item.produtos?.origem_produto || null,
+          cst_icms: item.produtos?.cst_icms || null,
+          csosn_icms: item.produtos?.csosn_icms || null,
+          cest: item.produtos?.cest || null,
+          margem_st: item.produtos?.margem_st || null,
+          aliquota_icms: item.produtos?.aliquota_icms || null,
+          aliquota_pis: item.produtos?.aliquota_pis || null,
+          aliquota_cofins: item.produtos?.aliquota_cofins || null,
+          cst_pis: item.produtos?.cst_pis || null,
+          cst_cofins: item.produtos?.cst_cofins || null,
+          // ✅ FOTOS DO PRODUTO
+          produto_fotos: item.produtos?.produto_fotos || []
         },
         quantidade: parseFloat(item.quantidade) || 1,
         preco: -Math.abs(parseFloat(item.preco_unitario) || 0), // Valor negativo
