@@ -487,6 +487,9 @@ const PDVPage: React.FC = () => {
     valorItensPositivos: number;
     totalResultante: number;
   } | null>(null);
+
+  // ✅ NOVO: Estados para modal de remoção de trocas
+  const [showRemoverTrocasModal, setShowRemoverTrocasModal] = useState(false);
   const [isVendaComTroca, setIsVendaComTroca] = useState(false);
   const [devolucaoAplicada, setDevolucaoAplicada] = useState<any>(null);
   const modalCardapioAbertoRef = useRef(false);
@@ -8255,6 +8258,16 @@ const PDVPage: React.FC = () => {
   const cancelarRemocao = () => {
     setShowConfirmModal(false);
     setItemParaRemover(null);
+  };
+
+  // ✅ NOVO: Função para remover todas as trocas
+  const removerTodasTrocas = () => {
+    const novoCarrinho = carrinho.filter(item => !item.isDevolucao);
+    setCarrinho(novoCarrinho);
+    setShowRemoverTrocasModal(false);
+
+    const quantidadeTrocasRemovidas = carrinho.filter(item => item.isDevolucao).length;
+    toast.success(`${quantidadeTrocasRemovidas} troca(s) removida(s) do carrinho`);
   };
 
   const removerDoCarrinho = (itemId: string) => {
@@ -18712,33 +18725,27 @@ const PDVPage: React.FC = () => {
 
                     return (
                       <>
-                        {/* Itens - Primeiro */}
+                        {/* Itens - Primeiro (excluindo trocas) */}
                         <div className="flex justify-between items-center text-xs mb-1.5">
                           <span className="text-white">Itens:</span>
-                          <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
+                          <span className="text-white">{carrinho.filter(item => !item.isDevolucao).reduce((total, item) => total + item.quantidade, 0)}</span>
                         </div>
 
-                        {/* Subtotal - Segundo (sem descontos) */}
+                        {/* Subtotal - Segundo (sem descontos e sem trocas) */}
                         <div className="flex justify-between items-center text-xs mb-1.5">
                           <span className="text-white">Subtotal:</span>
-                          <span className="text-white">{formatCurrency(subtotalSemDescontos)}</span>
+                          <span className="text-white">{formatCurrency(carrinho.filter(item => !item.isDevolucao).reduce((total, item) => total + item.subtotal, 0))}</span>
                         </div>
 
-                        {/* Área de Descontos */}
+                        {/* Área de Descontos (excluindo trocas) */}
                         {(() => {
-                          const descontoItens = calcularDescontoItens();
+                          // Calcular desconto apenas de itens que não são trocas
+                          const descontoItens = carrinho
+                            .filter(item => !item.isDevolucao && item.desconto)
+                            .reduce((total, item) => total + (item.desconto?.valorDesconto || 0), 0);
+
                           const temDescontoItens = descontoItens > 0;
                           const temDescontoTotal = descontoGlobal > 0;
-
-                          // Debug para verificar valores
-                          console.log('🔍 Debug Desconto Total:', {
-                            descontoGlobal,
-                            temDescontoTotal,
-                            pdvConfigDescontoTotal: pdvConfig?.desconto_no_total,
-                            isVendaComTroca,
-                            devolucaoAplicada,
-                            condicaoExibicao: pdvConfig?.desconto_no_total && temDescontoTotal
-                          });
 
                           return (temDescontoItens || temDescontoTotal) && (
                             <>
@@ -18760,6 +18767,28 @@ const PDVPage: React.FC = () => {
                                 </div>
                               )}
                             </>
+                          );
+                        })()}
+
+                        {/* Devolução - Nova linha para mostrar valor das trocas */}
+                        {(() => {
+                          const itensTroca = carrinho.filter(item => item.isDevolucao);
+                          const valorTotalTrocas = itensTroca.reduce((total, item) => total + Math.abs(item.subtotal), 0);
+
+                          return itensTroca.length > 0 && (
+                            <div className="flex justify-between items-center text-xs mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-400">Devolução:</span>
+                                <button
+                                  onClick={() => setShowRemoverTrocasModal(true)}
+                                  className="text-red-400 hover:text-red-300 transition-colors"
+                                  title="Remover todas as trocas"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                              <span className="text-green-400">-{formatCurrency(valorTotalTrocas)}</span>
+                            </div>
                           );
                         })()}
 
@@ -29232,26 +29261,94 @@ const PDVPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Botões */}
-              <div className="flex gap-3">
+              {/* Botão */}
+              <div className="flex justify-center">
                 <button
                   onClick={() => {
                     setShowValorNegativoModal(false);
                     setValorNegativoInfo(null);
                   }}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                  className="px-8 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
                 >
                   Entendi
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação para Remover Trocas */}
+      <AnimatePresence>
+        {showRemoverTrocasModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-xl border border-red-500/30 p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Remover Todas as Trocas
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Esta ação não pode ser desfeita
+                  </p>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="space-y-4 mb-6">
+                <p className="text-gray-300">
+                  Tem certeza que deseja remover todas as trocas aplicadas no carrinho?
+                </p>
+
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Trocas no carrinho:</span>
+                      <span className="text-white font-medium">
+                        {carrinho.filter(item => item.isDevolucao).length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Valor total das trocas:</span>
+                      <span className="text-red-400 font-medium">
+                        -{new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(carrinho.filter(item => item.isDevolucao).reduce((total, item) => total + Math.abs(item.subtotal), 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setShowValorNegativoModal(false);
-                    setValorNegativoInfo(null);
-                    setShowDevolucoesModal(true);
-                  }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                  onClick={() => setShowRemoverTrocasModal(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
                 >
-                  Ver Devoluções
+                  Cancelar
+                </button>
+                <button
+                  onClick={removerTodasTrocas}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Remover Trocas
                 </button>
               </div>
             </motion.div>
