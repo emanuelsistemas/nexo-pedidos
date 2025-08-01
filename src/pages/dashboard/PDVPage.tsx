@@ -39,6 +39,7 @@ import {
   Bike,
   Pencil,
   Check,
+  CheckCircle,
   MessageSquare,
   Maximize2,
   Minimize2,
@@ -2786,11 +2787,19 @@ const PDVPage: React.FC = () => {
           return;
         }
 
-        // Processar dados para incluir nome do cliente
+        // Verificar quais devoluções já estão no carrinho
+        const devolucaoIdsNoCarrinho = new Set(
+          carrinho
+            .filter(item => item.isDevolucao && item.devolucao_origem_id)
+            .map(item => item.devolucao_origem_id)
+        );
+
+        // Processar dados para incluir nome do cliente e status no carrinho
         const devolucoesProcesadas = (devolucoes || []).map((devolucao: any) => {
           return {
             ...devolucao,
-            cliente_nome: devolucao.clientes?.nome || 'Cliente não informado'
+            cliente_nome: devolucao.clientes?.nome || 'Cliente não informado',
+            jaNoCarrinho: devolucaoIdsNoCarrinho.has(devolucao.id) // Flag para identificar se já está no carrinho
           };
         });
 
@@ -28833,8 +28842,17 @@ const PDVPage: React.FC = () => {
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              className="p-2.5 bg-background-card rounded border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer"
+                              className={`p-2.5 rounded border transition-colors ${
+                                devolucao.jaNoCarrinho
+                                  ? 'bg-green-900/20 border-green-600/30 opacity-60 cursor-not-allowed'
+                                  : 'bg-background-card border-gray-800 hover:border-gray-700 cursor-pointer'
+                              }`}
                               onClick={(e) => {
+                                if (devolucao.jaNoCarrinho) {
+                                  toast.warning('Esta troca já está aplicada no carrinho');
+                                  return;
+                                }
+
                                 console.log('🔍 Clique no card da devolução detectado!', devolucao.numero);
                                 console.log('🛒 Itens no carrinho:', carrinho.length);
 
@@ -28872,9 +28890,15 @@ const PDVPage: React.FC = () => {
                                   )}
                                   <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-white font-medium text-sm">#{devolucao.numero}</span>
-                                    <span className="text-xs px-1.5 py-0.5 rounded-full text-yellow-400 border-yellow-400 bg-opacity-20 border">
-                                      Pendente
-                                    </span>
+                                    {devolucao.jaNoCarrinho ? (
+                                      <span className="text-xs px-1.5 py-0.5 rounded-full text-green-400 border-green-400 bg-green-500/20 border">
+                                        No Carrinho
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs px-1.5 py-0.5 rounded-full text-yellow-400 border-yellow-400 bg-opacity-20 border">
+                                        Pendente
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="text-gray-400 text-sm truncate">
                                     {devolucao.cliente_nome || 'Sem Cliente'}
@@ -28926,10 +28950,16 @@ const PDVPage: React.FC = () => {
                                     </span>
                                   </div>
                                   {/* Indicador visual de que pode clicar para aplicar desconto */}
-                                  {carrinho.length > 0 && (
+                                  {carrinho.length > 0 && !devolucao.jaNoCarrinho && (
                                     <div className="flex items-center gap-1 mt-1">
                                       <Percent size={12} className="text-orange-400" />
                                       <span className="text-xs text-orange-400">Clique para aplicar desconto</span>
+                                    </div>
+                                  )}
+                                  {devolucao.jaNoCarrinho && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <CheckCircle size={12} className="text-green-400" />
+                                      <span className="text-xs text-green-400">Já aplicada no carrinho</span>
                                     </div>
                                   )}
                                 </div>
