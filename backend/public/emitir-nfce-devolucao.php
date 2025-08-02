@@ -49,7 +49,8 @@ function logDetalhado($step, $message, $data = null, $status = 'info') {
 
     $logEntry = "[{$timestamp}] DEVOLUCAO_STEP_{$step}: {$message}";
     if ($data !== null) {
-        $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE);
+        // ✅ CORREÇÃO: Usar JSON_PRETTY_PRINT para logs mais legíveis e completos
+        $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     }
 
     // Log padrão do PHP (para o sistema de logs)
@@ -66,11 +67,13 @@ function logDetalhado($step, $message, $data = null, $status = 'info') {
         error_log("ERRO: Exceção ao escrever log detalhado: " . $logError->getMessage());
     }
 
-    // Log no formato que o sistema de logs consegue ler COM EMOJI
+    // Log no formato que o sistema de logs consegue ler COM EMOJI (SEM TRUNCAMENTO)
     try {
         $systemLogEntry = "[" . date('H:i:s') . "] [NFE-SYSTEM] [NFCE-DEVOLUCAO] {$emoji} {$message}";
         if ($data !== null) {
-            $systemLogEntry .= " | " . json_encode($data, JSON_UNESCAPED_UNICODE);
+            // ✅ CORREÇÃO: Usar JSON_PRETTY_PRINT para logs mais legíveis e sem truncamento
+            $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            $systemLogEntry .= " | " . $jsonData;
         }
         file_put_contents('/var/log/php_nfe_debug.log', $systemLogEntry . "\n", FILE_APPEND | LOCK_EX);
     } catch (Exception $systemLogError) {
@@ -334,7 +337,7 @@ try {
     $std->tpEmis = 1; // Normal
     $std->cDV = 0; // Será calculado
     $std->tpAmb = $config['tpAmb'];
-    $std->finNFe = 4; // Devolução
+    $std->finNFe = 1; // ✅ CORREÇÃO: Para NFC-e SEMPRE usar 1 (Normal), mesmo em devolução
     $std->indFinal = 1; // Consumidor final
     $std->indPres = 1; // Presencial
     $std->procEmi = 0; // Aplicativo do contribuinte
@@ -344,16 +347,33 @@ try {
     logDetalhado('IDE_CONFIGURADO', 'Identificação da NFC-e configurada', [
         'numero' => $proximoNumero,
         'serie' => $serieDocumento,
-        'natureza_operacao' => 'DEVOLUCAO DE VENDA'
+        'natureza_operacao' => 'DEVOLUCAO DE VENDA',
+        'finNFe' => 1,
+        'observacao' => 'finNFe=1 (Normal) é obrigatório para NFC-e, mesmo em devolução'
     ], 'success');
 
     // IMPORTANTE: Tag de referência à NFC-e original
+    $chaveOriginal = $nfceData['chave_nfe_original'];
+
+    logDetalhado('CHAVE_ORIGINAL_DEBUG', 'Analisando chave original recebida', [
+        'chave_recebida' => $chaveOriginal,
+        'tamanho_chave' => strlen($chaveOriginal),
+        'chave_valida' => (strlen($chaveOriginal) === 44),
+        'primeiros_8_digitos' => substr($chaveOriginal, 0, 8),
+        'ultimos_8_digitos' => substr($chaveOriginal, -8)
+    ]);
+
+    // Validar se a chave tem 44 dígitos
+    if (strlen($chaveOriginal) !== 44) {
+        throw new Exception("Chave da NFC-e original inválida. Deve ter 44 dígitos, recebido: " . strlen($chaveOriginal));
+    }
+
     $std = new stdClass();
-    $std->refNFe = $nfceData['chave_nfe_original']; // Chave da NFC-e original
+    $std->refNFe = $chaveOriginal; // Chave da NFC-e original
     $make->tagrefNFe($std);
 
     logDetalhado('REFERENCIA_ORIGINAL', 'Referência à NFC-e original adicionada', [
-        'chave_original' => $nfceData['chave_nfe_original']
+        'chave_original' => $chaveOriginal
     ]);
 
     // Emitente (EXATAMENTE igual ao emitir-nfce.php)
@@ -516,6 +536,48 @@ try {
     logDetalhado('XML_GERANDO', 'Iniciando geração do XML da NFC-e de devolução');
     $xml = $make->getXML();
     logDetalhado('XML_GERADO', 'XML da NFC-e de devolução gerado com sucesso');
+
+    // ✅ DEBUG: Extrair e verificar a chave da nova NFC-e gerada
+    try {
+        $xmlDom = new DOMDocument();
+        $xmlDom->loadXML($xml);
+
+        // Tentar extrair chave da nova NFC-e
+        $chaveNode = $xmlDom->getElementsByTagName('chNFe')->item(0);
+        $chaveNova = $chaveNode ? $chaveNode->nodeValue : null;
+
+        if (!$chaveNova) {
+            // Tentar extrair da tag infNFe
+            $infNFeNodes = $xmlDom->getElementsByTagName('infNFe');
+            if ($infNFeNodes->length > 0) {
+                $idAttribute = $infNFeNodes->item(0)->getAttribute('Id');
+                $chaveNova = str_replace('NFe', '', $idAttribute);
+            }
+        }
+
+        logDetalhado('CHAVE_NOVA_DEBUG', 'Chave da nova NFC-e de devolução gerada', [
+            'chave_nova' => $chaveNova,
+            'chave_original' => $chaveOriginal,
+            'sao_iguais' => ($chaveNova === $chaveOriginal),
+            'tamanho_nova' => strlen($chaveNova ?? ''),
+            'tamanho_original' => strlen($chaveOriginal)
+        ]);
+
+        // ⚠️ VERIFICAÇÃO CRÍTICA: Se as chaves são iguais, isso causa erro 715
+        if ($chaveNova === $chaveOriginal) {
+            logDetalhado('ERRO_CHAVES_IGUAIS', 'ERRO CRÍTICO: Chave da devolução é igual à original!', [
+                'chave_duplicada' => $chaveNova,
+                'serie_nova' => $serieDocumento,
+                'numero_novo' => $proximoNumero
+            ], 'error');
+            throw new Exception('ERRO: A chave da NFC-e de devolução é igual à chave original. Isso causará erro 715 na SEFAZ.');
+        }
+
+    } catch (Exception $chaveDebugError) {
+        logDetalhado('ERRO_DEBUG_CHAVE', 'Erro ao extrair chave para debug', [
+            'erro' => $chaveDebugError->getMessage()
+        ], 'warning');
+    }
 
     // Assinar XML
     $xmlAssinado = $tools->signNFe($xml);
