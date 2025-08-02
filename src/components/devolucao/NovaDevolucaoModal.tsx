@@ -1161,6 +1161,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [itensComDadosFiscais, setItensComDadosFiscais] = useState<any[]>([]);
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao' | null>(null);
   const [empresaCompleta, setEmpresaCompleta] = useState<any>(null);
+  const [proximoNumeroNFCe, setProximoNumeroNFCe] = useState<number | null>(null);
   const [showConfirmacaoManualModal, setShowConfirmacaoManualModal] = useState(false);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
 
@@ -1608,6 +1609,40 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     carregarEmpresaCompleta();
   }, [isOpen, empresaId]);
 
+  // Carregar próximo número da NFC-e (igual ao PDV)
+  useEffect(() => {
+    const carregarProximoNumeroNFCe = async () => {
+      if (!isOpen || !empresaId) return;
+
+      try {
+        // Buscar último número da NFC-e (modelo 65) da empresa
+        const { data, error } = await supabase
+          .from('pdv')
+          .select('numero_documento')
+          .eq('empresa_id', empresaId)
+          .eq('modelo_documento', 65) // NFC-e modelo 65
+          .not('numero_documento', 'is', null)
+          .order('numero_documento', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('Erro ao buscar último número NFC-e:', error);
+          return;
+        }
+
+        const ultimoNumero = data && data.length > 0 ? data[0].numero_documento : 0;
+        const proximoNumero = ultimoNumero + 1;
+
+        setProximoNumeroNFCe(proximoNumero);
+        console.log('✅ Próximo número NFC-e carregado:', proximoNumero);
+      } catch (error) {
+        console.error('Erro ao carregar próximo número NFC-e:', error);
+      }
+    };
+
+    carregarProximoNumeroNFCe();
+  }, [isOpen, empresaId]);
+
   // Função para obter todos os itens selecionados (excluindo taxa de entrega)
   const getItensSelecionados = () => {
     const itens: ItemVenda[] = [];
@@ -1738,6 +1773,23 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
         {/* Conteúdo */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Informações da NFC-e de Devolução */}
+          {vendaOrigemInfo && vendaOrigemInfo.modelo_documento === 65 && (
+            <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-green-400 mb-3">
+                📄 NFC-e de Devolução
+              </h3>
+              <div className="flex items-center gap-4">
+                <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-sm rounded border border-blue-600/30">
+                  Série: {vendaOrigemInfo.serie_documento || 'N/A'}
+                </span>
+                <span className="px-3 py-1 bg-orange-600/20 text-orange-400 text-sm rounded border border-orange-600/30">
+                  Próximo Número: #{proximoNumeroNFCe || 'Carregando...'}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Informações da Venda Origem */}
           {vendaOrigemInfo && (
             <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
