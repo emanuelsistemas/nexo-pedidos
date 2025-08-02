@@ -49,8 +49,8 @@ function logDetalhado($step, $message, $data = null, $status = 'info') {
 
     $logEntry = "[{$timestamp}] DEVOLUCAO_STEP_{$step}: {$message}";
     if ($data !== null) {
-        // ✅ CORREÇÃO: Usar JSON_PRETTY_PRINT para logs mais legíveis e completos
-        $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        // ✅ CORREÇÃO: JSON compacto para logs mais legíveis
+        $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 
     // Log padrão do PHP (para o sistema de logs)
@@ -67,12 +67,16 @@ function logDetalhado($step, $message, $data = null, $status = 'info') {
         error_log("ERRO: Exceção ao escrever log detalhado: " . $logError->getMessage());
     }
 
-    // Log no formato que o sistema de logs consegue ler COM EMOJI (SEM TRUNCAMENTO)
+    // Log no formato que o sistema de logs consegue ler COM EMOJI (COMPACTO)
     try {
         $systemLogEntry = "[" . date('H:i:s') . "] [NFE-SYSTEM] [NFCE-DEVOLUCAO] {$emoji} {$message}";
         if ($data !== null) {
-            // ✅ CORREÇÃO: Usar JSON_PRETTY_PRINT para logs mais legíveis e sem truncamento
-            $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            // ✅ CORREÇÃO: JSON compacto para evitar quebras de linha
+            $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
+            // Limitar tamanho do JSON para evitar logs muito longos
+            if (strlen($jsonData) > 500) {
+                $jsonData = substr($jsonData, 0, 500) . '...[TRUNCADO]';
+            }
             $systemLogEntry .= " | " . $jsonData;
         }
         file_put_contents('/var/log/php_nfe_debug.log', $systemLogEntry . "\n", FILE_APPEND | LOCK_EX);
@@ -98,44 +102,78 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// ✅ DEBUG: Log simples para verificar se chega aqui
+error_log("[DEBUG] Chegou no try do emitir-nfce-devolucao.php");
+
 try {
+    error_log("[DEBUG] Dentro do try, chamando logDetalhado...");
     logDetalhado('INICIO', 'Iniciando emissão de NFC-e de devolução');
+    error_log("[DEBUG] logDetalhado INICIO executado com sucesso");
 
     // Receber dados
+    logDetalhado('RECEBENDO_INPUT', 'Recebendo dados do input...');
     $input = file_get_contents('php://input');
+
+    logDetalhado('DECODIFICANDO_JSON', 'Decodificando JSON...');
     $data = json_decode($input, true);
 
     if (!$data) {
+        logDetalhado('ERRO_JSON', 'Dados JSON inválidos', ['input_size' => strlen($input)], 'error');
         throw new Exception('Dados JSON inválidos');
     }
 
+    logDetalhado('JSON_DECODIFICADO', 'JSON decodificado com sucesso');
+
+    // ✅ CORREÇÃO: Logar apenas resumo dos dados, não o array completo
     logDetalhado('DADOS_RECEBIDOS', 'Dados recebidos para processamento', [
         'empresa_id' => $data['empresa_id'] ?? 'não informado',
         'chave_original' => $data['nfce_data']['chave_nfe_original'] ?? 'não informado',
-        'qtd_itens' => count($data['nfce_data']['itens'] ?? [])
+        'qtd_itens' => count($data['nfce_data']['itens'] ?? []),
+        'tipo_operacao' => $data['nfce_data']['tipo_operacao'] ?? 'não informado',
+        'cfop_devolucao' => $data['nfce_data']['cfop_devolucao'] ?? 'não informado'
     ]);
+
+    // ✅ LOG SIMPLES PARA VERIFICAR SE CHEGA AQUI
+    logDetalhado('CHECKPOINT_1', 'Checkpoint 1 - Dados processados, extraindo variáveis...');
 
     $empresaId = $data['empresa_id'] ?? null;
     $nfceData = $data['nfce_data'] ?? null;
 
+    logDetalhado('CHECKPOINT_2', 'Checkpoint 2 - Variáveis extraídas, iniciando validações...');
+
+    logDetalhado('CHECKPOINT_3', 'Checkpoint 3 - Validando dados obrigatórios...');
+
     if (!$empresaId || !$nfceData) {
+        logDetalhado('ERRO_DADOS_OBRIGATORIOS', 'Dados obrigatórios não informados', [
+            'empresaId' => $empresaId,
+            'nfceData_existe' => !empty($nfceData)
+        ], 'error');
         throw new Exception('Dados obrigatórios não informados');
     }
 
+    logDetalhado('CHECKPOINT_4', 'Checkpoint 4 - Validando dados específicos de devolução...');
+
     // Validações específicas para devolução
     if (!isset($nfceData['chave_nfe_original'])) {
+        logDetalhado('ERRO_CHAVE_ORIGINAL', 'Chave da NFC-e original não informada', [], 'error');
         throw new Exception('Chave da NFC-e original é obrigatória para devolução');
     }
 
     if (!isset($nfceData['tipo_operacao']) || $nfceData['tipo_operacao'] !== 'devolucao') {
+        logDetalhado('ERRO_TIPO_OPERACAO', 'Tipo de operação inválido', [
+            'tipo_recebido' => $nfceData['tipo_operacao'] ?? 'não informado'
+        ], 'error');
         throw new Exception('Tipo de operação deve ser "devolucao"');
     }
 
     if (!isset($nfceData['cfop_devolucao']) || $nfceData['cfop_devolucao'] !== '5202') {
+        logDetalhado('ERRO_CFOP', 'CFOP inválido para devolução', [
+            'cfop_recebido' => $nfceData['cfop_devolucao'] ?? 'não informado'
+        ], 'error');
         throw new Exception('CFOP deve ser 5202 para devolução');
     }
 
-    logDetalhado('VALIDACAO_INICIAL', 'Validações iniciais concluídas');
+    logDetalhado('CHECKPOINT_5', 'Checkpoint 5 - Validações concluídas, incluindo bibliotecas...');
 
     // Incluir bibliotecas necessárias
     logDetalhado('INCLUINDO_LIBS', 'Incluindo bibliotecas necessárias');
@@ -352,15 +390,15 @@ try {
         'observacao' => 'finNFe=1 (Normal) é obrigatório para NFC-e, mesmo em devolução'
     ], 'success');
 
-    // IMPORTANTE: Tag de referência à NFC-e original
+    // ✅ CORREÇÃO: NFC-e NÃO PODE referenciar documento fiscal (Erro 708)
+    // Armazenar chave original para usar nas informações adicionais
     $chaveOriginal = $nfceData['chave_nfe_original'];
 
-    logDetalhado('CHAVE_ORIGINAL_DEBUG', 'Analisando chave original recebida', [
+    logDetalhado('CHAVE_ORIGINAL_DEBUG', 'Analisando chave original para informações adicionais', [
         'chave_recebida' => $chaveOriginal,
         'tamanho_chave' => strlen($chaveOriginal),
         'chave_valida' => (strlen($chaveOriginal) === 44),
-        'primeiros_8_digitos' => substr($chaveOriginal, 0, 8),
-        'ultimos_8_digitos' => substr($chaveOriginal, -8)
+        'observacao' => 'NFC-e não pode usar tagrefNFe - será adicionada em infAdic'
     ]);
 
     // Validar se a chave tem 44 dígitos
@@ -368,12 +406,10 @@ try {
         throw new Exception("Chave da NFC-e original inválida. Deve ter 44 dígitos, recebido: " . strlen($chaveOriginal));
     }
 
-    $std = new stdClass();
-    $std->refNFe = $chaveOriginal; // Chave da NFC-e original
-    $make->tagrefNFe($std);
-
-    logDetalhado('REFERENCIA_ORIGINAL', 'Referência à NFC-e original adicionada', [
-        'chave_original' => $chaveOriginal
+    logDetalhado('REFERENCIA_REMOVIDA', 'Tag de referência removida conforme regra SEFAZ', [
+        'motivo' => 'NFC-e modelo 65 não pode referenciar documento fiscal',
+        'erro_evitado' => '708 - NFC-e não pode referenciar documento fiscal',
+        'solucao' => 'Chave será adicionada nas informações adicionais'
     ]);
 
     // Emitente (EXATAMENTE igual ao emitir-nfce.php)
@@ -407,10 +443,19 @@ try {
     logDetalhado('EMITENTE_CONFIGURADO', 'Dados do emitente configurados');
 
     // Processar itens da devolução
+    logDetalhado('INICIANDO_LOOP_ITENS', 'Iniciando processamento dos itens', [
+        'total_itens' => count($nfceData['itens'])
+    ]);
+
     foreach ($nfceData['itens'] as $index => $item) {
         $nItem = $index + 1;
-        
+
+        logDetalhado('PROCESSANDO_ITEM', "Processando item {$nItem}", [
+            'item_data' => $item
+        ]);
+
         // Produto
+        logDetalhado('CRIANDO_TAG_PRODUTO', "Criando tag produto para item {$nItem}");
         $std = new stdClass();
         $std->item = $nItem;
         $std->cProd = $item['codigo_produto'] ?? $item['produto_id'];
@@ -427,14 +472,33 @@ try {
         $std->qTrib = $item['quantidade'];
         $std->vUnTrib = number_format($item['valor_unitario'], 2, '.', '');
         $std->indTot = 1;
-        $make->tagprod($std);
+
+        try {
+            $make->tagprod($std);
+            logDetalhado('TAG_PRODUTO_OK', "Tag produto criada para item {$nItem}");
+        } catch (Exception $prodError) {
+            logDetalhado('ERRO_TAG_PRODUTO', "Erro ao criar tag produto para item {$nItem}", [
+                'erro' => $prodError->getMessage()
+            ], 'error');
+            throw $prodError;
+        }
 
         // Impostos
+        logDetalhado('CRIANDO_TAG_IMPOSTOS', "Criando tag impostos para item {$nItem}");
         $std = new stdClass();
         $std->item = $nItem;
-        $make->tagimposto($std);
+        try {
+            $make->tagimposto($std);
+            logDetalhado('TAG_IMPOSTOS_OK', "Tag impostos criada para item {$nItem}");
+        } catch (Exception $impostoError) {
+            logDetalhado('ERRO_TAG_IMPOSTOS', "Erro ao criar tag impostos para item {$nItem}", [
+                'erro' => $impostoError->getMessage()
+            ], 'error');
+            throw $impostoError;
+        }
 
         // ICMS
+        logDetalhado('CRIANDO_TAG_ICMS', "Criando tag ICMS para item {$nItem}");
         $std = new stdClass();
         $std->item = $nItem;
         $std->orig = 0; // Nacional
@@ -442,25 +506,51 @@ try {
         if ($item['aliquota_icms'] > 0) {
             $std->pICMS = number_format($item['aliquota_icms'], 2, '.', '');
         }
-        $make->tagICMSSN($std);
+        try {
+            $make->tagICMSSN($std);
+            logDetalhado('TAG_ICMS_OK', "Tag ICMS criada para item {$nItem}");
+        } catch (Exception $icmsError) {
+            logDetalhado('ERRO_TAG_ICMS', "Erro ao criar tag ICMS para item {$nItem}", [
+                'erro' => $icmsError->getMessage()
+            ], 'error');
+            throw $icmsError;
+        }
 
         // PIS
+        logDetalhado('CRIANDO_TAG_PIS', "Criando tag PIS para item {$nItem}");
         $std = new stdClass();
         $std->item = $nItem;
         $std->CST = '01';
         $std->vBC = number_format($item['valor_total'], 2, '.', '');
         $std->pPIS = number_format($item['aliquota_pis'], 4, '.', '');
         $std->vPIS = number_format($item['valor_total'] * $item['aliquota_pis'] / 100, 2, '.', '');
-        $make->tagPIS($std);
+        try {
+            $make->tagPIS($std);
+            logDetalhado('TAG_PIS_OK', "Tag PIS criada para item {$nItem}");
+        } catch (Exception $pisError) {
+            logDetalhado('ERRO_TAG_PIS', "Erro ao criar tag PIS para item {$nItem}", [
+                'erro' => $pisError->getMessage()
+            ], 'error');
+            throw $pisError;
+        }
 
         // COFINS
+        logDetalhado('CRIANDO_TAG_COFINS', "Criando tag COFINS para item {$nItem}");
         $std = new stdClass();
         $std->item = $nItem;
         $std->CST = '01';
         $std->vBC = number_format($item['valor_total'], 2, '.', '');
         $std->pCOFINS = number_format($item['aliquota_cofins'], 4, '.', '');
         $std->vCOFINS = number_format($item['valor_total'] * $item['aliquota_cofins'] / 100, 2, '.', '');
-        $make->tagCOFINS($std);
+        try {
+            $make->tagCOFINS($std);
+            logDetalhado('TAG_COFINS_OK', "Tag COFINS criada para item {$nItem}");
+        } catch (Exception $cofinsError) {
+            logDetalhado('ERRO_TAG_COFINS', "Erro ao criar tag COFINS para item {$nItem}", [
+                'erro' => $cofinsError->getMessage()
+            ], 'error');
+            throw $cofinsError;
+        }
 
         logDetalhado('ITEM_PROCESSADO', "Item {$nItem} processado", [
             'codigo' => $item['codigo_produto'] ?? $item['produto_id'],
@@ -491,6 +581,27 @@ try {
     $std->vNF = number_format($valorTotal, 2, '.', '');
     $make->tagICMSTot($std);
 
+    // ✅ INFORMAÇÕES ADICIONAIS (SOLUÇÃO PARA ERRO 708)
+    // Como NFC-e não pode referenciar documento fiscal, incluir informação da NFC-e original aqui
+    logDetalhado('INFORMACOES_ADICIONAIS', 'Criando informações adicionais com referência à NFC-e original');
+    $std = new stdClass();
+
+    // Incluir informação sobre a NFC-e original nas informações complementares
+    $std->infCpl = "DEVOLUCAO DE VENDA - NFC-e Original: {$chaveOriginal} - NFC-e emitida pelo Sistema Nexo PDV";
+
+    try {
+        $make->taginfAdic($std);
+        logDetalhado('INFORMACOES_ADICIONAIS_OK', 'Informações adicionais criadas com sucesso', [
+            'infCpl' => $std->infCpl,
+            'chave_original_incluida' => $chaveOriginal
+        ]);
+    } catch (Exception $infError) {
+        logDetalhado('ERRO_INFORMACOES_ADICIONAIS', 'Erro ao criar informações adicionais', [
+            'erro' => $infError->getMessage()
+        ], 'error');
+        throw new Exception("Erro nas informações adicionais: " . $infError->getMessage());
+    }
+
     // ✅ TRANSPORTE (OBRIGATÓRIO) - FIXO PARA DEVOLUÇÃO CFOP 5202
     // Para devolução: "9 = Sem Ocorrência de Transporte" (padrão para devoluções)
     logDetalhado('TRANSPORTE_INICIANDO', 'Configurando transporte para devolução CFOP 5202');
@@ -498,6 +609,27 @@ try {
     $std->modFrete = 9; // 9 = Sem Ocorrência de Transporte (FIXO para devolução)
     $make->tagtransp($std);
     logDetalhado('TRANSPORTE_CONFIGURADO', 'Transporte configurado para devolução', ['modFrete' => 9]);
+
+    // ✅ INFORMAÇÕES ADICIONAIS (SOLUÇÃO PARA ERRO 708)
+    // Como NFC-e não pode referenciar documento fiscal, incluir informação da NFC-e original aqui
+    logDetalhado('INFORMACOES_ADICIONAIS', 'Criando informações adicionais com referência à NFC-e original');
+    $std = new stdClass();
+
+    // Incluir informação sobre a NFC-e original nas informações complementares
+    $std->infCpl = "DEVOLUCAO DE VENDA - NFC-e Original: {$chaveOriginal} - NFC-e emitida pelo Sistema Nexo PDV";
+
+    try {
+        $make->taginfAdic($std);
+        logDetalhado('INFORMACOES_ADICIONAIS_OK', 'Informações adicionais criadas com sucesso', [
+            'infCpl' => $std->infCpl,
+            'chave_original_incluida' => $chaveOriginal
+        ]);
+    } catch (Exception $infError) {
+        logDetalhado('ERRO_INFORMACOES_ADICIONAIS', 'Erro ao criar informações adicionais', [
+            'erro' => $infError->getMessage()
+        ], 'error');
+        throw new Exception("Erro nas informações adicionais: " . $infError->getMessage());
+    }
 
     // ✅ PAGAMENTO (OBRIGATÓRIO) - FIXO PARA DEVOLUÇÃO CFOP 5202
     // Para devolução: "90 = Sem Pagamento" (padrão para devoluções)
@@ -526,16 +658,26 @@ try {
     ]);
 
     // Verificar erros antes de gerar XML
+    logDetalhado('VERIFICANDO_ERROS', 'Verificando erros de validação antes de gerar XML...');
     $erros = $make->getErrors();
     if (!empty($erros)) {
         logDetalhado('ERROS_VALIDACAO', 'Erros encontrados na validação das tags', $erros, 'error');
         throw new Exception('Erros na validação: ' . implode('; ', $erros));
     }
+    logDetalhado('VALIDACAO_OK', 'Nenhum erro de validação encontrado, prosseguindo...');
 
     // Gerar XML
     logDetalhado('XML_GERANDO', 'Iniciando geração do XML da NFC-e de devolução');
-    $xml = $make->getXML();
-    logDetalhado('XML_GERADO', 'XML da NFC-e de devolução gerado com sucesso');
+    try {
+        $xml = $make->getXML();
+        logDetalhado('XML_GERADO', 'XML da NFC-e de devolução gerado com sucesso');
+    } catch (Exception $xmlError) {
+        logDetalhado('ERRO_GERAR_XML', 'Erro ao gerar XML da NFC-e', [
+            'erro' => $xmlError->getMessage(),
+            'trace' => $xmlError->getTraceAsString()
+        ], 'error');
+        throw new Exception('Erro ao gerar XML: ' . $xmlError->getMessage());
+    }
 
     // ✅ DEBUG: Extrair e verificar a chave da nova NFC-e gerada
     try {
