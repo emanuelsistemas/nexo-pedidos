@@ -3161,6 +3161,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           inscricao_estadual: dadosDevolucao.cliente.inscricao_estadual
         } : {};
 
+        // ✅ NOVO: Preparar chave de referência se houver
+        const chaveReferencia = dadosDevolucao.chave_nfce_original ? [{
+          id: 'devolucao_ref',
+          chave: dadosDevolucao.chave_nfce_original,
+          chave_formatada: dadosDevolucao.chave_nfce_original.replace(/(\d{4})/g, '$1 ').trim()
+        }] : [];
+
         setNfeData(prev => ({
           ...prev,
           produtos: produtosFormatados,
@@ -3178,6 +3185,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             ...prev.destinatario,
             ...destinatarioData
           },
+          // ✅ NOVO: Adicionar chave de referência da NFC-e original
+          chaves_ref: chaveReferencia,
           totais: {
             ...prev.totais,
             valor_produtos: dadosDevolucao.valorTotal || 0,
@@ -3188,6 +3197,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         console.log('✅ Produtos da devolução carregados no formulário com estrutura completa');
         if (dadosDevolucao.cliente) {
           console.log('✅ Cliente da devolução carregado no destinatário:', dadosDevolucao.cliente.nome);
+        }
+        if (dadosDevolucao.chave_nfce_original) {
+          console.log('✅ Chave de referência da NFC-e carregada:', dadosDevolucao.chave_nfce_original);
         }
       }
     };
