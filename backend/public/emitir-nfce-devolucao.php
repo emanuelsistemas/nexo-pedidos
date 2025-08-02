@@ -183,34 +183,23 @@ try {
     }
 
     $nfeConfig = $nfeConfigData[0];
+
+    // ✅ USAR dados do payload em vez de buscar do banco (igual ao PDV)
+    $serieDocumento = $nfceData['serie_documento'] ?? $nfeConfig['serie_nfce'] ?? 1;
+    $proximoNumero = $nfceData['numero_documento'] ?? 1;
+
     logDetalhado('NFE_CONFIG_CARREGADA', 'Configuração NFe carregada', [
         'ambiente' => $nfeConfig['ambiente'],
-        'serie' => $nfeConfig['serie_nfce']
-    ]);
+        'serie_banco' => $nfeConfig['serie_nfce'],
+        'serie_payload' => $nfceData['serie_documento'],
+        'serie_final' => $serieDocumento
+    ], 'success');
 
-    // Buscar próximo número da série
-    $url = $supabaseUrl . "/rest/v1/nfce_numeracao?empresa_id=eq.{$empresaId}&serie=eq.{$nfeConfig['serie_nfce']}&select=*";
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'apikey: ' . $supabaseKey,
-        'Authorization: Bearer ' . $supabaseKey,
-        'Content-Type: application/json'
-    ]);
-    
-    $response = curl_exec($ch);
-    $numeracaoData = json_decode($response, true);
-    
-    $proximoNumero = 1;
-    if (!empty($numeracaoData)) {
-        $proximoNumero = $numeracaoData[0]['proximo_numero'];
-    }
-
-    logDetalhado('NUMERO_SERIE', 'Próximo número da série obtido', [
-        'serie' => $nfeConfig['serie_nfce'],
-        'proximo_numero' => $proximoNumero
-    ]);
+    logDetalhado('NUMERO_SERIE', 'Série e número obtidos do payload', [
+        'serie' => $serieDocumento,
+        'proximo_numero' => $proximoNumero,
+        'fonte' => 'payload_frontend'
+    ], 'success');
 
     // Configurar NFePHP (mesmo padrão do emitir-nfce.php)
     logDetalhado('CONFIG_BUILD', 'Construindo configuração NFePHP');
@@ -330,7 +319,7 @@ try {
     $std->cNF = str_pad(rand(10000000, 99999999), 8, '0', STR_PAD_LEFT);
     $std->natOp = 'DEVOLUCAO DE VENDA'; // Natureza específica para devolução
     $std->mod = 65; // NFC-e
-    $std->serie = $nfeConfig['serie_nfce'];
+    $std->serie = $serieDocumento;
     $std->nNF = $proximoNumero;
     $std->dhEmi = date('Y-m-d\TH:i:sP');
     $std->tpNF = 1; // Saída
@@ -349,9 +338,9 @@ try {
 
     logDetalhado('IDE_CONFIGURADO', 'Identificação da NFC-e configurada', [
         'numero' => $proximoNumero,
-        'serie' => $nfeConfig['serie_nfce'],
+        'serie' => $serieDocumento,
         'natureza_operacao' => 'DEVOLUCAO DE VENDA'
-    ]);
+    ], 'success');
 
     // IMPORTANTE: Tag de referência à NFC-e original
     $std = new stdClass();

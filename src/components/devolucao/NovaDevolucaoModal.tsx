@@ -1305,6 +1305,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         cfop_devolucao: '5202',
         ambiente: ambienteNFe,
         tipo_operacao: 'devolucao',
+        // ✅ ADICIONANDO dados da série e próximo número
+        serie_documento: vendaOrigem.serie_documento,
+        numero_documento: proximoNumeroNFCe,
         itens: itensComDadosFiscais.map(item => ({
           produto_id: item.produto_id,
           codigo_produto: item.dadosFiscais.codigo,
