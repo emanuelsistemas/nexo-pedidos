@@ -3230,6 +3230,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         } else {
           console.log('❌ Número da venda não encontrado na venda origem');
         }
+
+        // ✅ DEBUG: Verificar se natureza da operação foi definida
+        console.log('🔍 DEBUG - Natureza da operação definida:', dadosDevolucao.natureza_operacao || 'Devolução de Mercadoria');
+        console.log('🔍 DEBUG - Naturezas disponíveis:', naturezasOperacao.map(n => n.descricao));
+
+
       }
     };
 
@@ -3438,6 +3444,40 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
     loadNaturezasOperacao();
   }, []);
+
+  // ✅ NOVO: useEffect para definir natureza da operação quando naturezas são carregadas
+  useEffect(() => {
+    // Se há dados de devolução no localStorage e naturezas foram carregadas
+    const dadosDevolucao = localStorage.getItem('dadosDevolucao');
+    if (dadosDevolucao && naturezasOperacao.length > 0) {
+      try {
+        const dados = JSON.parse(dadosDevolucao);
+        if (dados.tipo === 'devolucao') {
+          console.log('🔄 Definindo natureza da operação após carregamento das naturezas...');
+          console.log('🔍 Naturezas disponíveis:', naturezasOperacao.map(n => n.descricao));
+
+          // Verificar se "Devolução de Mercadoria" existe nas naturezas
+          const naturezaDevolucao = naturezasOperacao.find(n =>
+            n.descricao === 'Devolução de Mercadoria' ||
+            n.descricao.toLowerCase().includes('devolução')
+          );
+
+          if (naturezaDevolucao) {
+            console.log('✅ Definindo natureza da operação:', naturezaDevolucao.descricao);
+            setNfeData(prev => ({
+              ...prev,
+              identificacao: {
+                ...prev.identificacao,
+                natureza_operacao: naturezaDevolucao.descricao
+              }
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao processar dados de devolução:', error);
+      }
+    }
+  }, [naturezasOperacao]); // Executar quando naturezas são carregadas
 
   // Verificar status da API e SEFAZ ao carregar a página
   useEffect(() => {
