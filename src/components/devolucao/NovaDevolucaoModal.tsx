@@ -1162,6 +1162,18 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [showConfirmacaoManualModal, setShowConfirmacaoManualModal] = useState(false);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
 
+  // Estados para modal de progresso NFC-e
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressSteps, setProgressSteps] = useState([
+    { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
+    { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
+    { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+    { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
+    { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
+  ]);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [isEmitindoNFCe, setIsEmitindoNFCe] = useState(false);
+
   // Função para formatar data (local do componente)
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -1175,7 +1187,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
   // Função para confirmar devolução com verificação de NFC-e
   const handleConfirmarDevolucao = async (tipoConfirmacao: 'manual' | 'nfce') => {
-    if (isLoading) return;
+    if (isLoading || isEmitindoNFCe) return;
 
     // Se for devolução manual e a venda origem for NFC-e, mostrar modal de confirmação
     if (tipoConfirmacao === 'manual') {
@@ -1186,7 +1198,13 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       }
     }
 
-    // Proceder com a confirmação normal
+    // Se for devolução NFC-e, usar função específica
+    if (tipoConfirmacao === 'nfce') {
+      await emitirNFCeDevolucao();
+      return;
+    }
+
+    // Proceder com a confirmação manual normal
     await handleConfirm(tipoConfirmacao);
   };
 
@@ -1203,6 +1221,169 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     }
   };
 
+  // Função para emitir NFC-e de devolução
+  const emitirNFCeDevolucao = async () => {
+    try {
+      setIsEmitindoNFCe(true);
+      setShowProgressModal(true);
+      resetProgress();
+
+      // ETAPA 1: VALIDAÇÃO
+      updateStep('validacao', 'loading');
+      addLog('Iniciando emissão de NFC-e de devolução');
+      addLog(`Ambiente: ${ambienteNFe?.toUpperCase()}`);
+
+      const vendaOrigem = getVendaOrigemInfo();
+      if (!vendaOrigem) {
+        throw new Error('Venda de origem não encontrada');
+      }
+
+      if (vendaOrigem.modelo_documento !== 65) {
+        throw new Error('Devolução NFC-e só é possível para vendas que foram emitidas com NFC-e');
+      }
+
+      if (!vendaOrigem.chave_nfe) {
+        throw new Error('Chave da NFC-e original não encontrada');
+      }
+
+      addLog(`Chave NFC-e original: ${vendaOrigem.chave_nfe}`);
+
+      // Validar dados fiscais
+      const erros: string[] = [];
+      itensComDadosFiscais.forEach(item => {
+        if (!item.dadosFiscais) {
+          erros.push(`${item.nome_produto}: Dados fiscais não encontrados`);
+          return;
+        }
+
+        const { ncm, cfop, csosn_icms, unidade_medida } = item.dadosFiscais;
+        if (!ncm) erros.push(`${item.nome_produto}: NCM obrigatório`);
+        if (!cfop) erros.push(`${item.nome_produto}: CFOP obrigatório`);
+        if (!csosn_icms) erros.push(`${item.nome_produto}: CSOSN obrigatório`);
+        if (!unidade_medida?.sigla) erros.push(`${item.nome_produto}: Unidade de medida obrigatória`);
+      });
+
+      if (erros.length > 0) {
+        throw new Error(`Dados fiscais incompletos:\n${erros.join('\n')}`);
+      }
+
+      updateStep('validacao', 'success', 'Dados validados com sucesso');
+      addLog('✅ Validação concluída');
+
+      // ETAPA 2: GERAÇÃO DO XML
+      updateStep('geracao', 'loading');
+      addLog('Preparando dados para NFC-e de devolução...');
+
+      const dadosNFCe = {
+        chave_nfe_original: vendaOrigem.chave_nfe,
+        modelo_documento: 65, // NFC-e
+        cfop_devolucao: '5202',
+        ambiente: ambienteNFe,
+        tipo_operacao: 'devolucao',
+        itens: itensComDadosFiscais.map(item => ({
+          produto_id: item.produto_id,
+          codigo_produto: item.dadosFiscais.codigo,
+          nome_produto: item.nome_produto,
+          ncm: item.dadosFiscais.ncm,
+          cfop: '5202', // CFOP específico para devolução
+          csosn: item.dadosFiscais.csosn_icms,
+          unidade_medida: item.dadosFiscais.unidade_medida.sigla,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_total: item.valor_total_item,
+          aliquota_icms: item.dadosFiscais.aliquota_icms || 0,
+          aliquota_pis: item.dadosFiscais.aliquota_pis || 0,
+          aliquota_cofins: item.dadosFiscais.aliquota_cofins || 0
+        }))
+      };
+
+      updateStep('geracao', 'success', 'XML preparado');
+      addLog('✅ Dados preparados para emissão');
+
+      // ETAPA 3: ENVIO PARA SEFAZ
+      updateStep('sefaz', 'loading');
+      addLog('Enviando NFC-e para SEFAZ...');
+
+      const response = await fetch('/backend/public/emitir-nfce-devolucao.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          empresa_id: empresaId,
+          nfce_data: dadosNFCe
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+
+      const resultado = await response.json();
+
+      if (resultado.erro) {
+        throw new Error(resultado.mensagem || 'Erro na emissão da NFC-e');
+      }
+
+      updateStep('sefaz', 'success', 'NFC-e autorizada pela SEFAZ');
+      addLog('✅ NFC-e autorizada pela SEFAZ');
+      addLog(`Chave: ${resultado.chave}`);
+      addLog(`Protocolo: ${resultado.protocolo}`);
+
+      // ETAPA 4: SALVAR DEVOLUÇÃO
+      updateStep('banco', 'loading');
+      addLog('Salvando devolução no sistema...');
+
+      await handleConfirm('nfce', {
+        chave_nfce_devolucao: resultado.chave,
+        numero_nfce: resultado.numero,
+        protocolo: resultado.protocolo,
+        xml_nfce: resultado.xml
+      });
+
+      updateStep('banco', 'success', 'Devolução salva');
+      addLog('✅ Devolução salva no sistema');
+
+      // ETAPA 5: FINALIZAÇÃO
+      updateStep('finalizacao', 'loading');
+      addLog('Finalizando processo...');
+
+      updateStep('finalizacao', 'success', 'Processo concluído');
+      addLog('✅ NFC-e de devolução emitida com sucesso!');
+
+      // Fechar modal após 2 segundos
+      setTimeout(() => {
+        setShowProgressModal(false);
+        setIsEmitindoNFCe(false);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Erro ao emitir NFC-e de devolução:', error);
+
+      const stepAtual = progressSteps.find(s => s.status === 'loading');
+      if (stepAtual) {
+        updateStep(stepAtual.id, 'error', (error as Error).message);
+      }
+
+      addLog(`❌ Erro: ${(error as Error).message}`);
+      setIsEmitindoNFCe(false);
+
+      // Oferecer fallback para devolução manual
+      setTimeout(() => {
+        const confirmarManual = confirm(
+          `Erro na emissão da NFC-e: ${(error as Error).message}\n\n` +
+          'Deseja prosseguir com devolução manual?\n' +
+          'ATENÇÃO: Não será emitida devolução fiscal.'
+        );
+
+        if (confirmarManual) {
+          setShowProgressModal(false);
+          handleConfirm('manual');
+        }
+      }, 1000);
+    }
+  };
+
   // Função para alternar expansão dos dados fiscais
   const toggleItemExpansion = (itemId: string) => {
     setExpandedItems(prev => {
@@ -1214,6 +1395,29 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       }
       return newSet;
     });
+  };
+
+  // Funções para modal de progresso NFC-e
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+  };
+
+  const updateStep = (stepId: string, status: 'pending' | 'loading' | 'success' | 'error', message = '') => {
+    setProgressSteps(prev => prev.map(step =>
+      step.id === stepId ? { ...step, status, message } : step
+    ));
+  };
+
+  const resetProgress = () => {
+    setProgressSteps([
+      { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
+      { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
+      { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
+      { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
+    ]);
+    setLogs([]);
   };
 
   // Carregar dados fiscais dos itens selecionados
@@ -1646,6 +1850,103 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           </div>
         </div>
       </motion.div>
+
+      {/* Modal de Progresso NFC-e Devolução */}
+      {showProgressModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70] p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl h-[95vh] overflow-hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-gray-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-bold text-white">Emitindo NFC-e de Devolução</h3>
+                  <div className="text-xs text-gray-400">
+                    {progressSteps.filter(s => s.status === 'success').length}/{progressSteps.length} concluídas
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`px-3 py-1 rounded text-sm font-medium ${
+                    ambienteNFe === 'homologacao'
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                      : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  }`}>
+                    {ambienteNFe?.toUpperCase()}
+                  </div>
+                  {!isEmitindoNFCe && (
+                    <button
+                      onClick={() => setShowProgressModal(false)}
+                      className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Steps */}
+            <div className="p-4 border-b border-gray-800 flex-shrink-0">
+              <div className="space-y-2">
+                {progressSteps.map((step, index) => (
+                  <div key={step.id} className="flex items-center gap-3">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      step.status === 'success'
+                        ? 'bg-green-500 text-white'
+                        : step.status === 'error'
+                        ? 'bg-red-500 text-white'
+                        : step.status === 'loading'
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-gray-700 text-gray-400'
+                    }`}>
+                      {step.status === 'success' ? '✓' :
+                       step.status === 'error' ? '✗' :
+                       step.status === 'loading' ? (
+                         <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                       ) : index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className={`text-sm font-medium ${
+                        step.status === 'success' ? 'text-green-400' :
+                        step.status === 'error' ? 'text-red-400' :
+                        step.status === 'loading' ? 'text-primary-400' :
+                        'text-gray-400'
+                      }`}>
+                        {step.label}
+                      </div>
+                      {step.message && (
+                        <div className="text-xs text-gray-500 mt-1">{step.message}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Logs */}
+            <div className="flex-1 p-4 overflow-hidden">
+              <div className="h-full bg-gray-900/50 rounded-lg p-3 overflow-y-auto">
+                <div className="space-y-1">
+                  {logs.map((log, index) => (
+                    <div key={index} className="text-xs font-mono text-gray-300">
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
       {/* Modal de Confirmação para Devolução Manual de NFC-e */}
       {showConfirmacaoManualModal && (
