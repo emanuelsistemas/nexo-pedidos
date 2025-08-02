@@ -1316,9 +1316,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       ambiente: ambienteNFe,
       natureza_operacao: 'DEVOLUÇÃO DE VENDA',
       finalidade: '4', // 4 = Devolução/Retorno
-      chave_referenciada: getVendaOrigemInfo()?.chave_nfce,
+      chave_referenciada: getVendaOrigemInfo()?.chave_nfe,
       // ✅ NOVO: Chave de referência para a aba Chaves Ref da NF-e
-      chave_nfce_original: getVendaOrigemInfo()?.chave_nfce,
+      chave_nfce_original: getVendaOrigemInfo()?.chave_nfe,
       // ✅ NOVO: Incluir dados do cliente selecionado na devolução
       cliente: clienteCompleto ? {
         id: clienteCompleto.id,
@@ -1341,6 +1341,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     };
 
     console.log('📦 Dados da devolução preparados:', dadosDevolucao);
+    console.log('🔍 DEBUG - Venda origem:', getVendaOrigemInfo());
+    console.log('🔍 DEBUG - Chave NFe:', getVendaOrigemInfo()?.chave_nfe);
+    console.log('🔍 DEBUG - Chave para NF-e:', dadosDevolucao.chave_nfce_original);
 
     // Salvar dados da devolução no localStorage para usar na página de NF-e
     localStorage.setItem('dadosDevolucao', JSON.stringify(dadosDevolucao));
