@@ -249,7 +249,8 @@ try {
         "schemes" => "PL_009_V4",
         "versao" => '4.00',
         "CSC" => $empresa[$cscField],
-        "CSCid" => (string)$empresa[$cscIdField] // Converter para string
+        "CSCid" => (string)$empresa[$cscIdField], // Converter para string
+        "cmun" => (int)$empresa['codigo_municipio'] // ✅ ADICIONADO: código do município
     ];
 
     logDetalhado('CONFIG_NFEPHP', 'Configuração NFePHP preparada', $config, 'success');
@@ -351,30 +352,32 @@ try {
         'chave_original' => $nfceData['chave_nfe_original']
     ]);
 
-    // Emitente (dados da empresa)
+    // Emitente (EXATAMENTE igual ao emitir-nfce.php)
     $std = new stdClass();
     $std->xNome = $empresa['razao_social'];
-    $std->xFant = $empresa['nome_fantasia'] ?? $empresa['razao_social'];
+    $std->CNPJ = $cnpjLimpo; // ✅ CORREÇÃO: Usar CNPJ já processado
+    $std->xFant = $empresa['nome_fantasia'] ?? null; // OPCIONAL
     $std->IE = $empresa['inscricao_estadual'];
-    $std->CRT = $empresa['regime_tributario'] ?? 1; // Simples Nacional
+    $std->CRT = (int)$empresa['regime_tributario'];
+
+    logDetalhado('EMITENTE_PREPARADO', 'Dados do emitente preparados', (array)$std);
     $make->tagemit($std);
 
-    // CNPJ do emitente
+    // Endereço do emitente (EXATAMENTE igual ao emitir-nfce.php)
+    $endereco = $empresa['endereco']; // Dados do endereço já vêm estruturados
     $std = new stdClass();
-    $std->CNPJ = $empresa['cnpj'];
-    $make->tagCNPJ($std);
-
-    // Endereço do emitente
-    $std = new stdClass();
-    $std->xLgr = $empresa['endereco'];
-    $std->nro = $empresa['numero'];
-    $std->xBairro = $empresa['bairro'];
-    $std->cMun = $config['cmun'];
-    $std->xMun = $empresa['cidade'];
+    $std->xLgr = $endereco['logradouro'];
+    $std->nro = $endereco['numero'];
+    $std->xCpl = $endereco['complemento'] ?? null; // OPCIONAL
+    $std->xBairro = $endereco['bairro'];
+    $std->cMun = (int)$empresa['codigo_municipio']; // ✅ CORREÇÃO: Usar código do município da empresa
+    $std->xMun = $endereco['cidade'] ?? $empresa['cidade'] ?? '';
     $std->UF = $empresa['uf'];
-    $std->CEP = $empresa['cep'];
+    $std->CEP = $endereco['cep'];
     $std->cPais = 1058;
     $std->xPais = 'BRASIL';
+
+    logDetalhado('ENDERECO_PREPARADO', 'Endereço do emitente preparado', (array)$std);
     $make->tagenderEmit($std);
 
     logDetalhado('EMITENTE_CONFIGURADO', 'Dados do emitente configurados');
@@ -475,9 +478,17 @@ try {
         'valor_total' => $valorTotal
     ]);
 
+    // Verificar erros antes de gerar XML
+    $erros = $make->getErrors();
+    if (!empty($erros)) {
+        logDetalhado('ERROS_VALIDACAO', 'Erros encontrados na validação das tags', $erros, 'error');
+        throw new Exception('Erros na validação: ' . implode('; ', $erros));
+    }
+
     // Gerar XML
+    logDetalhado('XML_GERANDO', 'Iniciando geração do XML da NFC-e de devolução');
     $xml = $make->getXML();
-    logDetalhado('XML_GERADO', 'XML da NFC-e de devolução gerado');
+    logDetalhado('XML_GERADO', 'XML da NFC-e de devolução gerado com sucesso');
 
     // Assinar XML
     $xmlAssinado = $tools->signNFe($xml);

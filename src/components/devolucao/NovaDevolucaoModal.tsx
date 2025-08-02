@@ -1582,27 +1582,49 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           return;
         }
 
-        // Formatar dados da empresa no mesmo padrão que o PDV envia
+        // Função para mapear UF para código (igual ao PDV)
+        const getCodigoUF = (uf: string) => {
+          const codigosUF: { [key: string]: number } = {
+            'AC': 12, 'AL': 17, 'AP': 16, 'AM': 13, 'BA': 29, 'CE': 23, 'DF': 53,
+            'ES': 32, 'GO': 52, 'MA': 21, 'MT': 51, 'MS': 50, 'MG': 31, 'PA': 15,
+            'PB': 25, 'PR': 41, 'PE': 26, 'PI': 22, 'RJ': 33, 'RN': 24, 'RS': 43,
+            'RO': 11, 'RR': 14, 'SC': 42, 'SP': 35, 'SE': 28, 'TO': 17
+          };
+          return codigosUF[uf] || 35; // Default SP se não encontrar
+        };
+
+        // Formatar dados da empresa EXATAMENTE como o PDV faz
         const empresaFormatada = {
+          // Dados básicos da empresa
           razao_social: data.razao_social,
           cnpj: data.documento, // PDV converte 'documento' para 'cnpj'
           nome_fantasia: data.nome_fantasia,
           inscricao_estadual: data.inscricao_estadual,
           regime_tributario: data.regime_tributario || 1,
-          uf: data.uf,
+
+          // Localização (CRÍTICO para NFe) - IGUAL AO PDV
+          uf: data.estado || data.uf || 'SP', // PDV usa 'estado', fallback para 'uf'
+          codigo_uf: getCodigoUF(data.estado || data.uf || 'SP'), // Calcular código da UF
           codigo_municipio: parseInt(data.codigo_municipio) || 3524402,
+
+          // Endereço completo
           endereco: {
-            logradouro: data.endereco,
-            numero: data.numero,
-            bairro: data.bairro,
-            cidade: data.cidade,
-            cep: data.cep
+            logradouro: data.endereco || '',
+            numero: data.numero || 'S/N',
+            bairro: data.bairro || '',
+            cidade: data.cidade || '',
+            cep: data.cep || ''
           },
-          // Campos CSC para NFC-e
+
+          // Campos CSC para NFC-e (OBRIGATÓRIOS)
           csc_homologacao: data.csc_homologacao,
           csc_id_homologacao: data.csc_id_homologacao,
           csc_producao: data.csc_producao,
-          csc_id_producao: data.csc_id_producao
+          csc_id_producao: data.csc_id_producao,
+
+          // Campos adicionais que o PDV envia
+          telefone: data.telefone || '',
+          email: data.email || ''
         };
 
         setEmpresaCompleta(empresaFormatada);
