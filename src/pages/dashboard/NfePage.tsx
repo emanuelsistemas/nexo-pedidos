@@ -3092,16 +3092,87 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       }
     };
 
+    // Listener para carregar dados de devolução
+    const handleLoadDevolucaoData = async (event: CustomEvent) => {
+      const dadosDevolucao = event.detail;
+      console.log('🎯 Evento loadDevolucaoData recebido:', dadosDevolucao);
+
+      // Gerar número da NF-e automaticamente (como faz em Nova NFe)
+      console.log('🔍 Gerando número automático para devolução...');
+      buscarProximoNumero();
+
+      // Carregar produtos da devolução
+      if (dadosDevolucao.produtos && dadosDevolucao.produtos.length > 0) {
+        console.log('📦 Carregando produtos da devolução:', dadosDevolucao.produtos);
+
+        // Estruturar produtos com todos os campos obrigatórios
+        const produtosFormatados = dadosDevolucao.produtos.map((produto: any, index: number) => ({
+          id: `devolucao_${index + 1}`,
+          produto_id: produto.produto_id || produto.id,
+          codigo: produto.codigo || produto.dadosFiscais?.codigo || '999999',
+          descricao: produto.descricao || `DEVOLUÇÃO - ${produto.nome_produto}`,
+          quantidade: produto.quantidade || 1,
+          valor_unitario: produto.valor_unitario || 0,
+          valor_total: produto.valor_total || produto.valor_total_item || 0,
+
+          // Dados fiscais obrigatórios
+          ncm: produto.ncm || produto.dadosFiscais?.ncm || '99999999',
+          cfop: produto.cfop || '5202', // CFOP automático para devolução
+          unidade: produto.unidade || produto.dadosFiscais?.unidade_medida?.sigla || 'UN',
+          ean: produto.ean || produto.dadosFiscais?.codigo_barras || 'SEM GTIN',
+          origem_produto: produto.origem_produto || produto.dadosFiscais?.origem || '0',
+
+          // CST/CSOSN
+          cst_icms: produto.cst_icms || produto.dadosFiscais?.cst_icms || '102',
+          csosn_icms: produto.csosn_icms || produto.dadosFiscais?.csosn_icms || '102',
+          cst_pis: produto.cst_pis || '07',
+          cst_cofins: produto.cst_cofins || '07',
+          cst_ipi: produto.cst_ipi || '99',
+
+          // Alíquotas (zeradas para devolução)
+          aliquota_icms: produto.aliquota_icms || 0,
+          aliquota_pis: produto.aliquota_pis || 0,
+          aliquota_cofins: produto.aliquota_cofins || 0,
+          aliquota_ipi: produto.aliquota_ipi || 0,
+
+          // Valores de impostos (zerados para devolução)
+          valor_icms: produto.valor_icms || 0,
+          valor_pis: produto.valor_pis || 0,
+          valor_cofins: produto.valor_cofins || 0,
+          valor_ipi: produto.valor_ipi || 0,
+          base_calculo_icms: produto.base_calculo_icms || 0
+        }));
+
+        setNfeData(prev => ({
+          ...prev,
+          produtos: produtosFormatados,
+          identificacao: {
+            ...prev.identificacao,
+            natureza_operacao: dadosDevolucao.natureza_operacao || 'DEVOLUÇÃO DE VENDA',
+            finalidade: dadosDevolucao.finalidade || '4'
+          },
+          totais: {
+            ...prev.totais,
+            valor_produtos: dadosDevolucao.valorTotal || 0,
+            valor_total: dadosDevolucao.valorTotal || 0
+          }
+        }));
+        console.log('✅ Produtos da devolução carregados no formulário com estrutura completa');
+      }
+    };
+
     // Adicionar listeners
     window.addEventListener('loadRascunho', handleLoadRascunho as EventListener);
     window.addEventListener('loadNfeView', handleLoadNfeView as EventListener);
     window.addEventListener('resetEditingFlag', handleResetEditingFlag as EventListener);
+    window.addEventListener('loadDevolucaoData', handleLoadDevolucaoData as EventListener);
 
     // Cleanup
     return () => {
       window.removeEventListener('loadRascunho', handleLoadRascunho as EventListener);
       window.removeEventListener('loadNfeView', handleLoadNfeView as EventListener);
       window.removeEventListener('resetEditingFlag', handleResetEditingFlag as EventListener);
+      window.removeEventListener('loadDevolucaoData', handleLoadDevolucaoData as EventListener);
     };
   }, []);
 
