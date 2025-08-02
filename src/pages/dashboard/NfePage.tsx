@@ -3,6 +3,7 @@ import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Downl
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/comum/Button';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
+import ClienteFormCompleto from '../../components/comum/ClienteFormCompleto';
 import { supabase } from '../../lib/supabase';
 import { useApiLogs } from '../../hooks/useApiLogs';
 import { showMessage } from '../../utils/toast';
@@ -5903,6 +5904,7 @@ const DestinatarioSection: React.FC<{
   onClienteSelected?: (observacaoNfe: string) => void;
 }> = ({ data, onChange, onClienteSelected }) => {
   const [showClienteModal, setShowClienteModal] = useState(false);
+  const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
   const [clientes, setClientes] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -6247,12 +6249,23 @@ const DestinatarioSection: React.FC<{
           <div className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">Buscar Cliente</h3>
-              <button
-                onClick={() => setShowClienteModal(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setShowClienteModal(false);
+                    setShowNovoClienteModal(true);
+                  }}
+                  className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors text-sm"
+                >
+                  Cadastrar Cliente
+                </button>
+                <button
+                  onClick={() => setShowClienteModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* Campo de busca */}
@@ -6333,6 +6346,22 @@ const DestinatarioSection: React.FC<{
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Cadastro de Cliente */}
+      {showNovoClienteModal && (
+        <ClienteFormCompleto
+          isOpen={showNovoClienteModal}
+          onClose={() => setShowNovoClienteModal(false)}
+          onClienteAdicionado={(novoCliente) => {
+            console.log('✅ Cliente cadastrado com sucesso:', novoCliente);
+            setShowNovoClienteModal(false);
+            // Opcional: Selecionar automaticamente o cliente recém-cadastrado
+            if (novoCliente) {
+              selecionarCliente(novoCliente);
+            }
+          }}
+        />
       )}
     </div>
   );
