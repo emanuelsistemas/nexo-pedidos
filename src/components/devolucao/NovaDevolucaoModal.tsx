@@ -1983,7 +1983,32 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
               <div className="space-y-6">
                 {/* Mensagem Principal */}
                 <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <h4 className="text-red-400 font-semibold mb-2">Mensagem de Erro:</h4>
+                  <h4 className="text-red-400 font-semibold mb-2">
+                    {(() => {
+                      // Extrair último erro específico dos logs
+                      const logsText = apiLogs.join('\n');
+
+                      // Procurar por erros específicos nos logs (do mais recente para o mais antigo)
+                      if (logsText.includes('A configuração (config.json) não é válido')) {
+                        return 'Próximo Erro: Configuração NFePHP inválida';
+                      }
+                      if (logsText.includes('Erro ao inicializar Tools')) {
+                        return 'Próximo Erro: Falha na inicialização NFePHP';
+                      }
+                      if (logsText.includes('CNPJ com tamanho inválido')) {
+                        return 'Próximo Erro: CNPJ da empresa inválido';
+                      }
+                      if (logsText.includes('Certificado não encontrado')) {
+                        return 'Próximo Erro: Certificado digital não encontrado';
+                      }
+                      if (logsText.includes('Configuração NFe não encontrada')) {
+                        return 'Próximo Erro: Configuração NFC-e não encontrada';
+                      }
+
+                      // Se não encontrou erro específico, mostrar genérico
+                      return 'Mensagem de Erro:';
+                    })()}
+                  </h4>
                   <p className="text-red-200">{errorDetails.mensagem}</p>
                 </div>
 

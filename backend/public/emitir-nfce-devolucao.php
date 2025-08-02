@@ -20,8 +20,30 @@ ini_set('max_execution_time', 300);
 ini_set('log_errors', 1);
 ini_set('error_log', '/tmp/nfce_devolucao_debug.log');
 
-function logDetalhado($step, $message, $data = null) {
+function logDetalhado($step, $message, $data = null, $status = 'info') {
     $timestamp = date('Y-m-d H:i:s.u');
+
+    // Determinar emoji baseado no status
+    $emoji = '🔵'; // Padrão azul para info
+    switch ($status) {
+        case 'success':
+        case 'ok':
+            $emoji = '🟢'; // Verde para sucesso
+            break;
+        case 'error':
+        case 'erro':
+            $emoji = '🔴'; // Vermelho para erro
+            break;
+        case 'warning':
+        case 'aviso':
+            $emoji = '🟡'; // Amarelo para aviso
+            break;
+        case 'info':
+        default:
+            $emoji = '🔵'; // Azul para informação
+            break;
+    }
+
     $logEntry = "[{$timestamp}] DEVOLUCAO_STEP_{$step}: {$message}";
     if ($data !== null) {
         $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE);
@@ -41,9 +63,9 @@ function logDetalhado($step, $message, $data = null) {
         error_log("ERRO: Exceção ao escrever log detalhado: " . $logError->getMessage());
     }
 
-    // Log no formato que o sistema de logs consegue ler
+    // Log no formato que o sistema de logs consegue ler COM EMOJI
     try {
-        $systemLogEntry = "[" . date('d-M-Y H:i:s') . "] ERROR: [NFCE-DEVOLUCAO] {$message}";
+        $systemLogEntry = "[" . date('H:i:s') . "] [NFE-SYSTEM] [NFCE-DEVOLUCAO] {$emoji} {$message}";
         if ($data !== null) {
             $systemLogEntry .= " | " . json_encode($data, JSON_UNESCAPED_UNICODE);
         }
@@ -195,26 +217,40 @@ try {
 
     $ambiente = ($nfeConfig['ambiente'] === 'producao') ? 1 : 2;
 
-    // Limpar CNPJ - usar campo 'documento' da tabela empresas
-    $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa['documento']);
+    // Limpar CNPJ - usar campo 'cnpj' igual ao emitir-nfce.php
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa['cnpj']);
     logDetalhado('CNPJ_PROCESSADO', 'CNPJ processado', [
-        'original' => $empresa['documento'],
+        'original' => $empresa['cnpj'],
         'limpo' => $cnpjLimpo,
         'tamanho' => strlen($cnpjLimpo)
-    ]);
+    ], 'success');
 
     if (strlen($cnpjLimpo) !== 14) {
         logDetalhado('CNPJ_ERROR', 'CNPJ com tamanho inválido', [
             'cnpj' => $cnpjLimpo,
             'tamanho' => strlen($cnpjLimpo)
-        ]);
+        ], 'error');
         throw new Exception('CNPJ da empresa deve ter 14 dígitos');
+    }
+
+    // Validações obrigatórias (igual ao emitir-nfce.php)
+    if (empty($empresa['uf'])) {
+        throw new Exception('UF da empresa é obrigatória');
+    }
+
+    if (empty($empresa['codigo_municipio'])) {
+        throw new Exception('Código do município da empresa é obrigatório');
+    }
+
+    if (empty($empresa['inscricao_estadual'])) {
+        throw new Exception('Inscrição Estadual da empresa é obrigatória');
     }
 
     // Determinar campos CSC baseado no ambiente
     $cscField = ($ambiente === 1) ? 'csc_producao' : 'csc_homologacao';
     $cscIdField = ($ambiente === 1) ? 'csc_id_producao' : 'csc_id_homologacao';
 
+    // Configuração IGUAL ao emitir-nfce.php
     $config = [
         "atualizacao" => date('Y-m-d H:i:s'),
         "tpAmb" => $ambiente,
@@ -223,11 +259,11 @@ try {
         "siglaUF" => $empresa['uf'],
         "schemes" => "PL_009_V4",
         "versao" => '4.00',
-        "CSC" => $empresa[$cscField] ?? '',
-        "CSCid" => (string)($empresa[$cscIdField] ?? '1')
+        "CSC" => $empresa[$cscField],
+        "CSCid" => (string)$empresa[$cscIdField] // Converter para string
     ];
 
-    logDetalhado('CONFIG_NFEPHP', 'Configuração NFePHP preparada', $config);
+    logDetalhado('CONFIG_NFEPHP', 'Configuração NFePHP preparada', $config, 'success');
 
     // Inicializar NFePHP Tools
     logDetalhado('INIT_NFEPHP', 'Inicializando classes NFePHP');
