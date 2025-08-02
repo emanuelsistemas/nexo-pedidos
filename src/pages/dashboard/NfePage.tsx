@@ -3175,10 +3175,28 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             ...prev.identificacao,
             natureza_operacao: dadosDevolucao.natureza_operacao || 'DEVOLUÇÃO DE VENDA',
             finalidade: dadosDevolucao.finalidade || '4',
-            // ✅ NOVO: Incluir observação do cliente se houver
-            informacao_adicional: dadosDevolucao.cliente?.observacao_nfe
-              ? `${prev.identificacao.informacao_adicional || ''}\n${dadosDevolucao.cliente.observacao_nfe}`.trim()
-              : prev.identificacao.informacao_adicional
+            // ✅ NOVO: Incluir número da venda e observação do cliente
+            informacao_adicional: (() => {
+              const infos = [];
+
+              // Adicionar número da venda (verificar múltiplos campos possíveis)
+              const numeroVenda = dadosDevolucao.vendaOrigem?.numero_venda || dadosDevolucao.vendaOrigem?.numero;
+              if (numeroVenda) {
+                infos.push(`DEVOLUÇÃO DA VENDA: ${numeroVenda}`);
+              }
+
+              // Adicionar observação do cliente se houver
+              if (dadosDevolucao.cliente?.observacao_nfe) {
+                infos.push(dadosDevolucao.cliente.observacao_nfe);
+              }
+
+              // Adicionar informações existentes se houver
+              if (prev.identificacao.informacao_adicional) {
+                infos.push(prev.identificacao.informacao_adicional);
+              }
+
+              return infos.join('\n').trim();
+            })()
           },
           // ✅ NOVO: Preencher destinatário com dados do cliente da devolução
           destinatario: {
@@ -3200,6 +3218,17 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         }
         if (dadosDevolucao.chave_nfce_original) {
           console.log('✅ Chave de referência da NFC-e carregada:', dadosDevolucao.chave_nfce_original);
+        }
+
+        // ✅ DEBUG: Verificar dados da venda origem
+        console.log('🔍 DEBUG - Venda origem completa:', dadosDevolucao.vendaOrigem);
+        console.log('🔍 DEBUG - Número da venda:', dadosDevolucao.vendaOrigem?.numero_venda);
+        console.log('🔍 DEBUG - Número (campo numero):', dadosDevolucao.vendaOrigem?.numero);
+
+        if (dadosDevolucao.vendaOrigem?.numero_venda || dadosDevolucao.vendaOrigem?.numero) {
+          console.log('✅ Número da venda adicionado às informações adicionais:', dadosDevolucao.vendaOrigem?.numero_venda || dadosDevolucao.vendaOrigem?.numero);
+        } else {
+          console.log('❌ Número da venda não encontrado na venda origem');
         }
       }
     };
