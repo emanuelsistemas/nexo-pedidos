@@ -133,6 +133,37 @@ const NfePage: React.FC = () => {
   useEffect(() => {
     loadNfes();
     loadNaturezasOperacao();
+
+    // Verificar se há dados de devolução no localStorage
+    const dadosDevolucao = localStorage.getItem('dadosDevolucao');
+    if (dadosDevolucao) {
+      console.log('💾 Dados de devolução encontrados no localStorage');
+      try {
+        const dados = JSON.parse(dadosDevolucao);
+        console.log('📦 Carregando dados de devolução:', dados);
+
+        // Limpar localStorage
+        localStorage.removeItem('dadosDevolucao');
+
+        // Abrir modal de NF-e com dados da devolução
+        handleNFeDevolucao(dados);
+      } catch (error) {
+        console.error('❌ Erro ao carregar dados de devolução:', error);
+        localStorage.removeItem('dadosDevolucao');
+      }
+    }
+
+    // Listener para abrir NF-e de devolução (mantido para compatibilidade)
+    const handleAbrirNFeDevolucao = (event: CustomEvent) => {
+      console.log('🎯 Evento abrirNFeDevolucao recebido:', event.detail);
+      handleNFeDevolucao(event.detail);
+    };
+
+    window.addEventListener('abrirNFeDevolucao', handleAbrirNFeDevolucao as EventListener);
+
+    return () => {
+      window.removeEventListener('abrirNFeDevolucao', handleAbrirNFeDevolucao as EventListener);
+    };
   }, []);
 
   const loadNfes = async () => {
@@ -1164,6 +1195,26 @@ const NfePage: React.FC = () => {
       console.log('🔄 Disparando evento resetEditingFlag para NOVA NFe');
       const event = new CustomEvent('resetEditingFlag', {
         detail: { isNewNfe: true } // ✅ Indicar que é uma nova NFe
+      });
+      window.dispatchEvent(event);
+    }, 100);
+  };
+
+  // Função para abrir NF-e de devolução
+  const handleNFeDevolucao = (dadosDevolucao: any) => {
+    console.log('🔄 handleNFeDevolucao chamada - Abrindo NF-e para devolução:', dadosDevolucao);
+    console.log('🔄 Estado atual - showForm:', showForm, 'isViewMode:', isViewMode);
+
+    setIsViewMode(false);
+    setShowForm(true);
+
+    console.log('🔄 Estados alterados - showForm: true, isViewMode: false');
+
+    // Disparar evento para carregar dados da devolução no formulário
+    setTimeout(() => {
+      console.log('🔄 Disparando evento loadDevolucaoData');
+      const event = new CustomEvent('loadDevolucaoData', {
+        detail: dadosDevolucao
       });
       window.dispatchEvent(event);
     }, 100);

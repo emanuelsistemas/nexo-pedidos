@@ -1265,7 +1265,46 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     setNumeroNFCeEditado('');
   };
 
-  // Função para emitir NFC-e de devolução
+  // Função para abrir modal de NF-e de devolução
+  const abrirModalNFeDevolucao = () => {
+    console.log('🚀 [MODAL] Abrindo modal de NF-e para devolução');
+
+    // Preparar produtos com CFOP 5202 automático
+    const produtosDevolucao = itensComDadosFiscais.map(item => ({
+      ...item,
+      cfop: '5202', // CFOP automático para devolução
+      descricao: `DEVOLUÇÃO - ${item.nome_produto}`,
+      finalidade: 'devolucao'
+    }));
+
+    // Preparar dados da devolução para o modal de NF-e
+    const dadosDevolucao = {
+      tipo: 'devolucao',
+      produtos: produtosDevolucao,
+      vendaOrigem: getVendaOrigemInfo(),
+      valorTotal: valorTotal,
+      empresaId: empresaId,
+      ambiente: ambienteNFe,
+      natureza_operacao: 'DEVOLUÇÃO DE VENDA',
+      finalidade: '4', // 4 = Devolução/Retorno
+      chave_referenciada: getVendaOrigemInfo()?.chave_nfce
+    };
+
+    console.log('📦 Dados da devolução preparados:', dadosDevolucao);
+
+    // Salvar dados da devolução no localStorage para usar na página de NF-e
+    localStorage.setItem('dadosDevolucao', JSON.stringify(dadosDevolucao));
+    console.log('💾 Dados da devolução salvos no localStorage');
+
+    // Fechar modal atual
+    onClose();
+
+    // Navegar para a página de NF-e
+    console.log('🧭 Navegando para página de NF-e...');
+    window.location.href = '/dashboard/nfe?acao=devolucao';
+  };
+
+  // Função para emitir NFC-e de devolução (mantida para compatibilidade)
   const emitirNFCeDevolucao = async () => {
     try {
       console.log('🚀 [MODAL] Iniciando emissão NFC-e devolução');
@@ -1336,12 +1375,22 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         // Ambiente (obrigatório)
         ambiente: ambienteNFe,
 
-        // Identificação da NFC-e
+        // Identificação da NFC-e de DEVOLUÇÃO
         identificacao: {
           numero: proximoNumeroNFCe,
           serie: empresaCompleta.serie_nfce || 1,
           codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
-          natureza_operacao: 'DEVOLUÇÃO DE VENDA'
+          natureza_operacao: 'DEVOLUÇÃO DE VENDA',
+          modelo: '65', // NFC-e
+          finalidade: '4', // 4 = Devolução/Retorno
+          tipo_operacao: '1', // 1 = Saída
+          tipo_emissao: '1', // 1 = Emissão normal
+          ambiente: ambienteNFe === 'homologacao' ? '2' : '1'
+        },
+
+        // Referência à NFC-e original (obrigatório para devolução)
+        nfe_referenciada: {
+          chave_acesso: vendaOrigem.chave_nfce
         },
 
         // Cliente (destinatário)
@@ -1353,8 +1402,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           email: vendaOrigem.cliente.email
         } : null,
 
-        // Produtos da devolução com CFOP 5202
-        produtos: itensComDadosFiscais.map(item => ({
+        // Produtos da devolução com CFOP 5202 AUTOMÁTICO
+        produtos: itensComDadosFiscais.map((item, index) => ({
+          numero_item: index + 1,
           codigo: item.dadosFiscais.codigo || '999999',
           descricao: `DEVOLUÇÃO - ${item.nome_produto}`,
           quantidade: item.quantidade,
@@ -1363,27 +1413,46 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           codigo_barras: item.dadosFiscais.codigo_barras || '',
           unidade: item.dadosFiscais.unidade_medida?.sigla || 'UN',
           ncm: item.dadosFiscais.ncm || '99999999',
-          cfop: '5202', // CFOP específico para devolução
-          cst_icms: item.dadosFiscais.cst_icms,
-          csosn_icms: item.dadosFiscais.csosn_icms,
+          cfop: '5202', // ✅ CFOP 5202 AUTOMÁTICO PARA DEVOLUÇÃO
+          cst_icms: item.dadosFiscais.cst_icms || '102',
+          csosn_icms: item.dadosFiscais.csosn_icms || '102',
           origem_produto: item.dadosFiscais.origem || '0'
         })),
 
-        // Pagamento (mesmo valor da devolução)
+        // Totais da NFC-e de devolução
+        totais: {
+          valor_produtos: valorTotal,
+          valor_total: valorTotal,
+          valor_icms: 0,
+          valor_pis: 0,
+          valor_cofins: 0,
+          valor_desconto: 0,
+          valor_frete: 0,
+          valor_seguro: 0,
+          valor_outras_despesas: 0
+        },
+
+        // Transporte para devolução
+        transporte: {
+          modalidade_frete: '9' // 9 = Sem Ocorrência de Transporte
+        },
+
+        // Pagamento para devolução (valor negativo ou estorno)
         pagamento: {
-          forma_pagamento: '01', // Dinheiro para devolução
-          valor_pago: valorTotal
+          forma_pagamento: '90', // Sem pagamento (devolução)
+          valor_pago: 0, // Zero para devolução
+          troco: 0
         },
 
         // ✅ MARCADORES ESPECÍFICOS PARA DEVOLUÇÃO
         is_devolucao: true,
-        natureza_operacao: 'DEVOLUÇÃO DE VENDA',
-        informacoes_adicionais: `DEVOLUÇÃO DE MERCADORIA - Ref. Chave: ${vendaOrigem.chave_nfe}`,
+        tipo_operacao: 'devolucao',
+        informacoes_adicionais: `DEVOLUÇÃO DE MERCADORIA - Ref. NFC-e: ${vendaOrigem.chave_nfce || vendaOrigem.chave_nfe}`,
 
         // Dados da venda origem para referência
         venda_origem: {
           numero: vendaOrigem.numero,
-          chave_nfe: vendaOrigem.chave_nfe,
+          chave_nfce: vendaOrigem.chave_nfce || vendaOrigem.chave_nfe,
           data_emissao: vendaOrigem.data_emissao_nfe
         }
       };
@@ -2152,11 +2221,11 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
             </button>
 
             <button
-              onClick={() => handleConfirmarDevolucao('nfce')}
+              onClick={() => abrirModalNFeDevolucao()}
               disabled={isLoading}
               className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
             >
-              {isLoading ? 'Criando Devolução...' : 'Confirmar Devolução NFC-e'}
+              {isLoading ? 'Criando Devolução...' : 'Emitir NF-e de Devolução'}
             </button>
           </div>
         </div>
