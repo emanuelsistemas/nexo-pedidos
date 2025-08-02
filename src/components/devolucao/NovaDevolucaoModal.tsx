@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus, AlertCircle, AlertTriangle } from 'lucide-react';
+import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus, AlertCircle, AlertTriangle, Edit2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
 import ClienteFormCompleto from '../comum/ClienteFormCompleto';
@@ -1164,6 +1164,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao' | null>(null);
   const [empresaCompleta, setEmpresaCompleta] = useState<any>(null);
   const [proximoNumeroNFCe, setProximoNumeroNFCe] = useState<number | null>(null);
+  const [editandoNumeroNFCe, setEditandoNumeroNFCe] = useState(false);
+  const [numeroNFCeEditado, setNumeroNFCeEditado] = useState<string>('');
   const [showConfirmacaoManualModal, setShowConfirmacaoManualModal] = useState(false);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
 
@@ -1239,6 +1241,29 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     } catch (error) {
       console.error('Erro ao confirmar devolução manual:', error);
     }
+  };
+
+  // Funções para edição do número da NFC-e
+  const iniciarEdicaoNumero = () => {
+    setNumeroNFCeEditado(proximoNumeroNFCe?.toString() || '');
+    setEditandoNumeroNFCe(true);
+  };
+
+  const cancelarEdicaoNumero = () => {
+    setEditandoNumeroNFCe(false);
+    setNumeroNFCeEditado('');
+  };
+
+  const salvarNumeroEditado = () => {
+    const numeroEditado = parseInt(numeroNFCeEditado);
+    if (isNaN(numeroEditado) || numeroEditado <= 0) {
+      alert('Por favor, insira um número válido maior que zero.');
+      return;
+    }
+
+    setProximoNumeroNFCe(numeroEditado);
+    setEditandoNumeroNFCe(false);
+    setNumeroNFCeEditado('');
   };
 
   // Função para emitir NFC-e de devolução
@@ -1758,7 +1783,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const itensSelecionados = getItensSelecionados();
   const vendaOrigemInfo = getVendaOrigemInfo();
 
-  const handleConfirm = (tipoConfirmacao: 'manual' | 'nfce' = 'manual') => {
+  const handleConfirm = (tipoConfirmacao: 'manual' | 'nfce' = 'manual', dadosExtras?: any) => {
     const dadosDevolucao = {
       clienteId,
       itens: itensSelecionados,
@@ -1766,7 +1791,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       vendasCompletas: Array.from(selectedVendas),
       itensIndividuais: Array.from(selectedItens),
       vendaOrigem: vendaOrigemInfo, // Adicionar informações da venda origem
-      tipoConfirmacao // Adicionar tipo de confirmação
+      tipoConfirmacao, // Adicionar tipo de confirmação
+      ...dadosExtras // Adicionar dados extras (como dados da NFC-e)
     };
     onConfirm(dadosDevolucao);
   };
@@ -1856,9 +1882,51 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                       <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-sm rounded border border-blue-600/30">
                         Série: {vendaOrigemInfo.serie_documento || 'N/A'}
                       </span>
-                      <span className="px-3 py-1 bg-orange-600/20 text-orange-400 text-sm rounded border border-orange-600/30">
-                        Próximo Número: #{proximoNumeroNFCe || 'Carregando...'}
-                      </span>
+
+                      {/* Campo de número editável */}
+                      <div className="flex items-center gap-2">
+                        {editandoNumeroNFCe ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={numeroNFCeEditado}
+                              onChange={(e) => setNumeroNFCeEditado(e.target.value)}
+                              className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
+                              placeholder="Número"
+                              min="1"
+                            />
+                            <button
+                              onClick={salvarNumeroEditado}
+                              className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                              title="Salvar número"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              onClick={cancelarEdicaoNumero}
+                              className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                              title="Cancelar edição"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 bg-orange-600/20 text-orange-400 text-sm rounded border border-orange-600/30">
+                              Próximo Número: #{proximoNumeroNFCe || 'Carregando...'}
+                            </span>
+                            {proximoNumeroNFCe && (
+                              <button
+                                onClick={iniciarEdicaoNumero}
+                                className="p-1 text-gray-400 hover:text-orange-400 transition-colors"
+                                title="Editar número"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="text-green-400 text-sm">
                       Nova NFC-e será gerada automaticamente

@@ -14,6 +14,9 @@ use NFePHP\NFe\Tools;
 use NFePHP\NFe\Make;
 use NFePHP\Common\Certificate;
 
+// Incluir arquivo de funções de storage
+require_once '../includes/storage-paths.php';
+
 // SISTEMA DE LOGS DETALHADOS
 ini_set('memory_limit', '512M');
 ini_set('max_execution_time', 300);
@@ -565,6 +568,192 @@ try {
     curl_exec($ch);
     curl_close($ch);
 
+    // ✅ SALVAR XML NO STORAGE (IGUAL AO emitir-nfce.php)
+    logDetalhado('XML_SALVANDO', 'Iniciando salvamento do XML da NFC-e de devolução');
+
+    // Protocolar XML (adicionar protocolo ao XML)
+    $xmlComProtocolo = $tools->addProtocol($xmlAssinado, $st->any);
+    logDetalhado('XML_PROTOCOLADO', 'XML protocolado com sucesso');
+
+    // Determinar ambiente para salvamento
+    $ambienteTexto = $ambiente == 1 ? 'producao' : 'homologacao';
+    logDetalhado('AMBIENTE_DETERMINADO', 'Ambiente determinado', ['ambiente' => $ambienteTexto]);
+
+    // Gerar caminho usando função do storage-paths.php
+    $xmlDir = getXmlPath($empresaId, $ambienteTexto, '65', 'Autorizados');
+    logDetalhado('DIRETORIO_XML', 'Diretório XML determinado', ['path' => $xmlDir]);
+
+    // Criar diretório se não existir
+    if (!is_dir($xmlDir)) {
+        logDetalhado('CRIANDO_DIRETORIO', 'Criando diretório XML', ['path' => $xmlDir]);
+        if (!mkdir($xmlDir, 0755, true)) {
+            logDetalhado('ERRO_DIRETORIO', 'Erro ao criar diretório XML', ['path' => $xmlDir], 'error');
+            throw new Exception('Erro ao criar diretório para XML da NFC-e de devolução');
+        }
+        logDetalhado('DIRETORIO_CRIADO', 'Diretório XML criado com sucesso', [], 'success');
+    } else {
+        logDetalhado('DIRETORIO_EXISTE', 'Diretório XML já existe', [], 'success');
+    }
+
+    // Salvar XML
+    $xmlPath = "{$xmlDir}/{$chaveNFe}.xml";
+    logDetalhado('SALVANDO_XML', 'Salvando XML no caminho', ['path' => $xmlPath]);
+
+    $xmlSalvo = file_put_contents($xmlPath, $xmlComProtocolo);
+
+    if ($xmlSalvo === false) {
+        logDetalhado('ERRO_SALVAR_XML', 'Erro ao salvar XML', ['path' => $xmlPath], 'error');
+        throw new Exception('Erro ao salvar XML da NFC-e de devolução');
+    }
+
+    logDetalhado('XML_SALVO', 'XML da NFC-e de devolução salvo com sucesso', [
+        'path' => $xmlPath,
+        'bytes' => $xmlSalvo,
+        'chave' => $chaveNFe
+    ], 'success');
+
+    // ✅ CRIAR REGISTRO NA TABELA PDV PARA CONTROLE DE NUMERAÇÃO
+    logDetalhado('PDV_CRIANDO', 'Criando registro na tabela PDV para controle de numeração');
+
+    // Buscar dados da empresa para o registro PDV
+    $url = $supabaseUrl . "/rest/v1/empresas?id=eq.{$empresaId}&select=*";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabaseKey,
+        'Authorization: Bearer ' . $supabaseKey,
+        'Content-Type: application/json'
+    ]);
+    $empresaResponse = curl_exec($ch);
+    curl_close($ch);
+
+    $empresaData = json_decode($empresaResponse, true);
+    if (!$empresaData || empty($empresaData)) {
+        logDetalhado('ERRO_EMPRESA', 'Empresa não encontrada para criar registro PDV', [], 'error');
+        throw new Exception('Empresa não encontrada para criar registro PDV');
+    }
+
+    $empresa = $empresaData[0];
+    logDetalhado('EMPRESA_ENCONTRADA', 'Dados da empresa carregados', ['razao_social' => $empresa['razao_social']]);
+
+    // Gerar número de venda único para a devolução
+    $numeroVendaDevolucao = 'DEV-' . date('YmdHis') . '-' . substr($chaveNFe, -6);
+    logDetalhado('NUMERO_VENDA_GERADO', 'Número de venda da devolução gerado', ['numero' => $numeroVendaDevolucao]);
+
+    // Preparar dados do registro PDV para devolução
+    $pdvDevolucaoData = [
+        'empresa_id' => $empresaId,
+        'usuario_id' => $empresa['usuario_proprietario_id'], // Usar proprietário da empresa
+        'numero_venda' => $numeroVendaDevolucao,
+        'data_venda' => date('Y-m-d\TH:i:s.u\Z'),
+        'status_venda' => 'finalizada',
+        'nfce_devolucao' => true, // ✅ CAMPO ESPECIAL PARA IDENTIFICAR DEVOLUÇÕES
+        'modelo_documento' => 65, // NFC-e
+        'serie_documento' => (int)$nfeConfig['serie_nfce'],
+        'numero_documento' => $proximoNumero,
+        'chave_acesso' => $chaveNFe,
+        'protocolo_autorizacao' => $protocolo,
+        'status_fiscal' => 'autorizada',
+        'valor_total' => $dadosNFCe['valor_total'],
+        'observacao_venda' => 'NFC-e de Devolução - Chave: ' . $chaveNFe,
+        'created_at' => date('Y-m-d\TH:i:s.u\Z'),
+        'updated_at' => date('Y-m-d\TH:i:s.u\Z')
+    ];
+
+    logDetalhado('PDV_DADOS_PREPARADOS', 'Dados do registro PDV preparados', $pdvDevolucaoData);
+
+    // Inserir registro na tabela PDV
+    $url = $supabaseUrl . "/rest/v1/pdv";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($pdvDevolucaoData));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabaseKey,
+        'Authorization: Bearer ' . $supabaseKey,
+        'Content-Type: application/json',
+        'Prefer: return=representation'
+    ]);
+    $pdvResponse = curl_exec($ch);
+    $pdvHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($pdvHttpCode !== 201) {
+        logDetalhado('ERRO_PDV', 'Erro ao criar registro PDV', [
+            'http_code' => $pdvHttpCode,
+            'response' => $pdvResponse
+        ], 'error');
+        throw new Exception('Erro ao criar registro PDV para devolução');
+    }
+
+    $pdvCriado = json_decode($pdvResponse, true);
+    $pdvId = $pdvCriado[0]['id'];
+    logDetalhado('PDV_CRIADO', 'Registro PDV criado com sucesso', [
+        'id' => $pdvId,
+        'numero_venda' => $numeroVendaDevolucao
+    ], 'success');
+
+    // ✅ CRIAR ITENS DA DEVOLUÇÃO NA TABELA PDV_ITENS
+    logDetalhado('PDV_ITENS_CRIANDO', 'Criando itens da devolução na tabela pdv_itens');
+
+    $pdvItensData = [];
+    foreach ($dadosNFCe['itens'] as $index => $item) {
+        $pdvItensData[] = [
+            'empresa_id' => $empresaId,
+            'usuario_id' => $empresa['usuario_proprietario_id'],
+            'pdv_id' => $pdvId,
+            'produto_id' => $item['produto_id'],
+            'codigo_produto' => $item['codigo_produto'] ?? null,
+            'nome_produto' => $item['nome_produto'],
+            'descricao_produto' => 'Item de devolução NFC-e',
+            'quantidade' => $item['quantidade'],
+            'valor_unitario' => $item['valor_unitario'],
+            'valor_subtotal' => $item['valor_total'],
+            'valor_total_item' => $item['valor_total'],
+            'origem_item' => 'nfce_devolucao',
+            'observacao_item' => 'Item de devolução - NFC-e: ' . $chaveNFe,
+            'created_at' => date('Y-m-d\TH:i:s.u\Z'),
+            'updated_at' => date('Y-m-d\TH:i:s.u\Z')
+        ];
+    }
+
+    logDetalhado('PDV_ITENS_DADOS_PREPARADOS', 'Dados dos itens PDV preparados', [
+        'total_itens' => count($pdvItensData)
+    ]);
+
+    // Inserir itens na tabela PDV_ITENS
+    $url = $supabaseUrl . "/rest/v1/pdv_itens";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($pdvItensData));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabaseKey,
+        'Authorization: Bearer ' . $supabaseKey,
+        'Content-Type: application/json',
+        'Prefer: return=representation'
+    ]);
+    $pdvItensResponse = curl_exec($ch);
+    $pdvItensHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($pdvItensHttpCode !== 201) {
+        logDetalhado('ERRO_PDV_ITENS', 'Erro ao criar itens PDV', [
+            'http_code' => $pdvItensHttpCode,
+            'response' => $pdvItensResponse
+        ], 'error');
+        // Não falhar aqui - o principal já foi criado
+        logDetalhado('AVISO_PDV_ITENS', 'Continuando sem os itens PDV - registro principal criado', [], 'warning');
+    } else {
+        $pdvItensCriados = json_decode($pdvItensResponse, true);
+        logDetalhado('PDV_ITENS_CRIADOS', 'Itens PDV criados com sucesso', [
+            'total_criados' => count($pdvItensCriados)
+        ], 'success');
+    }
+
     // Resposta de sucesso
     echo json_encode([
         'erro' => false,
@@ -573,6 +762,9 @@ try {
         'numero' => $proximoNumero,
         'protocolo' => $protocolo,
         'xml' => base64_encode($xmlAssinado),
+        'pdv_id' => $pdvId,
+        'numero_venda_devolucao' => $numeroVendaDevolucao,
+        'xml_path' => $xmlPath,
         'mensagem' => 'NFC-e de devolução emitida com sucesso'
     ]);
 
