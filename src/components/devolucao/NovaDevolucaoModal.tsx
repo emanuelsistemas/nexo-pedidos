@@ -172,7 +172,9 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
           status_venda,
           status_fiscal,
           modelo_documento,
-          chave_nfe
+          chave_nfe,
+          numero_documento,
+          serie_documento
         `)
         .eq('empresa_id', empresaIdToUse)
         .in('status_venda', ['finalizada', 'paga'])
@@ -1702,7 +1704,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         numero: venda.numero_venda,
         data: venda.data_venda || venda.created_at,
         modelo_documento: venda.modelo_documento,
-        chave_nfe: venda.chave_nfe
+        chave_nfe: venda.chave_nfe,
+        numero_documento: venda.numero_documento,
+        serie_documento: venda.serie_documento
       } : null;
     }
 
@@ -1717,7 +1721,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         numero: vendaDoItem.numero_venda,
         data: vendaDoItem.data_venda || vendaDoItem.created_at,
         modelo_documento: vendaDoItem.modelo_documento,
-        chave_nfe: vendaDoItem.chave_nfe
+        chave_nfe: vendaDoItem.chave_nfe,
+        numero_documento: vendaDoItem.numero_documento,
+        serie_documento: vendaDoItem.serie_documento
       } : null;
     }
 
