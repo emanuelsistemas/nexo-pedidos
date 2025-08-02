@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus, AlertCircle } from 'lucide-react';
+import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus, AlertCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
 import ClienteFormCompleto from '../comum/ClienteFormCompleto';
@@ -1158,6 +1158,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [itensComDadosFiscais, setItensComDadosFiscais] = useState<any[]>([]);
+  const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao' | null>(null);
+  const [showConfirmacaoManualModal, setShowConfirmacaoManualModal] = useState(false);
+  const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
 
   // Função para formatar data (local do componente)
   const formatDate = (dateString: string) => {
@@ -1168,6 +1171,36 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Função para confirmar devolução com verificação de NFC-e
+  const handleConfirmarDevolucao = async (tipoConfirmacao: 'manual' | 'nfce') => {
+    if (isLoading) return;
+
+    // Se for devolução manual e a venda origem for NFC-e, mostrar modal de confirmação
+    if (tipoConfirmacao === 'manual') {
+      const vendaOrigem = getVendaOrigemInfo();
+      if (vendaOrigem?.modelo_documento === 65) { // 65 = NFC-e
+        setShowConfirmacaoManualModal(true);
+        return;
+      }
+    }
+
+    // Proceder com a confirmação normal
+    await handleConfirm(tipoConfirmacao);
+  };
+
+  // Função para confirmar devolução manual forçada (após confirmação)
+  const handleConfirmarDevolucaoManualForcada = async () => {
+    if (confirmacaoTexto !== 'CONFIRMAR') return;
+
+    try {
+      setShowConfirmacaoManualModal(false);
+      setConfirmacaoTexto('');
+      await handleConfirm('manual');
+    } catch (error) {
+      console.error('Erro ao confirmar devolução manual:', error);
+    }
   };
 
   // Função para alternar expansão dos dados fiscais
@@ -1249,6 +1282,35 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
     carregarDadosFiscais();
   }, [isOpen, selectedItens, selectedVendas, vendas, empresaId]);
+
+  // Carregar ambiente NFe da empresa
+  useEffect(() => {
+    const carregarAmbienteNFe = async () => {
+      if (!isOpen || !empresaId) return;
+
+      try {
+        const { data: nfeConfigData, error } = await supabase
+          .from('nfe_config')
+          .select('ambiente')
+          .eq('empresa_id', empresaId)
+          .single();
+
+        if (error) {
+          console.warn('Erro ao buscar configuração NFe:', error);
+          setAmbienteNFe(null); // Não define ambiente se houver erro
+          return;
+        }
+
+        // Só define o ambiente se realmente conseguir buscar da base
+        setAmbienteNFe(nfeConfigData?.ambiente || null);
+      } catch (error) {
+        console.error('Erro ao carregar ambiente NFe:', error);
+        setAmbienteNFe(null); // Não define ambiente se houver erro
+      }
+    };
+
+    carregarAmbienteNFe();
+  }, [isOpen, empresaId]);
 
   // Função para obter todos os itens selecionados (excluindo taxa de entrega)
   const getItensSelecionados = () => {
@@ -1359,9 +1421,17 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       >
         {/* Cabeçalho */}
         <div className="flex-shrink-0 px-6 py-4 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">
-            Finalizar Devolução
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-semibold text-white">
+              Finalizar Devolução
+            </h2>
+            {/* Tag de Homologação - só aparece quando ambiente é homologação */}
+            {ambienteNFe === 'homologacao' && (
+              <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full border bg-orange-500/10 text-orange-400 border-orange-500/20">
+                HOMOLOG.
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
@@ -1559,7 +1629,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => handleConfirm('manual')}
+              onClick={() => handleConfirmarDevolucao('manual')}
               disabled={isLoading}
               className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
             >
@@ -1567,7 +1637,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
             </button>
 
             <button
-              onClick={() => handleConfirm('nfce')}
+              onClick={() => handleConfirmarDevolucao('nfce')}
               disabled={isLoading}
               className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
             >
@@ -1576,6 +1646,80 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           </div>
         </div>
       </motion.div>
+
+      {/* Modal de Confirmação para Devolução Manual de NFC-e */}
+      {showConfirmacaoManualModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="w-full max-w-md bg-background-card rounded-lg border border-gray-800 shadow-2xl"
+          >
+            {/* Cabeçalho */}
+            <div className="px-6 py-4 border-b border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-yellow-500/20 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-white">
+                  Atenção: Devolução Manual de NFC-e
+                </h3>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-yellow-200 text-sm leading-relaxed">
+                  <strong>IMPORTANTE:</strong> Esta venda foi emitida com NFC-e.
+                  Se optar pela <strong>Devolução Manual</strong>, não será emitida uma
+                  <strong> Devolução Fiscal</strong> e não será deduzido fiscalmente
+                  esse valor de impostos.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">
+                  Digite <strong>CONFIRMAR</strong> para prosseguir com a devolução manual:
+                </label>
+                <input
+                  type="text"
+                  value={confirmacaoTexto}
+                  onChange={(e) => setConfirmacaoTexto(e.target.value)}
+                  placeholder="Digite CONFIRMAR"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Rodapé */}
+            <div className="px-6 py-4 border-t border-gray-800 flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowConfirmacaoManualModal(false);
+                  setConfirmacaoTexto('');
+                }}
+                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarDevolucaoManualForcada}
+                disabled={confirmacaoTexto !== 'CONFIRMAR' || isLoading}
+                className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                {isLoading ? 'Processando...' : 'Confirmar Devolução Manual'}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
       {/* Formulário Completo de Novo Cliente */}
       <ClienteFormCompleto
