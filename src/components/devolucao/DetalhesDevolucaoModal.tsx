@@ -45,11 +45,15 @@ const DetalhesDevolucaoModal: React.FC<DetalhesDevolucaoModalProps> = ({
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, devolucao?: any) => {
     switch (status) {
       case 'pendente':
         return 'Pendente';
       case 'processada':
+        // ✅ NOVO: Incluir número da venda que processou a devolução
+        if (devolucao?.venda_processamento_numero) {
+          return `Processada - Venda #${devolucao.venda_processamento_numero}`;
+        }
         return 'Processada';
       case 'cancelada':
         return 'Cancelada';
@@ -149,7 +153,7 @@ const DetalhesDevolucaoModal: React.FC<DetalhesDevolucaoModalProps> = ({
                   Status
                 </label>
                 <span className={`text-sm px-3 py-1 rounded-full ${getStatusColor(devolucao.status)} bg-opacity-20 border`}>
-                  {getStatusText(devolucao.status)}
+                  {getStatusText(devolucao.status, devolucao)}
                 </span>
               </div>
 

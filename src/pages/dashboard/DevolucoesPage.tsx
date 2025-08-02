@@ -124,11 +124,15 @@ const DevolucoesPage: React.FC = () => {
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, devolucao?: any) => {
     switch (status) {
       case 'pendente':
         return 'Pendente';
       case 'processada':
+        // ✅ NOVO: Incluir número da venda que processou a devolução
+        if (devolucao?.venda_processamento_numero) {
+          return `Processada - Venda #${devolucao.venda_processamento_numero}`;
+        }
         return 'Processada';
       case 'cancelada':
         return 'Cancelada';
@@ -265,6 +269,18 @@ const DevolucoesPage: React.FC = () => {
   };
 
   const handleDeletarDevolucao = (devolucao: Devolucao) => {
+    // ✅ NOVO: Verificar se a devolução já foi processada ANTES de abrir o modal
+    if (devolucao.status === 'processada') {
+      const vendaNumero = devolucao.venda_processamento_numero;
+      const mensagem = vendaNumero
+        ? `Esta devolução foi processada e não pode ser excluída. A venda #${vendaNumero} precisa ser cancelada para que essa devolução possa ser excluída.`
+        : 'Esta devolução não pode ser excluída pois já foi processada no PDV. Para excluir, é necessário cancelar a venda no PDV primeiro.';
+
+      alert(mensagem);
+      return; // ✅ Não abre o modal
+    }
+
+    // ✅ Se chegou aqui, a devolução pode ser deletada - abre o modal
     setDevolucaoParaDeletar(devolucao);
     setShowDeleteModal(true);
   };
@@ -272,13 +288,7 @@ const DevolucoesPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!devolucaoParaDeletar) return;
 
-    // Verificar se a devolução já foi processada
-    if (devolucaoParaDeletar.status === 'processada') {
-      alert('Esta devolução não pode ser cancelada pois já foi processada no PDV. Para cancelar, é necessário cancelar a venda no PDV primeiro.');
-      setShowDeleteModal(false);
-      setDevolucaoParaDeletar(null);
-      return;
-    }
+    // ✅ Validação movida para handleDeletarDevolucao - se chegou aqui, pode deletar
 
     try {
       setIsDeletingDevolucao(true);
@@ -565,7 +575,7 @@ const DevolucoesPage: React.FC = () => {
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-white font-medium text-sm">#{devolucao.numero}</span>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${getStatusColor(devolucao.status)} bg-opacity-20 border`}>
-                      {getStatusText(devolucao.status)}
+                      {getStatusText(devolucao.status, devolucao)}
                     </span>
                   </div>
                   <p className="text-gray-400 text-sm truncate">
