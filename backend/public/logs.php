@@ -27,16 +27,23 @@ try {
     
     // Coletar logs do PHP-FPM
     $phpLogs = [
+        '/var/log/php_nfe_debug.log',  // Logs específicos do NFe (incluindo devolução)
         '/var/log/php7.4-fpm.log',
+        '/var/log/php8.3-fpm.log',
         '/var/log/php-fpm.log',
         '/var/log/php/error.log'
     ];
-    
+
     foreach ($phpLogs as $phpLog) {
         if (file_exists($phpLog)) {
-            $phpLogEntries = collectLogsFromFile($phpLog, 'php-fpm', 'error', $limit);
+            $source = ($phpLog === '/var/log/php_nfe_debug.log') ? 'nfe-system' : 'php-fpm';
+            $phpLogEntries = collectLogsFromFile($phpLog, $source, 'error', $limit);
             $logs = array_merge($logs, $phpLogEntries);
-            break; // Usar apenas o primeiro arquivo encontrado
+            if ($phpLog === '/var/log/php_nfe_debug.log') {
+                // Para logs NFe, não quebrar o loop para pegar outros logs também
+                continue;
+            }
+            break; // Para outros logs PHP, usar apenas o primeiro encontrado
         }
     }
     

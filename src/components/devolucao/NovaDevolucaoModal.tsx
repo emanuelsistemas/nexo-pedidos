@@ -4,6 +4,7 @@ import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronD
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
 import ClienteFormCompleto from '../comum/ClienteFormCompleto';
+import { useApiLogs } from '../../hooks/useApiLogs';
 
 // Função para formatar moeda
 const formatCurrency = (value: number): string => {
@@ -1178,6 +1179,17 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorDetails, setErrorDetails] = useState<any>(null);
 
+  // Hook para logs da API
+  const {
+    apiLogs,
+    isLoadingApiLogs,
+    apiLogsError,
+    fetchApiLogs,
+    formatApiLog,
+    copyApiLogsToClipboard,
+    clearApiLogs
+  } = useApiLogs();
+
   // Função para formatar data (local do componente)
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -1378,6 +1390,15 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
       addLog(`❌ Erro: ${(error as Error).message}`);
       setIsEmitindoNFCe(false);
+
+      // Buscar logs da API automaticamente quando houver erro
+      addLog('🔍 Buscando logs detalhados da API...');
+      try {
+        await fetchApiLogs('error', 20);
+        addLog('✅ Logs da API carregados - verifique o modal de erro');
+      } catch (logError) {
+        addLog('⚠️ Não foi possível carregar logs da API');
+      }
 
       // Se não temos detalhes do erro ainda, criar um básico
       if (!errorDetails) {
@@ -1935,10 +1956,48 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                         <span className="text-gray-400 text-sm">Timestamp:</span>
                         <p className="text-white font-mono text-sm">{errorDetails.timestamp}</p>
                       </div>
+                    </div>
 
-                      <div className="p-3 bg-gray-800/50 rounded-lg">
-                        <span className="text-gray-400 text-sm">Endpoint:</span>
-                        <p className="text-white font-mono text-sm">{errorDetails.endpoint}</p>
+                    {/* Logs da API */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-white font-medium">Logs do Servidor:</h5>
+                        <div className="flex gap-2">
+                          {isLoadingApiLogs && (
+                            <div className="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs rounded-lg">
+                              Carregando...
+                            </div>
+                          )}
+                          <button
+                            onClick={async () => {
+                              try {
+                                await copyApiLogsToClipboard();
+                                alert('Logs copiados para a área de transferência!');
+                              } catch (err) {
+                                alert('Erro ao copiar logs');
+                              }
+                            }}
+                            className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-lg transition-colors"
+                          >
+                            Copiar Logs
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-gray-900/80 rounded-lg border border-gray-700 max-h-60 overflow-y-auto">
+                        {apiLogsError ? (
+                          <p className="text-red-400 text-sm">Erro ao carregar logs: {apiLogsError}</p>
+                        ) : apiLogs.length > 0 ? (
+                          <div className="space-y-1">
+                            {apiLogs.map((log, index) => (
+                              <div key={index} className="text-xs text-gray-300 font-mono">
+                                {formatApiLog(log)}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-gray-400 text-sm">Nenhum log encontrado</p>
+                        )}
                       </div>
                     </div>
 
@@ -1949,13 +2008,13 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                           <h5 className="text-white font-medium">Stack Trace:</h5>
                           <button
                             onClick={() => {
-                              const traceText = `ERRO NFC-e DEVOLUÇÃO\n\nMensagem: ${errorDetails.mensagem}\nTimestamp: ${errorDetails.timestamp}\nEndpoint: ${errorDetails.endpoint}\n\nStack Trace:\n${errorDetails.detalhes.trace}`;
+                              const traceText = `ERRO NFC-e DEVOLUÇÃO\n\nMensagem: ${errorDetails.mensagem}\nTimestamp: ${errorDetails.timestamp}\n\nStack Trace:\n${errorDetails.detalhes.trace}`;
                               navigator.clipboard.writeText(traceText);
                               alert('Log copiado para a área de transferência!');
                             }}
                             className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-lg transition-colors"
                           >
-                            Copiar Log
+                            Copiar Stack Trace
                           </button>
                         </div>
                         <div className="p-4 bg-gray-900/80 rounded-lg border border-gray-700 max-h-60 overflow-y-auto">

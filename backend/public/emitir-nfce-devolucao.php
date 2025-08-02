@@ -27,8 +27,10 @@ function logDetalhado($step, $message, $data = null) {
         $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 
+    // Log padrão do PHP (para o sistema de logs)
     error_log($logEntry);
 
+    // Log detalhado específico
     try {
         $logDir = dirname('/tmp/nfce_devolucao_detailed.log');
         if (!is_dir($logDir)) {
@@ -37,6 +39,17 @@ function logDetalhado($step, $message, $data = null) {
         file_put_contents('/tmp/nfce_devolucao_detailed.log', $logEntry . "\n", FILE_APPEND | LOCK_EX);
     } catch (Exception $logError) {
         error_log("ERRO: Exceção ao escrever log detalhado: " . $logError->getMessage());
+    }
+
+    // Log no formato que o sistema de logs consegue ler
+    try {
+        $systemLogEntry = "[" . date('d-M-Y H:i:s') . "] ERROR: [NFCE-DEVOLUCAO] {$message}";
+        if ($data !== null) {
+            $systemLogEntry .= " | " . json_encode($data, JSON_UNESCAPED_UNICODE);
+        }
+        file_put_contents('/var/log/php_nfe_debug.log', $systemLogEntry . "\n", FILE_APPEND | LOCK_EX);
+    } catch (Exception $systemLogError) {
+        error_log("ERRO: Não foi possível escrever no log do sistema: " . $systemLogError->getMessage());
     }
 }
 
