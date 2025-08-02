@@ -1752,12 +1752,12 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[99999] bg-black/80">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-background-card rounded-lg border border-gray-800 flex flex-col shadow-2xl max-h-[90vh]"
+        exit={{ opacity: 0, scale: 0.98 }}
+        className="w-full h-full bg-background-card flex flex-col shadow-2xl"
       >
         {/* Cabeçalho */}
         <div className="flex-shrink-0 px-6 py-4 border-b border-gray-800 flex items-center justify-between">
