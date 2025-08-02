@@ -1314,7 +1314,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       valorTotal: valorTotal,
       empresaId: empresaId,
       ambiente: ambienteNFe,
-      natureza_operacao: 'DEVOLUÇÃO DE VENDA',
+      natureza_operacao: 'Devolução de Mercadoria',
       finalidade: '4', // 4 = Devolução/Retorno
       chave_referenciada: getVendaOrigemInfo()?.chave_nfe,
       // ✅ NOVO: Chave de referência para a aba Chaves Ref da NF-e

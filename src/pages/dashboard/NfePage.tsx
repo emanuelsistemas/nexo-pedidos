@@ -3173,7 +3173,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           produtos: produtosFormatados,
           identificacao: {
             ...prev.identificacao,
-            natureza_operacao: dadosDevolucao.natureza_operacao || 'DEVOLUÇÃO DE VENDA',
+            natureza_operacao: dadosDevolucao.natureza_operacao || 'Devolução de Mercadoria',
             finalidade: dadosDevolucao.finalidade || '4',
             // ✅ NOVO: Incluir número da venda e observação do cliente
             informacao_adicional: (() => {
