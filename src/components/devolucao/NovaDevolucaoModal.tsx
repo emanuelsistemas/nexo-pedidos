@@ -1174,6 +1174,10 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [logs, setLogs] = useState<string[]>([]);
   const [isEmitindoNFCe, setIsEmitindoNFCe] = useState(false);
 
+  // Estados para modal de erro detalhado
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<any>(null);
+
   // Função para formatar data (local do componente)
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -1322,6 +1326,13 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       const resultado = await response.json();
 
       if (resultado.erro) {
+        // Capturar detalhes do erro para o modal
+        setErrorDetails({
+          mensagem: resultado.mensagem || 'Erro na emissão da NFC-e',
+          detalhes: resultado.detalhes || null,
+          timestamp: new Date().toLocaleString(),
+          endpoint: '/backend/public/emitir-nfce-devolucao.php'
+        });
         throw new Error(resultado.mensagem || 'Erro na emissão da NFC-e');
       }
 
@@ -1368,18 +1379,23 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       addLog(`❌ Erro: ${(error as Error).message}`);
       setIsEmitindoNFCe(false);
 
-      // Oferecer fallback para devolução manual
-      setTimeout(() => {
-        const confirmarManual = confirm(
-          `Erro na emissão da NFC-e: ${(error as Error).message}\n\n` +
-          'Deseja prosseguir com devolução manual?\n' +
-          'ATENÇÃO: Não será emitida devolução fiscal.'
-        );
+      // Se não temos detalhes do erro ainda, criar um básico
+      if (!errorDetails) {
+        setErrorDetails({
+          mensagem: (error as Error).message,
+          detalhes: {
+            timestamp: new Date().toLocaleString(),
+            tipo: 'Erro de Frontend'
+          },
+          timestamp: new Date().toLocaleString(),
+          endpoint: '/backend/public/emitir-nfce-devolucao.php'
+        });
+      }
 
-        if (confirmarManual) {
-          setShowProgressModal(false);
-          handleConfirm('manual');
-        }
+      // Mostrar modal de erro detalhado
+      setTimeout(() => {
+        setShowProgressModal(false);
+        setShowErrorModal(true);
       }, 1000);
     }
   };
@@ -1850,6 +1866,138 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           </div>
         </div>
       </motion.div>
+
+      {/* Modal de Erro Detalhado */}
+      {showErrorModal && errorDetails && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-[80] p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="w-full max-w-4xl bg-background-card rounded-lg border border-red-500/30 shadow-2xl max-h-[90vh] overflow-hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-red-500/30 bg-red-500/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-500/20 rounded-lg">
+                    <AlertTriangle className="w-6 h-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Erro na Emissão NFC-e Devolução</h3>
+                    <p className="text-sm text-red-300">Detalhes técnicos do erro</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowErrorModal(false)}
+                  className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="flex-1 p-6 overflow-y-auto">
+              <div className="space-y-6">
+                {/* Mensagem Principal */}
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <h4 className="text-red-400 font-semibold mb-2">Mensagem de Erro:</h4>
+                  <p className="text-red-200">{errorDetails.mensagem}</p>
+                </div>
+
+                {/* Detalhes Técnicos */}
+                {errorDetails.detalhes && (
+                  <div className="space-y-4">
+                    <h4 className="text-white font-semibold">Detalhes Técnicos:</h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {errorDetails.detalhes.arquivo && (
+                        <div className="p-3 bg-gray-800/50 rounded-lg">
+                          <span className="text-gray-400 text-sm">Arquivo:</span>
+                          <p className="text-white font-mono text-sm">{errorDetails.detalhes.arquivo}</p>
+                        </div>
+                      )}
+
+                      {errorDetails.detalhes.linha && (
+                        <div className="p-3 bg-gray-800/50 rounded-lg">
+                          <span className="text-gray-400 text-sm">Linha:</span>
+                          <p className="text-white font-mono text-sm">{errorDetails.detalhes.linha}</p>
+                        </div>
+                      )}
+
+                      <div className="p-3 bg-gray-800/50 rounded-lg">
+                        <span className="text-gray-400 text-sm">Timestamp:</span>
+                        <p className="text-white font-mono text-sm">{errorDetails.timestamp}</p>
+                      </div>
+
+                      <div className="p-3 bg-gray-800/50 rounded-lg">
+                        <span className="text-gray-400 text-sm">Endpoint:</span>
+                        <p className="text-white font-mono text-sm">{errorDetails.endpoint}</p>
+                      </div>
+                    </div>
+
+                    {/* Stack Trace */}
+                    {errorDetails.detalhes.trace && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-white font-medium">Stack Trace:</h5>
+                          <button
+                            onClick={() => {
+                              const traceText = `ERRO NFC-e DEVOLUÇÃO\n\nMensagem: ${errorDetails.mensagem}\nTimestamp: ${errorDetails.timestamp}\nEndpoint: ${errorDetails.endpoint}\n\nStack Trace:\n${errorDetails.detalhes.trace}`;
+                              navigator.clipboard.writeText(traceText);
+                              alert('Log copiado para a área de transferência!');
+                            }}
+                            className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-lg transition-colors"
+                          >
+                            Copiar Log
+                          </button>
+                        </div>
+                        <div className="p-4 bg-gray-900/80 rounded-lg border border-gray-700 max-h-60 overflow-y-auto">
+                          <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono">
+                            {errorDetails.detalhes.trace}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-800 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowErrorModal(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  setShowErrorModal(false);
+                  const confirmarManual = confirm(
+                    'Deseja prosseguir com devolução manual?\n' +
+                    'ATENÇÃO: Não será emitida devolução fiscal.'
+                  );
+
+                  if (confirmarManual) {
+                    handleConfirm('manual');
+                  }
+                }}
+                className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors font-medium"
+              >
+                Tentar Devolução Manual
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
       {/* Modal de Progresso NFC-e Devolução */}
       {showProgressModal && (

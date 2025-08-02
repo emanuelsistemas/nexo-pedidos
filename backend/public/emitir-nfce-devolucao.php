@@ -1,13 +1,18 @@
 <?php
 /**
  * Endpoint para emissão de NFC-e de DEVOLUÇÃO (Modelo 65)
- * 
+ *
  * DIFERENÇAS DA NFC-e NORMAL:
  * - CFOP fixo 5202 (Devolução de venda de mercadoria)
  * - Tag de referência à NFC-e original
  * - Natureza da operação específica para devolução
  * - Validações específicas para devolução
  */
+
+// Imports necessários (devem estar no topo)
+use NFePHP\NFe\Tools;
+use NFePHP\NFe\Make;
+use NFePHP\Common\Certificate;
 
 // SISTEMA DE LOGS DETALHADOS
 ini_set('memory_limit', '512M');
@@ -92,8 +97,20 @@ try {
     logDetalhado('VALIDACAO_INICIAL', 'Validações iniciais concluídas');
 
     // Incluir bibliotecas necessárias
+    logDetalhado('INCLUINDO_LIBS', 'Incluindo bibliotecas necessárias');
+
+    if (!file_exists(__DIR__ . '/../vendor/autoload.php')) {
+        throw new Exception('Autoload do Composer não encontrado');
+    }
     require_once __DIR__ . '/../vendor/autoload.php';
-    require_once __DIR__ . '/../config/database.php';
+
+    if (!file_exists(__DIR__ . '/../config/database.php')) {
+        logDetalhado('WARNING', 'Arquivo database.php não encontrado, continuando sem ele');
+    } else {
+        require_once __DIR__ . '/../config/database.php';
+    }
+
+    logDetalhado('LIBS_CARREGADAS', 'Bibliotecas carregadas com sucesso');
 
     // Buscar configurações da empresa (reutilizar função existente)
     $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
@@ -178,40 +195,86 @@ try {
         'proximo_numero' => $proximoNumero
     ]);
 
-    // Configurar NFePHP
-    $configPath = __DIR__ . '/../config/nfe_config.json';
-    if (!file_exists($configPath)) {
-        throw new Exception('Arquivo de configuração NFe não encontrado');
+    // Configurar NFePHP (mesmo padrão do emitir-nfce.php)
+    logDetalhado('CONFIG_BUILD', 'Construindo configuração NFePHP');
+
+    $ambiente = ($nfeConfig['ambiente'] === 'producao') ? 1 : 2;
+
+    // Limpar CNPJ
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa['cnpj']);
+    if (strlen($cnpjLimpo) !== 14) {
+        throw new Exception('CNPJ da empresa deve ter 14 dígitos');
     }
 
-    $config = json_decode(file_get_contents($configPath), true);
-    
-    // Ajustar configuração para o ambiente
-    $config['tpAmb'] = ($nfeConfig['ambiente'] === 'producao') ? 1 : 2;
-    $config['razaosocial'] = $empresa['razao_social'];
-    $config['cnpj'] = $empresa['cnpj'];
-    $config['siglaUF'] = $empresa['uf'];
-    $config['municipio'] = $empresa['cidade'];
+    // Determinar campos CSC baseado no ambiente
+    $cscField = ($ambiente === 1) ? 'csc_producao' : 'csc_homologacao';
+    $cscIdField = ($ambiente === 1) ? 'csc_id_producao' : 'csc_id_homologacao';
 
-    logDetalhado('CONFIG_NFEPHP', 'Configuração NFePHP preparada');
+    $config = [
+        "atualizacao" => date('Y-m-d H:i:s'),
+        "tpAmb" => $ambiente,
+        "razaosocial" => $empresa['razao_social'],
+        "cnpj" => $cnpjLimpo,
+        "siglaUF" => $empresa['uf'],
+        "schemes" => "PL_009_V4",
+        "versao" => '4.00',
+        "CSC" => $empresa[$cscField] ?? '',
+        "CSCid" => (string)($empresa[$cscIdField] ?? '1')
+    ];
+
+    logDetalhado('CONFIG_NFEPHP', 'Configuração NFePHP preparada', $config);
 
     // Inicializar NFePHP Tools
-    use NFePHP\NFe\Tools;
-    use NFePHP\NFe\Make;
-    use NFePHP\Common\Certificate;
+    logDetalhado('INIT_NFEPHP', 'Inicializando classes NFePHP');
 
-    $certificadoPath = __DIR__ . '/../certificates/' . $empresaId . '.pfx';
-    if (!file_exists($certificadoPath)) {
-        throw new Exception('Certificado digital não encontrado');
+    // Buscar certificado da empresa (mesmo padrão do emitir-nfce.php)
+    logDetalhado('CERT_SEARCH', 'Buscando certificado da empresa');
+
+    $url = $supabaseUrl . "/rest/v1/certificados?empresa_id=eq.{$empresaId}&ativo=eq.true&select=*";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabaseKey,
+        'Authorization: Bearer ' . $supabaseKey,
+        'Content-Type: application/json'
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    $certificadoData = json_decode($response, true);
+    if (empty($certificadoData)) {
+        throw new Exception('Certificado digital não encontrado para a empresa');
     }
 
-    $certificadoContent = file_get_contents($certificadoPath);
-    $certificate = Certificate::readPfx($certificadoContent, $nfeConfig['senha_certificado']);
-    
-    $tools = new Tools(json_encode($config), $certificate);
-    $tools->model('65'); // NFC-e
+    $certificado = $certificadoData[0];
+    logDetalhado('CERT_FOUND', 'Certificado encontrado', ['id' => $certificado['id']]);
 
-    logDetalhado('TOOLS_INICIALIZADO', 'NFePHP Tools inicializado');
+    // Decodificar certificado
+    $certificadoContent = base64_decode($certificado['arquivo_base64']);
+    if (!$certificadoContent) {
+        throw new Exception('Erro ao decodificar certificado');
+    }
+
+    logDetalhado('CERT_DECODED', 'Certificado decodificado', ['size' => strlen($certificadoContent)]);
+
+    try {
+        $certificate = Certificate::readPfx($certificadoContent, $certificado['senha']);
+        logDetalhado('CERT_PARSED', 'Certificado parseado com sucesso');
+    } catch (Exception $certError) {
+        logDetalhado('CERT_PARSE_ERROR', 'Erro ao parsear certificado', ['erro' => $certError->getMessage()]);
+        throw new Exception('Erro ao processar certificado: ' . $certError->getMessage());
+    }
+
+    try {
+        $tools = new Tools(json_encode($config), $certificate);
+        $tools->model('65'); // NFC-e
+        logDetalhado('TOOLS_INICIALIZADO', 'NFePHP Tools inicializado com sucesso');
+    } catch (Exception $toolsError) {
+        logDetalhado('TOOLS_ERROR', 'Erro ao inicializar Tools', ['erro' => $toolsError->getMessage()]);
+        throw new Exception('Erro ao inicializar NFePHP Tools: ' . $toolsError->getMessage());
+    }
 
     // Preparar dados específicos para devolução
     $make = new Make();
@@ -454,16 +517,55 @@ try {
     logDetalhado('SUCESSO', 'Processo concluído com sucesso');
 
 } catch (Exception $e) {
-    logDetalhado('ERRO', 'Erro durante o processo', [
+    $erroDetalhado = [
         'erro' => $e->getMessage(),
         'linha' => $e->getLine(),
-        'arquivo' => $e->getFile()
-    ]);
+        'arquivo' => basename($e->getFile()),
+        'trace' => $e->getTraceAsString(),
+        'timestamp' => date('Y-m-d H:i:s'),
+        'dados_recebidos' => $data ?? 'Não disponível'
+    ];
+
+    logDetalhado('ERRO_CRITICO', 'Erro durante o processo de emissão NFC-e devolução', $erroDetalhado);
+
+    // Log adicional para debug
+    error_log("ERRO NFCE DEVOLUCAO: " . json_encode($erroDetalhado, JSON_UNESCAPED_UNICODE));
 
     http_response_code(500);
     echo json_encode([
         'erro' => true,
-        'mensagem' => $e->getMessage()
+        'mensagem' => $e->getMessage(),
+        'detalhes' => [
+            'arquivo' => basename($e->getFile()),
+            'linha' => $e->getLine(),
+            'timestamp' => date('Y-m-d H:i:s'),
+            'trace' => $e->getTraceAsString()
+        ]
+    ]);
+} catch (Error $e) {
+    $erroDetalhado = [
+        'erro' => $e->getMessage(),
+        'linha' => $e->getLine(),
+        'arquivo' => basename($e->getFile()),
+        'trace' => $e->getTraceAsString(),
+        'timestamp' => date('Y-m-d H:i:s'),
+        'tipo' => 'Fatal Error'
+    ];
+
+    logDetalhado('ERRO_FATAL', 'Erro fatal durante o processo', $erroDetalhado);
+    error_log("ERRO FATAL NFCE DEVOLUCAO: " . json_encode($erroDetalhado, JSON_UNESCAPED_UNICODE));
+
+    http_response_code(500);
+    echo json_encode([
+        'erro' => true,
+        'mensagem' => 'Erro fatal: ' . $e->getMessage(),
+        'detalhes' => [
+            'arquivo' => basename($e->getFile()),
+            'linha' => $e->getLine(),
+            'timestamp' => date('Y-m-d H:i:s'),
+            'tipo' => 'Fatal Error',
+            'trace' => $e->getTraceAsString()
+        ]
     ]);
 }
 ?>
