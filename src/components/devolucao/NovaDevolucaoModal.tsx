@@ -1981,8 +1981,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
             {/* Conteúdo */}
             <div className="flex-1 p-6 overflow-y-auto">
               <div className="space-y-6">
-                {/* Mensagem Principal */}
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                {/* Mensagem Principal - OCULTA */}
+                <div className="hidden p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
                   <h4 className="text-red-400 font-semibold mb-2">
                     {(() => {
                       // Extrair último erro específico dos logs
