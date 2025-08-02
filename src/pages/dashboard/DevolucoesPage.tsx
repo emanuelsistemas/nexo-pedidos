@@ -36,6 +36,10 @@ const DevolucoesPage: React.FC = () => {
   const [devolucaoParaDeletar, setDevolucaoParaDeletar] = useState<Devolucao | null>(null);
   const [isDeletingDevolucao, setIsDeletingDevolucao] = useState(false);
 
+  // ✅ NOVO: Estados para modal de proteção
+  const [showProtecaoModal, setShowProtecaoModal] = useState(false);
+  const [mensagemProtecao, setMensagemProtecao] = useState('');
+
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -276,8 +280,10 @@ const DevolucoesPage: React.FC = () => {
         ? `Esta devolução foi processada e não pode ser excluída. A venda #${vendaNumero} precisa ser cancelada para que essa devolução possa ser excluída.`
         : 'Esta devolução não pode ser excluída pois já foi processada no PDV. Para excluir, é necessário cancelar a venda no PDV primeiro.';
 
-      alert(mensagem);
-      return; // ✅ Não abre o modal
+      // ✅ NOVO: Usar modal em vez de alert
+      setMensagemProtecao(mensagem);
+      setShowProtecaoModal(true);
+      return; // ✅ Não abre o modal de exclusão
     }
 
     // ✅ Se chegou aqui, a devolução pode ser deletada - abre o modal
@@ -727,6 +733,38 @@ const DevolucoesPage: React.FC = () => {
                 className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
               >
                 {isDeletingDevolucao ? 'Cancelando...' : 'Sim, Cancelar Devolução'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NOVO: Modal de Proteção para Devoluções Processadas */}
+      {showProtecaoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-700">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <X size={20} className="text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">
+                Devolução Protegida
+              </h3>
+            </div>
+
+            <p className="text-gray-300 mb-6 leading-relaxed">
+              {mensagemProtecao}
+            </p>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  setShowProtecaoModal(false);
+                  setMensagemProtecao('');
+                }}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+              >
+                Entendi
               </button>
             </div>
           </div>
