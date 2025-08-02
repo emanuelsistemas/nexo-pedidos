@@ -1292,6 +1292,10 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       console.log('🔍 Buscando dados do cliente:', clienteId);
       clienteCompleto = await buscarDadosCliente(clienteId);
       console.log('✅ Dados do cliente carregados:', clienteCompleto?.nome);
+      console.log('🔍 DEBUG - Dados completos do cliente:', clienteCompleto);
+      console.log('🔍 DEBUG - Documento:', clienteCompleto?.documento);
+      console.log('🔍 DEBUG - CPF:', clienteCompleto?.cpf);
+      console.log('🔍 DEBUG - CNPJ:', clienteCompleto?.cnpj);
     }
 
     // Preparar produtos com CFOP 5202 automático
@@ -1317,8 +1321,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       cliente: clienteCompleto ? {
         id: clienteCompleto.id,
         nome: clienteCompleto.nome,
-        documento: clienteCompleto.cpf || clienteCompleto.cnpj || '',
-        tipo_documento: clienteCompleto.cpf ? 'cpf' : 'cnpj',
+        // ✅ CORREÇÃO: Verificar múltiplos campos possíveis para documento
+        documento: clienteCompleto.documento || clienteCompleto.cpf || clienteCompleto.cnpj || '',
+        tipo_documento: (clienteCompleto.cpf || clienteCompleto.documento?.length === 11) ? 'cpf' : 'cnpj',
         email: clienteCompleto.email || '',
         telefone: clienteCompleto.telefone || '',
         endereco: clienteCompleto.endereco || '',
@@ -1326,7 +1331,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         complemento: clienteCompleto.complemento || '',
         bairro: clienteCompleto.bairro || '',
         cidade: clienteCompleto.cidade || '',
-        uf: clienteCompleto.estado || '',
+        uf: clienteCompleto.estado || clienteCompleto.uf || '',
         cep: clienteCompleto.cep || '',
         inscricao_estadual: clienteCompleto.inscricao_estadual || '',
         observacao_nfe: clienteCompleto.observacao_nfe || ''
