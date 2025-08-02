@@ -1265,9 +1265,34 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     setNumeroNFCeEditado('');
   };
 
+  // Função para buscar dados completos do cliente
+  const buscarDadosCliente = async (clienteId: string) => {
+    try {
+      const { data: cliente, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('id', clienteId)
+        .single();
+
+      if (error) throw error;
+      return cliente;
+    } catch (error) {
+      console.error('Erro ao buscar dados do cliente:', error);
+      return null;
+    }
+  };
+
   // Função para abrir modal de NF-e de devolução
-  const abrirModalNFeDevolucao = () => {
+  const abrirModalNFeDevolucao = async () => {
     console.log('🚀 [MODAL] Abrindo modal de NF-e para devolução');
+
+    // ✅ Buscar dados completos do cliente se selecionado
+    let clienteCompleto = null;
+    if (clienteId) {
+      console.log('🔍 Buscando dados do cliente:', clienteId);
+      clienteCompleto = await buscarDadosCliente(clienteId);
+      console.log('✅ Dados do cliente carregados:', clienteCompleto?.nome);
+    }
 
     // Preparar produtos com CFOP 5202 automático
     const produtosDevolucao = itensComDadosFiscais.map(item => ({
@@ -1287,7 +1312,25 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       ambiente: ambienteNFe,
       natureza_operacao: 'DEVOLUÇÃO DE VENDA',
       finalidade: '4', // 4 = Devolução/Retorno
-      chave_referenciada: getVendaOrigemInfo()?.chave_nfce
+      chave_referenciada: getVendaOrigemInfo()?.chave_nfce,
+      // ✅ NOVO: Incluir dados do cliente selecionado na devolução
+      cliente: clienteCompleto ? {
+        id: clienteCompleto.id,
+        nome: clienteCompleto.nome,
+        documento: clienteCompleto.cpf || clienteCompleto.cnpj || '',
+        tipo_documento: clienteCompleto.cpf ? 'cpf' : 'cnpj',
+        email: clienteCompleto.email || '',
+        telefone: clienteCompleto.telefone || '',
+        endereco: clienteCompleto.endereco || '',
+        numero: clienteCompleto.numero || '',
+        complemento: clienteCompleto.complemento || '',
+        bairro: clienteCompleto.bairro || '',
+        cidade: clienteCompleto.cidade || '',
+        uf: clienteCompleto.estado || '',
+        cep: clienteCompleto.cep || '',
+        inscricao_estadual: clienteCompleto.inscricao_estadual || '',
+        observacao_nfe: clienteCompleto.observacao_nfe || ''
+      } : null
     };
 
     console.log('📦 Dados da devolução preparados:', dadosDevolucao);

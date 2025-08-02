@@ -3144,13 +3144,39 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           base_calculo_icms: produto.base_calculo_icms || 0
         }));
 
+        // ✅ NOVO: Preparar dados do destinatário se houver cliente selecionado
+        const destinatarioData = dadosDevolucao.cliente ? {
+          nome: dadosDevolucao.cliente.nome,
+          documento: dadosDevolucao.cliente.documento,
+          tipo_documento: dadosDevolucao.cliente.tipo_documento,
+          email: dadosDevolucao.cliente.email,
+          telefone: dadosDevolucao.cliente.telefone,
+          endereco: dadosDevolucao.cliente.endereco,
+          numero: dadosDevolucao.cliente.numero,
+          complemento: dadosDevolucao.cliente.complemento,
+          bairro: dadosDevolucao.cliente.bairro,
+          cidade: dadosDevolucao.cliente.cidade,
+          uf: dadosDevolucao.cliente.uf,
+          cep: dadosDevolucao.cliente.cep,
+          inscricao_estadual: dadosDevolucao.cliente.inscricao_estadual
+        } : {};
+
         setNfeData(prev => ({
           ...prev,
           produtos: produtosFormatados,
           identificacao: {
             ...prev.identificacao,
             natureza_operacao: dadosDevolucao.natureza_operacao || 'DEVOLUÇÃO DE VENDA',
-            finalidade: dadosDevolucao.finalidade || '4'
+            finalidade: dadosDevolucao.finalidade || '4',
+            // ✅ NOVO: Incluir observação do cliente se houver
+            informacao_adicional: dadosDevolucao.cliente?.observacao_nfe
+              ? `${prev.identificacao.informacao_adicional || ''}\n${dadosDevolucao.cliente.observacao_nfe}`.trim()
+              : prev.identificacao.informacao_adicional
+          },
+          // ✅ NOVO: Preencher destinatário com dados do cliente da devolução
+          destinatario: {
+            ...prev.destinatario,
+            ...destinatarioData
           },
           totais: {
             ...prev.totais,
@@ -3158,7 +3184,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             valor_total: dadosDevolucao.valorTotal || 0
           }
         }));
+
         console.log('✅ Produtos da devolução carregados no formulário com estrutura completa');
+        if (dadosDevolucao.cliente) {
+          console.log('✅ Cliente da devolução carregado no destinatário:', dadosDevolucao.cliente.nome);
+        }
       }
     };
 
