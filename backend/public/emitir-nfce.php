@@ -352,6 +352,15 @@ try {
 
     $ambiente = $nfceData['ambiente'] === 'producao' ? 1 : 2;
 
+    // ✅ DETECTAR SE É DEVOLUÇÃO (sem afetar vendas normais)
+    $isDevolucao = isset($nfceData['is_devolucao']) && $nfceData['is_devolucao'] === true;
+    if ($isDevolucao) {
+        logDetalhado('DEVOLUCAO_DETECTADA', 'Operação de devolução identificada', [
+            'natureza_operacao' => $nfceData['natureza_operacao'] ?? 'DEVOLUÇÃO DE VENDA',
+            'informacoes_adicionais' => $nfceData['informacoes_adicionais'] ?? 'DEVOLUÇÃO DE MERCADORIA'
+        ]);
+    }
+
     // Validar dados obrigatórios da empresa
     if (empty($empresa['razao_social'])) {
         throw new Exception('Razão social da empresa é obrigatória');
@@ -546,7 +555,13 @@ try {
 
     logDetalhado('050.2', 'Códigos validados conforme NT2019.001', ['cNF' => $std->cNF, 'nNF' => $std->nNF]);
 
-    $std->natOp = $identificacao['natureza_operacao'] ?? 'Venda de mercadoria';
+    // ✅ AJUSTAR NATUREZA DA OPERAÇÃO PARA DEVOLUÇÃO (sem afetar vendas)
+    if ($isDevolucao) {
+        $std->natOp = $nfceData['natureza_operacao'] ?? 'DEVOLUÇÃO DE VENDA';
+        logDetalhado('DEVOLUCAO_NATUREZA', 'Natureza da operação ajustada para devolução', ['natOp' => $std->natOp]);
+    } else {
+        $std->natOp = $identificacao['natureza_operacao'] ?? 'Venda de mercadoria';
+    }
     $std->mod = 65; // NFC-e
     $std->serie = (int)($identificacao['serie'] ?? 1);
     $std->dhEmi = date('Y-m-d\TH:i:sP'); // Data/hora emissão com timezone brasileiro (já definido no início)
@@ -1073,6 +1088,17 @@ try {
         // 🔍 DEBUG: Mostrar dados fiscais encontrados
         error_log("✅ PRODUTO {$nItem}: Dados fiscais encontrados - CFOP: {$produtoFiscal['cfop']}, CSOSN: {$produtoFiscal['csosn_icms']}, CST: {$produtoFiscal['cst_icms']}");
 
+        // ✅ FORÇAR CFOP 5202 PARA DEVOLUÇÃO (sem afetar vendas normais)
+        if ($isDevolucao) {
+            $cfopOriginal = $produtoFiscal['cfop'];
+            $produtoFiscal['cfop'] = '5202'; // CFOP específico para devolução de NFC-e
+            logDetalhado('DEVOLUCAO_CFOP', "CFOP alterado para devolução no produto {$nItem}", [
+                'cfop_original' => $cfopOriginal,
+                'cfop_devolucao' => $produtoFiscal['cfop'],
+                'produto_codigo' => $produto['codigo']
+            ]);
+        }
+
         $regimeTributario = (int)($empresa['regime_tributario'] ?? 1);
         validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $produto['codigo']);
 
@@ -1483,8 +1509,14 @@ try {
     logDetalhado('159', 'Criando informações adicionais');
     $std = new stdClass();
 
-    // ✅ NOVO: Informações específicas para TROCA EXATA
-    if ($isTrocaExata) {
+    // ✅ INFORMAÇÕES ADICIONAIS: Devolução, Troca ou Venda Normal
+    if ($isDevolucao) {
+        $infoAdicional = $nfceData['informacoes_adicionais'] ?? 'DEVOLUÇÃO DE MERCADORIA';
+        $std->infCpl = $infoAdicional . ' - NFC-e emitida pelo Sistema Nexo PDV';
+        logDetalhado('159.0', 'DEVOLUÇÃO: Informações adicionais específicas', [
+            'infCpl' => $std->infCpl
+        ]);
+    } else if ($isTrocaExata) {
         $std->infCpl = $observacaoTroca . ' - NFC-e emitida pelo Sistema Nexo PDV';
         logDetalhado('159.1', 'TROCA EXATA: Informações adicionais específicas', [
             'infCpl' => $std->infCpl

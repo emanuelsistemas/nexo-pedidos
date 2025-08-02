@@ -1181,8 +1181,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [logs, setLogs] = useState<string[]>([]);
   const [isEmitindoNFCe, setIsEmitindoNFCe] = useState(false);
 
-  // Estados para modal de erro detalhado
-  const [showErrorModal, setShowErrorModal] = useState(false);
+  // Estados para controle de erro (removido modal de erro separado)
   const [errorDetails, setErrorDetails] = useState<any>(null);
 
   // Hook para logs da API
@@ -1269,8 +1268,11 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   // Função para emitir NFC-e de devolução
   const emitirNFCeDevolucao = async () => {
     try {
+      console.log('🚀 [MODAL] Iniciando emissão NFC-e devolução');
       setIsEmitindoNFCe(true);
+      console.log('🚀 [MODAL] setIsEmitindoNFCe(true) - Modal de progresso deve abrir');
       setShowProgressModal(true);
+      console.log('🚀 [MODAL] setShowProgressModal(true) - Modal de progresso aberto');
       resetProgress();
 
       // ETAPA 1: VALIDAÇÃO
@@ -1315,7 +1317,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       updateStep('validacao', 'success', 'Dados validados com sucesso');
       addLog('✅ Validação concluída');
 
-      // ETAPA 2: GERAÇÃO DO XML
+      // ETAPA 2: PREPARAR DADOS PARA EMITIR-NFCE.PHP
       updateStep('geracao', 'loading');
       addLog('Preparando dados para NFC-e de devolução...');
 
@@ -1323,82 +1325,150 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         throw new Error('Dados da empresa não carregados');
       }
 
-      const dadosNFCe = {
-        empresa: empresaCompleta, // Dados completos da empresa (igual ao PDV)
-        chave_nfe_original: vendaOrigem.chave_nfe,
-        modelo_documento: 65, // NFC-e
-        cfop_devolucao: '5202',
+      // Obter itens selecionados para devolução
+      const itensSelecionados = getItensSelecionados();
+
+      // Preparar dados no formato esperado pelo emitir-nfce.php
+      const dadosNFCeDevolucao = {
+        // Dados da empresa (obrigatório)
+        empresa: empresaCompleta,
+
+        // Ambiente (obrigatório)
         ambiente: ambienteNFe,
-        tipo_operacao: 'devolucao',
-        // ✅ ADICIONANDO dados da série e próximo número
-        serie_documento: vendaOrigem.serie_documento,
-        numero_documento: proximoNumeroNFCe,
-        itens: itensComDadosFiscais.map(item => ({
-          produto_id: item.produto_id,
-          codigo_produto: item.dadosFiscais.codigo,
-          nome_produto: item.nome_produto,
-          ncm: item.dadosFiscais.ncm,
-          cfop: '5202', // CFOP específico para devolução
-          csosn: item.dadosFiscais.csosn_icms,
-          unidade_medida: item.dadosFiscais.unidade_medida.sigla,
+
+        // Identificação da NFC-e
+        identificacao: {
+          numero: proximoNumeroNFCe,
+          serie: empresaCompleta.serie_nfce || 1,
+          codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
+          natureza_operacao: 'DEVOLUÇÃO DE VENDA'
+        },
+
+        // Cliente (destinatário)
+        destinatario: vendaOrigem.cliente ? {
+          nome: vendaOrigem.cliente.nome,
+          documento: vendaOrigem.cliente.documento,
+          tipo_documento: vendaOrigem.cliente.tipo_documento,
+          telefone: vendaOrigem.cliente.telefone,
+          email: vendaOrigem.cliente.email
+        } : null,
+
+        // Produtos da devolução com CFOP 5202
+        produtos: itensComDadosFiscais.map(item => ({
+          codigo: item.dadosFiscais.codigo || '999999',
+          descricao: `DEVOLUÇÃO - ${item.nome_produto}`,
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
           valor_total: item.valor_total_item,
-          aliquota_icms: item.dadosFiscais.aliquota_icms || 0,
-          aliquota_pis: item.dadosFiscais.aliquota_pis || 0,
-          aliquota_cofins: item.dadosFiscais.aliquota_cofins || 0
-        }))
+          codigo_barras: item.dadosFiscais.codigo_barras || '',
+          unidade: item.dadosFiscais.unidade_medida?.sigla || 'UN',
+          ncm: item.dadosFiscais.ncm || '99999999',
+          cfop: '5202', // CFOP específico para devolução
+          cst_icms: item.dadosFiscais.cst_icms,
+          csosn_icms: item.dadosFiscais.csosn_icms,
+          origem_produto: item.dadosFiscais.origem || '0'
+        })),
+
+        // Pagamento (mesmo valor da devolução)
+        pagamento: {
+          forma_pagamento: '01', // Dinheiro para devolução
+          valor_pago: valorTotal
+        },
+
+        // ✅ MARCADORES ESPECÍFICOS PARA DEVOLUÇÃO
+        is_devolucao: true,
+        natureza_operacao: 'DEVOLUÇÃO DE VENDA',
+        informacoes_adicionais: `DEVOLUÇÃO DE MERCADORIA - Ref. Chave: ${vendaOrigem.chave_nfe}`,
+
+        // Dados da venda origem para referência
+        venda_origem: {
+          numero: vendaOrigem.numero,
+          chave_nfe: vendaOrigem.chave_nfe,
+          data_emissao: vendaOrigem.data_emissao_nfe
+        }
       };
 
-      updateStep('geracao', 'success', 'XML preparado');
-      addLog('✅ Dados preparados para emissão');
+      updateStep('geracao', 'success', 'Dados preparados');
+      addLog('✅ Dados de devolução preparados para emissão');
 
-      // ETAPA 3: ENVIO PARA SEFAZ
+      // ETAPA 3: ENVIO PARA SEFAZ usando emitir-nfce.php
       updateStep('sefaz', 'loading');
-      addLog('Enviando NFC-e para SEFAZ...');
+      addLog('Enviando NFC-e de devolução para SEFAZ...');
 
-      const response = await fetch('/backend/public/emitir-nfce-devolucao.php', {
+      const endpointUrl = '/backend/public/emitir-nfce.php';
+      addLog(`🔗 ENDPOINT: ${endpointUrl}`);
+      addLog(`📡 PAYLOAD: ${JSON.stringify({empresa_id: empresaId, nfce_data: 'dados_preparados'})}`);
+
+      const response = await fetch(endpointUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           empresa_id: empresaId,
-          nfce_data: dadosNFCe
+          nfce_data: dadosNFCeDevolucao
         })
       });
 
+      addLog(`📊 RESPOSTA HTTP: ${response.status} ${response.statusText}`);
+      addLog(`🌐 URL FINAL: ${response.url}`);
+
       if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+        const errorText = await response.text();
+        addLog(`❌ ERRO HTTP COMPLETO: ${errorText}`);
+
+        // Capturar detalhes do erro para o modal
+        let errorDetails = null;
+        try {
+          errorDetails = JSON.parse(errorText);
+        } catch {
+          errorDetails = { error: errorText };
+        }
+
+        setErrorDetails({
+          mensagem: errorDetails.error || `Erro HTTP ${response.status}`,
+          detalhes: {
+            status_http: response.status,
+            erro_completo: errorDetails,
+            timestamp: new Date().toLocaleString(),
+            endpoint: '/backend/public/emitir-nfce.php'
+          },
+          timestamp: new Date().toLocaleString(),
+          endpoint: '/backend/public/emitir-nfce.php'
+        });
+
+        throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
       }
 
       const resultado = await response.json();
+      addLog(`✅ RESPOSTA JSON: ${JSON.stringify(resultado, null, 2)}`);
 
-      if (resultado.erro) {
+      if (!resultado.success) {
         // Capturar detalhes do erro para o modal
         setErrorDetails({
-          mensagem: resultado.mensagem || 'Erro na emissão da NFC-e',
-          detalhes: resultado.detalhes || null,
+          mensagem: resultado.message || 'Erro na emissão da NFC-e de devolução',
+          detalhes: resultado.data || null,
           timestamp: new Date().toLocaleString(),
-          endpoint: '/backend/public/emitir-nfce-devolucao.php'
+          endpoint: '/backend/public/emitir-nfce.php'
         });
-        throw new Error(resultado.mensagem || 'Erro na emissão da NFC-e');
+        throw new Error(resultado.message || 'Erro na emissão da NFC-e de devolução');
       }
 
-      updateStep('sefaz', 'success', 'NFC-e autorizada pela SEFAZ');
-      addLog('✅ NFC-e autorizada pela SEFAZ');
-      addLog(`Chave: ${resultado.chave}`);
-      addLog(`Protocolo: ${resultado.protocolo}`);
+      updateStep('sefaz', 'success', 'NFC-e de devolução autorizada pela SEFAZ');
+      addLog('✅ NFC-e de devolução autorizada pela SEFAZ');
+      addLog(`Chave: ${resultado.data.chave}`);
+      addLog(`Protocolo: ${resultado.data.protocolo}`);
 
       // ETAPA 4: SALVAR DEVOLUÇÃO
       updateStep('banco', 'loading');
       addLog('Salvando devolução no sistema...');
 
       await handleConfirm('nfce', {
-        chave_nfce_devolucao: resultado.chave,
-        numero_nfce: resultado.numero,
-        protocolo: resultado.protocolo,
-        xml_nfce: resultado.xml
+        chave_nfce_devolucao: resultado.data.chave,
+        numero_nfce: resultado.data.numero,
+        protocolo: resultado.data.protocolo,
+        xml_nfce: resultado.data.xml,
+        serie_nfce: resultado.data.serie
       });
 
       updateStep('banco', 'success', 'Devolução salva');
@@ -1428,33 +1498,23 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       addLog(`❌ Erro: ${(error as Error).message}`);
       setIsEmitindoNFCe(false);
 
-      // Buscar logs da API automaticamente quando houver erro
-      addLog('🔍 Buscando logs detalhados da API...');
-      try {
-        await fetchApiLogs('error', 20);
-        addLog('✅ Logs da API carregados - verifique o modal de erro');
-      } catch (logError) {
-        addLog('⚠️ Não foi possível carregar logs da API');
-      }
-
-      // Se não temos detalhes do erro ainda, criar um básico
+      // Se não temos detalhes do erro ainda (erro não HTTP), criar um básico
       if (!errorDetails) {
         setErrorDetails({
           mensagem: (error as Error).message,
           detalhes: {
+            erro_completo: (error as Error).message,
             timestamp: new Date().toLocaleString(),
-            tipo: 'Erro de Frontend'
+            tipo: 'Erro de Frontend - Devolução NFC-e',
+            endpoint_chamado: '/backend/public/emitir-nfce.php'
           },
           timestamp: new Date().toLocaleString(),
-          endpoint: '/backend/public/emitir-nfce-devolucao.php'
+          endpoint: '/backend/public/emitir-nfce.php'
         });
       }
 
-      // Mostrar modal de erro detalhado
-      setTimeout(() => {
-        setShowProgressModal(false);
-        setShowErrorModal(true);
-      }, 1000);
+      // Manter o modal de progresso aberto para mostrar os logs de erro
+      console.log('❌ [MODAL] Mantendo modal de progresso aberto para mostrar logs de erro');
     }
   };
 
@@ -2102,200 +2162,11 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         </div>
       </motion.div>
 
-      {/* Modal de Erro Detalhado */}
-      {showErrorModal && errorDetails && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-[80] p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="w-full max-w-4xl bg-background-card rounded-lg border border-red-500/30 shadow-2xl max-h-[90vh] overflow-hidden flex flex-col"
-          >
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-red-500/30 bg-red-500/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-500/20 rounded-lg">
-                    <AlertTriangle className="w-6 h-6 text-red-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white">Erro na Emissão NFC-e Devolução</h3>
-                    <p className="text-sm text-red-300">Detalhes técnicos do erro</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowErrorModal(false)}
-                  className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
 
-            {/* Conteúdo */}
-            <div className="flex-1 p-6 overflow-y-auto">
-              <div className="space-y-6">
-                {/* Mensagem Principal - OCULTA */}
-                <div className="hidden p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <h4 className="text-red-400 font-semibold mb-2">
-                    {(() => {
-                      // Extrair último erro específico dos logs
-                      const logsText = apiLogs.join('\n');
 
-                      // Procurar por erros específicos nos logs (do mais recente para o mais antigo)
-                      if (logsText.includes('A configuração (config.json) não é válido')) {
-                        return 'Próximo Erro: Configuração NFePHP inválida';
-                      }
-                      if (logsText.includes('Erro ao inicializar Tools')) {
-                        return 'Próximo Erro: Falha na inicialização NFePHP';
-                      }
-                      if (logsText.includes('CNPJ com tamanho inválido')) {
-                        return 'Próximo Erro: CNPJ da empresa inválido';
-                      }
-                      if (logsText.includes('Certificado não encontrado')) {
-                        return 'Próximo Erro: Certificado digital não encontrado';
-                      }
-                      if (logsText.includes('Configuração NFe não encontrada')) {
-                        return 'Próximo Erro: Configuração NFC-e não encontrada';
-                      }
 
-                      // Se não encontrou erro específico, mostrar genérico
-                      return 'Mensagem de Erro:';
-                    })()}
-                  </h4>
-                  <p className="text-red-200">{errorDetails.mensagem}</p>
-                </div>
 
-                {/* Detalhes Técnicos */}
-                {errorDetails.detalhes && (
-                  <div className="space-y-4">
-                    <h4 className="text-white font-semibold">Detalhes Técnicos:</h4>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {errorDetails.detalhes.arquivo && (
-                        <div className="p-3 bg-gray-800/50 rounded-lg">
-                          <span className="text-gray-400 text-sm">Arquivo:</span>
-                          <p className="text-white font-mono text-sm">{errorDetails.detalhes.arquivo}</p>
-                        </div>
-                      )}
-
-                      {errorDetails.detalhes.linha && (
-                        <div className="p-3 bg-gray-800/50 rounded-lg">
-                          <span className="text-gray-400 text-sm">Linha:</span>
-                          <p className="text-white font-mono text-sm">{errorDetails.detalhes.linha}</p>
-                        </div>
-                      )}
-
-                      <div className="p-3 bg-gray-800/50 rounded-lg">
-                        <span className="text-gray-400 text-sm">Timestamp:</span>
-                        <p className="text-white font-mono text-sm">{errorDetails.timestamp}</p>
-                      </div>
-                    </div>
-
-                    {/* Logs da API */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h5 className="text-white font-medium">Logs do Servidor:</h5>
-                        <div className="flex gap-2">
-                          {isLoadingApiLogs && (
-                            <div className="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs rounded-lg">
-                              Carregando...
-                            </div>
-                          )}
-                          <button
-                            onClick={async () => {
-                              try {
-                                await copyApiLogsToClipboard();
-                                alert('Logs copiados para a área de transferência!');
-                              } catch (err) {
-                                alert('Erro ao copiar logs');
-                              }
-                            }}
-                            className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-lg transition-colors"
-                          >
-                            Copiar Logs
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-gray-900/80 rounded-lg border border-gray-700 max-h-60 overflow-y-auto">
-                        {apiLogsError ? (
-                          <p className="text-red-400 text-sm">Erro ao carregar logs: {apiLogsError}</p>
-                        ) : apiLogs.length > 0 ? (
-                          <div className="space-y-1">
-                            {apiLogs.map((log, index) => (
-                              <div key={index} className="text-xs text-gray-300 font-mono">
-                                {formatApiLog(log)}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-gray-400 text-sm">Nenhum log encontrado</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Stack Trace */}
-                    {errorDetails.detalhes.trace && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h5 className="text-white font-medium">Stack Trace:</h5>
-                          <button
-                            onClick={() => {
-                              const traceText = `ERRO NFC-e DEVOLUÇÃO\n\nMensagem: ${errorDetails.mensagem}\nTimestamp: ${errorDetails.timestamp}\n\nStack Trace:\n${errorDetails.detalhes.trace}`;
-                              navigator.clipboard.writeText(traceText);
-                              alert('Log copiado para a área de transferência!');
-                            }}
-                            className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-lg transition-colors"
-                          >
-                            Copiar Stack Trace
-                          </button>
-                        </div>
-                        <div className="p-4 bg-gray-900/80 rounded-lg border border-gray-700 max-h-60 overflow-y-auto">
-                          <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono">
-                            {errorDetails.detalhes.trace}
-                          </pre>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-800 flex gap-3 justify-end">
-              <button
-                onClick={() => setShowErrorModal(false)}
-                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
-              >
-                Fechar
-              </button>
-              <button
-                onClick={() => {
-                  setShowErrorModal(false);
-                  const confirmarManual = confirm(
-                    'Deseja prosseguir com devolução manual?\n' +
-                    'ATENÇÃO: Não será emitida devolução fiscal.'
-                  );
-
-                  if (confirmarManual) {
-                    handleConfirm('manual');
-                  }
-                }}
-                className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors font-medium"
-              >
-                Tentar Devolução Manual
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
 
       {/* Modal de Progresso NFC-e Devolução */}
       {showProgressModal && (
