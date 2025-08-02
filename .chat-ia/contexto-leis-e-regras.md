@@ -2,7 +2,19 @@
 
 ## 📋 **LEIS FUNDAMENTAIS DO PROJETO**
 
-### **IMPORTANTE**: Este projeto segue 5 leis fundamentais documentadas na pasta `/root/nexo-pedidos/chat-ia/`. Consulte sempre esses arquivos antes de implementar qualquer funcionalidade fiscal.
+### **IMPORTANTE**: Este projeto segue 6 leis fundamentais documentadas na pasta `/root/nexo-pedidos/chat-ia/`. Consulte sempre esses arquivos antes de implementar qualquer funcionalidade fiscal.
+
+### **🚨 LEI FUNDAMENTAL #6 - PROTEÇÃO CONTRA REMOÇÕES**
+**NUNCA REMOVA CÓDIGO OU DADOS SEM AUTORIZAÇÃO EXPLÍCITA**
+
+- ❌ **PROIBIDO**: Remover qualquer código existente sem consulta prévia
+- ❌ **PROIBIDO**: Deletar campos de banco de dados sem autorização
+- ❌ **PROIBIDO**: Excluir funcionalidades implementadas no PDV
+- ❌ **PROIBIDO**: Remover tabelas, colunas ou dados do sistema
+- ✅ **OBRIGATÓRIO**: Sempre pedir autorização clara antes de qualquer remoção
+- ✅ **OBRIGATÓRIO**: Explicar detalhadamente o objetivo da remoção
+- ✅ **OBRIGATÓRIO**: Aguardar confirmação explícita do usuário
+- 🎯 **RAZÃO**: O PDV é o coração do sistema e remoções podem quebrar funcionalidades vitais
 
 ### **Documentação Oficial Obrigatória**:
 1. **sped-nfe**: https://github.com/nfephp-org/sped-nfe/blob/master/docs/Make.md
@@ -218,3 +230,70 @@ csc_id_producao INTEGER,       -- ID do CSC produção
 2. Integração com contabilidade
 3. Backup em nuvem
 4. Monitoramento de status SEFAZ
+
+## 🚨 **LEI FUNDAMENTAL #6 - PROTEÇÃO TOTAL CONTRA REMOÇÕES**
+
+### **⚠️ ATENÇÃO MÁXIMA: NUNCA REMOVER SEM AUTORIZAÇÃO**
+
+Esta é uma **LEI CRÍTICA** que deve ser seguida por todas as IAs que trabalham neste projeto:
+
+#### **🔒 REGRAS ABSOLUTAS DE PROTEÇÃO**
+
+1. **CÓDIGO EXISTENTE É SAGRADO**
+   - Nunca remover funções, métodos ou componentes existentes
+   - Nunca deletar arquivos do sistema
+   - Nunca comentar código funcional sem autorização
+
+2. **BANCO DE DADOS É INTOCÁVEL**
+   - Nunca executar DROP TABLE, DROP COLUMN
+   - Nunca deletar registros sem autorização explícita
+   - Nunca alterar estruturas existentes sem consulta
+
+3. **PDV É O CORAÇÃO DO SISTEMA**
+   - Qualquer alteração no PDV requer autorização
+   - Funcionalidades de venda são críticas
+   - Campos de devolução são vitais para o negócio
+
+#### **✅ PROCESSO OBRIGATÓRIO ANTES DE QUALQUER REMOÇÃO**
+
+1. **PARAR IMEDIATAMENTE** antes de remover qualquer código
+2. **EXPLICAR DETALHADAMENTE**:
+   - O que pretende remover
+   - Por que considera necessário
+   - Qual o impacto esperado
+   - Quais alternativas existem
+3. **AGUARDAR AUTORIZAÇÃO EXPLÍCITA** do usuário
+4. **DOCUMENTAR** a remoção se autorizada
+
+#### **🎯 EXEMPLOS DE SITUAÇÕES QUE REQUEREM AUTORIZAÇÃO**
+
+- Remover campos de tabelas do banco
+- Deletar funções do PDV
+- Excluir componentes React
+- Remover validações existentes
+- Alterar estruturas de dados
+- Comentar código funcional
+
+#### **💡 ALTERNATIVAS SEGURAS**
+
+Em vez de remover, considere:
+- **Adicionar** novos campos/funcionalidades
+- **Estender** código existente
+- **Criar** novas funções paralelas
+- **Configurar** funcionalidades opcionais
+- **Documentar** problemas encontrados
+
+### **🔥 CONSEQUÊNCIAS DE VIOLAÇÃO DESTA LEI**
+
+- Quebra de funcionalidades críticas
+- Perda de dados importantes
+- Interrupção do sistema de vendas
+- Necessidade de rollback complexo
+- Perda de confiança do usuário
+
+### **📝 LEMBRETE PARA TODAS AS IAs**
+
+**ANTES DE QUALQUER REMOÇÃO, SEMPRE PERGUNTE:**
+> "Posso remover [DESCRIÇÃO DETALHADA] do sistema? Qual o impacto esperado e você autoriza esta remoção?"
+
+**AGUARDE A RESPOSTA ANTES DE PROSSEGUIR!**

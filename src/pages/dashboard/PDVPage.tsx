@@ -11109,7 +11109,6 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Função para carregar próximo número da NFC-e no modal de itens
   const carregarProximoNumeroNfceModal = async () => {
-    console.log('🔢 MODAL: Iniciando carregamento do próximo número...');
 
     try {
       setLoadingProximoNumero(true);
@@ -11117,7 +11116,6 @@ const PDVPage: React.FC = () => {
       // Buscar dados do usuário atual
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        console.log('❌ MODAL: Usuário não autenticado');
         return;
       }
 
@@ -11128,22 +11126,16 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) {
-        console.log('❌ MODAL: Empresa ID não encontrado');
         return;
       }
 
-      console.log('🔢 MODAL: Carregando próximo número NFC-e para empresa:', usuarioData.empresa_id);
-
       const proximoNumero = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
       setNumeroNfceModalItens(proximoNumero.toString());
-      console.log('✅ MODAL: Próximo número carregado e definido:', proximoNumero);
     } catch (error) {
-      console.error('❌ MODAL: Erro ao carregar próximo número:', error);
+      console.error('Erro ao carregar próximo número:', error);
       setNumeroNfceModalItens('1'); // Fallback
-      console.log('🔄 MODAL: Usando fallback número 1');
     } finally {
       setLoadingProximoNumero(false);
-      console.log('🔢 MODAL: Loading finalizado');
     }
   };
 
@@ -13171,13 +13163,10 @@ const PDVPage: React.FC = () => {
           devolucao_origem_numero: primeiraDevolucao.devolucao_codigo,
           devolucao_origem_codigo: primeiraDevolucao.devolucao_codigo,
           venda_origem_troca_id: primeiraDevolucao.venda_origem_id,
-          venda_origem_troca_numero: primeiraDevolucao.venda_origem_numero,
+          venda_origem_troca_numero: primeiraDevolucao.venda_origem_numero
 
-          // ✅ NOVO: Listas completas (múltiplas devoluções)
-          devolucoes_origem_ids: devolucaoIds.length > 1 ? devolucaoIds : null,
-          devolucoes_origem_codigos: devolucaoCodigos.length > 1 ? devolucaoCodigos : null,
-          vendas_origem_troca_ids: vendaOrigemIds.length > 1 ? vendaOrigemIds : null,
-          vendas_origem_troca_numeros: vendaOrigemNumeros.length > 1 ? vendaOrigemNumeros : null
+          // ✅ NOTA: Campos no plural removidos pois não existem na tabela pdv
+          // A tabela pdv só suporta uma devolução por venda nos campos individuais
         };
 
         // Log para debug
@@ -14450,6 +14439,8 @@ const PDVPage: React.FC = () => {
               status: 'processada',
               processada_em: new Date().toISOString(),
               processada_por_usuario_id: userData.user.id,
+              venda_processamento_id: vendaId, // ✅ NOVO: ID da venda que processou a devolução
+              venda_processamento_numero: numeroVenda, // ✅ NOVO: Número da venda que processou a devolução
               observacoes: `Troca processada automaticamente - Venda #${numeroVenda}`
             })
             .eq('codigo_troca', devolucaoAplicada.codigo_troca)
@@ -14461,6 +14452,7 @@ const PDVPage: React.FC = () => {
             // Não interrompe o processo, apenas loga o erro
           } else {
             console.log('✅ Troca processada com sucesso:', devolucaoAplicada.codigo_troca);
+            console.log('✅ Venda de processamento registrada:', { vendaId, numeroVenda });
           }
         } catch (trocaError) {
           console.error('❌ Erro inesperado ao processar troca:', trocaError);
