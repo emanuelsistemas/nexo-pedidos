@@ -169,7 +169,8 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
           valor_total,
           status_venda,
           status_fiscal,
-          modelo_documento
+          modelo_documento,
+          chave_nfe
         `)
         .eq('empresa_id', empresaIdToUse)
         .in('status_venda', ['finalizada', 'paga'])
@@ -1112,7 +1113,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       return venda ? {
         id: venda.id,
         numero: venda.numero_venda,
-        data: venda.data_venda || venda.created_at
+        data: venda.data_venda || venda.created_at,
+        modelo_documento: venda.modelo_documento,
+        chave_nfe: venda.chave_nfe
       } : null;
     }
 
@@ -1125,7 +1128,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       return vendaDoItem ? {
         id: vendaDoItem.id,
         numero: vendaDoItem.numero_venda,
-        data: vendaDoItem.data_venda || vendaDoItem.created_at
+        data: vendaDoItem.data_venda || vendaDoItem.created_at,
+        modelo_documento: vendaDoItem.modelo_documento,
+        chave_nfe: vendaDoItem.chave_nfe
       } : null;
     }
 
@@ -1135,14 +1140,15 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const itensSelecionados = getItensSelecionados();
   const vendaOrigemInfo = getVendaOrigemInfo();
 
-  const handleConfirm = () => {
+  const handleConfirm = (tipoConfirmacao: 'manual' | 'nfce' = 'manual') => {
     const dadosDevolucao = {
       clienteId,
       itens: itensSelecionados,
       valorTotal,
       vendasCompletas: Array.from(selectedVendas),
       itensIndividuais: Array.from(selectedItens),
-      vendaOrigem: vendaOrigemInfo // Adicionar informações da venda origem
+      vendaOrigem: vendaOrigemInfo, // Adicionar informações da venda origem
+      tipoConfirmacao // Adicionar tipo de confirmação
     };
     onConfirm(dadosDevolucao);
   };
@@ -1179,13 +1185,31 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                 Venda de Origem
               </h3>
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-white font-medium">
-                    #{vendaOrigemInfo.numero}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-white font-medium">
+                      #{vendaOrigemInfo.numero}
+                    </span>
+                    {/* Tag NFC-e ou PDV */}
+                    {vendaOrigemInfo.modelo_documento === 65 ? (
+                      <span className="px-2 py-1 bg-green-600/20 text-green-400 text-xs rounded border border-green-600/30">
+                        NFC-e
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-gray-600/20 text-gray-400 text-xs rounded border border-gray-600/30">
+                        PDV
+                      </span>
+                    )}
                   </div>
                   <div className="text-gray-400 text-sm">
                     {formatDate(vendaOrigemInfo.data)}
                   </div>
+                  {/* Mostrar chave NFC-e se existir */}
+                  {vendaOrigemInfo.modelo_documento === 65 && vendaOrigemInfo.chave_nfe && (
+                    <div className="text-gray-500 text-xs mt-1 font-mono">
+                      Chave: {vendaOrigemInfo.chave_nfe}
+                    </div>
+                  )}
                 </div>
                 <div className="text-blue-400 text-sm">
                   Venda selecionada para devolução
@@ -1262,13 +1286,24 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           >
             Cancelar
           </button>
-          <button
-            onClick={handleConfirm}
-            disabled={isLoading}
-            className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
-          >
-            {isLoading ? 'Criando Devolução...' : 'Confirmar Devolução'}
-          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => handleConfirm('manual')}
+              disabled={isLoading}
+              className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+            >
+              {isLoading ? 'Criando Devolução...' : 'Confirmar Devolução Manual'}
+            </button>
+
+            <button
+              onClick={() => handleConfirm('nfce')}
+              disabled={isLoading}
+              className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+            >
+              {isLoading ? 'Criando Devolução...' : 'Confirmar Devolução NFC-e'}
+            </button>
+          </div>
         </div>
       </motion.div>
 

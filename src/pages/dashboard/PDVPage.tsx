@@ -5331,7 +5331,42 @@ const PDVPage: React.FC = () => {
         if (error) {
           throw error;
         }
+      }
 
+      // ✅ NOVO: Liberar devoluções que foram processadas por esta venda
+      console.log(`🔄 Liberando devoluções processadas pela venda #${vendaParaCancelar.numero_venda}...`);
+
+      const { data: devolucoesProcesadas, error: errorDevolucoesConsulta } = await supabase
+        .from('devolucoes')
+        .select('id, numero')
+        .eq('venda_processamento_numero', vendaParaCancelar.numero_venda)
+        .eq('status', 'processada');
+
+      if (errorDevolucoesConsulta) {
+        console.error('❌ Erro ao consultar devoluções processadas:', errorDevolucoesConsulta);
+      } else if (devolucoesProcesadas && devolucoesProcesadas.length > 0) {
+        console.log(`📋 Encontradas ${devolucoesProcesadas.length} devoluções para liberar:`, devolucoesProcesadas);
+
+        const { error: errorLiberarDevolucoes } = await supabase
+          .from('devolucoes')
+          .update({
+            status: 'pendente',
+            venda_processamento_id: null,
+            venda_processamento_numero: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('venda_processamento_numero', vendaParaCancelar.numero_venda)
+          .eq('status', 'processada');
+
+        if (errorLiberarDevolucoes) {
+          console.error('❌ Erro ao liberar devoluções:', errorLiberarDevolucoes);
+          toast.error('Venda cancelada, mas houve erro ao liberar devoluções');
+        } else {
+          console.log('✅ Devoluções liberadas com sucesso');
+          toast.success(`Venda cancelada e ${devolucoesProcesadas.length} devolução(ões) liberada(s) para exclusão`);
+        }
+      } else {
+        console.log('ℹ️ Nenhuma devolução processada encontrada para esta venda');
         toast.success(`Venda #${vendaParaCancelar.numero_venda} cancelada com sucesso`);
       }
 
