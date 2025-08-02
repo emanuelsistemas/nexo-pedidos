@@ -521,27 +521,213 @@ try {
     $xmlAssinado = $tools->signNFe($xml);
     logDetalhado('XML_ASSINADO', 'XML assinado digitalmente');
 
-    // Enviar para SEFAZ
-    $idLote = str_pad(mt_rand(1, 999999999), 15, '0', STR_PAD_LEFT);
-    $resp = $tools->sefazEnviaLote([$xmlAssinado], $idLote);
-
-    logDetalhado('ENVIADO_SEFAZ', 'XML enviado para SEFAZ', [
-        'id_lote' => $idLote
-    ]);
-
-    // Processar resposta
-    $st = $tools->sefazConsultaRecibo($resp);
-    
-    if ($st->cStat != 104) {
-        throw new Exception("Erro SEFAZ: {$st->cStat} - {$st->xMotivo}");
+    // ENVIAR PARA SEFAZ (MÉTODO SÍNCRONO IGUAL AO emitir-nfce.php)
+    logDetalhado('ENVIANDO_SEFAZ', 'Enviando para SEFAZ com modo síncrono...');
+    try {
+        // ✅ CORREÇÃO: Para NFC-e usar envio síncrono (indSinc=1) igual ao emitir-nfce.php
+        $response = $tools->sefazEnviaLote([$xmlAssinado], 1, 1); // Terceiro parâmetro = indSinc=1 (síncrono)
+        logDetalhado('RESPOSTA_RECEBIDA', 'Resposta recebida da SEFAZ (modo síncrono)');
+    } catch (Exception $sefazError) {
+        logDetalhado('ERRO_ENVIO_SEFAZ', 'Erro ao enviar para SEFAZ', [
+            'erro' => $sefazError->getMessage()
+        ], 'error');
+        throw new Exception("Erro ao enviar para SEFAZ: " . $sefazError->getMessage());
     }
 
-    // Extrair dados da resposta
-    $dom = new DOMDocument();
-    $dom->loadXML($st->any);
-    
-    $chaveNFe = $dom->getElementsByTagName('chNFe')->item(0)->nodeValue;
-    $protocolo = $dom->getElementsByTagName('nProt')->item(0)->nodeValue;
+    // PROCESSAR RESPOSTA (MÉTODO NATIVO IGUAL AO emitir-nfce.php)
+    logDetalhado('PROCESSANDO_RESPOSTA', 'Processando resposta da SEFAZ', [
+        'resposta_sefaz' => $response
+    ]);
+
+    try {
+        $dom = new DOMDocument();
+        $dom->loadXML($response);
+        logDetalhado('XML_RESPOSTA_CARREGADO', 'XML da resposta carregado');
+    } catch (Exception $domError) {
+        logDetalhado('ERRO_XML_RESPOSTA', 'Erro ao carregar XML da resposta', [
+            'erro' => $domError->getMessage()
+        ], 'error');
+        throw new Exception("Erro ao processar resposta da SEFAZ: " . $domError->getMessage());
+    }
+
+    // Extrair dados da resposta (IGUAL AO emitir-nfce.php)
+    logDetalhado('EXTRAINDO_DADOS', 'Extraindo dados da resposta...');
+
+    // Status do lote (104 = Lote processado é OK)
+    $statusLoteNode = $dom->getElementsByTagName('cStat')->item(0);
+    $statusLote = $statusLoteNode ? $statusLoteNode->nodeValue : 'STATUS_NAO_ENCONTRADO';
+    logDetalhado('STATUS_LOTE', 'Status do Lote', ['status' => $statusLote]);
+
+    $motivoLoteNode = $dom->getElementsByTagName('xMotivo')->item(0);
+    $motivoLote = $motivoLoteNode ? $motivoLoteNode->nodeValue : 'MOTIVO_NAO_ENCONTRADO';
+    logDetalhado('MOTIVO_LOTE', 'Motivo do Lote', ['motivo' => $motivoLote]);
+
+    // ✅ CORREÇÃO: Para modo síncrono, verificar status individual da NFC-e
+    logDetalhado('BUSCANDO_STATUS_INDIVIDUAL', 'Buscando status individual da NFC-e...');
+
+    // Buscar status da NFC-e individual (dentro de protNFe)
+    $protNFeNodes = $dom->getElementsByTagName('protNFe');
+    if ($protNFeNodes->length > 0) {
+        $protNFe = $protNFeNodes->item(0);
+        $infProtNodes = $protNFe->getElementsByTagName('infProt');
+
+        if ($infProtNodes->length > 0) {
+            $infProt = $infProtNodes->item(0);
+
+            $statusNFeNode = $infProt->getElementsByTagName('cStat')->item(0);
+            $status = $statusNFeNode ? $statusNFeNode->nodeValue : 'STATUS_NFE_NAO_ENCONTRADO';
+
+            $motivoNFeNode = $infProt->getElementsByTagName('xMotivo')->item(0);
+            $motivo = $motivoNFeNode ? $motivoNFeNode->nodeValue : 'MOTIVO_NFE_NAO_ENCONTRADO';
+
+            logDetalhado('STATUS_NFCE', 'Status da NFC-e', ['status' => $status, 'motivo' => $motivo]);
+        } else {
+            logDetalhado('ERRO_INFPROT', 'infProt não encontrado', [], 'error');
+            $status = 'INFPROT_NAO_ENCONTRADO';
+            $motivo = 'Estrutura de protocolo inválida';
+        }
+    } else {
+        logDetalhado('ERRO_PROTNFE', 'protNFe não encontrado', [], 'error');
+        $status = 'PROTNFE_NAO_ENCONTRADO';
+        $motivo = 'Protocolo da NFC-e não encontrado na resposta';
+    }
+
+    logDetalhado('STATUS_FINAL', 'Status final da NFC-e', ['status' => $status, 'motivo' => $motivo]);
+
+    // Verificar se foi autorizada (100 = Autorizado) - IGUAL AO emitir-nfce.php
+    if ($status !== '100') {
+        logDetalhado('NFCE_REJEITADA', 'NFC-e rejeitada', ['status' => $status, 'motivo' => $motivo], 'error');
+
+        // ✅ CORREÇÃO: Criar mensagem específica baseada no status (IGUAL AO emitir-nfce.php)
+        $mensagemEspecifica = "NFC-e de devolução rejeitada pela SEFAZ";
+
+        // Tratar erros específicos mais comuns
+        switch ($status) {
+            case '539':
+                $mensagemEspecifica = "ERRO: Número da NFC-e já foi utilizado. Configure o próximo número disponível no sistema.";
+                break;
+            case '204':
+                $mensagemEspecifica = "ERRO: Duplicidade de NFC-e. Verifique a numeração sequencial.";
+                break;
+            case '225':
+                $mensagemEspecifica = "ERRO: Falha no Schema XML. Verifique os dados obrigatórios.";
+                break;
+            case '402':
+                $mensagemEspecifica = "ERRO: XML mal formado. Problema na estrutura dos dados.";
+                break;
+            case '503':
+                $mensagemEspecifica = "ERRO: Serviço da SEFAZ temporariamente indisponível. Tente novamente em alguns minutos.";
+                break;
+            case '656':
+                $mensagemEspecifica = "ERRO: Consumo indevido. Verifique se o ambiente (homologação/produção) está correto.";
+                break;
+            default:
+                $mensagemEspecifica = "NFC-e de devolução rejeitada pela SEFAZ - Status {$status}: {$motivo}";
+                break;
+        }
+
+        throw new Exception($mensagemEspecifica);
+    }
+
+    logDetalhado('NFCE_AUTORIZADA', 'NFC-e de devolução autorizada pela SEFAZ!', [], 'success');
+
+    // ✅ CORREÇÃO: No modo síncrono, extrair protocolo e recibo da resposta (IGUAL AO emitir-nfce.php)
+    logDetalhado('EXTRAINDO_PROTOCOLO', 'Extraindo protocolo e recibo da resposta síncrona...');
+    $protocolo = null;
+    $recibo = null;
+
+    try {
+        // Buscar protocolo na resposta síncrona (dentro de infProt)
+        if ($protNFeNodes->length > 0) {
+            $protNFe = $protNFeNodes->item(0);
+            $infProtNodes = $protNFe->getElementsByTagName('infProt');
+
+            if ($infProtNodes->length > 0) {
+                $infProt = $infProtNodes->item(0);
+
+                $protocoloNode = $infProt->getElementsByTagName('nProt')->item(0);
+                $protocolo = $protocoloNode ? $protocoloNode->nodeValue : null;
+
+                // Para modo síncrono, o recibo pode estar no cabeçalho
+                $reciboNode = $dom->getElementsByTagName('nRec')->item(0);
+                $recibo = $reciboNode ? $reciboNode->nodeValue : 'SINCRONO';
+            }
+        }
+
+        if ($protocolo) {
+            logDetalhado('PROTOCOLO_EXTRAIDO', 'Protocolo extraído da resposta síncrona', [
+                'protocolo' => $protocolo,
+                'recibo' => $recibo
+            ], 'success');
+
+            // ✅ CORREÇÃO: Usar método oficial da biblioteca sped-nfe (IGUAL AO emitir-nfce.php)
+            logDetalhado('ADICIONANDO_PROTOCOLO', 'Adicionando protocolo ao XML usando Complements::toAuthorize...');
+            try {
+                // Usar a classe Complements da biblioteca sped-nfe (OFICIAL)
+                $xmlComProtocolo = \NFePHP\NFe\Complements::toAuthorize($xmlAssinado, $response);
+                logDetalhado('PROTOCOLO_ADICIONADO', 'Protocolo adicionado ao XML usando Complements::toAuthorize', [], 'success');
+            } catch (Exception $protocolError) {
+                logDetalhado('ERRO_ADICIONAR_PROTOCOLO', 'Erro ao adicionar protocolo', [
+                    'erro' => $protocolError->getMessage()
+                ], 'warning');
+                $xmlComProtocolo = $xmlAssinado;
+            }
+        } else {
+            logDetalhado('PROTOCOLO_NAO_ENCONTRADO', 'Protocolo não encontrado na resposta síncrona', [], 'warning');
+            $xmlComProtocolo = $xmlAssinado;
+            $protocolo = 'PROTOCOLO_NAO_ENCONTRADO';
+            $recibo = 'RECIBO_NAO_ENCONTRADO';
+        }
+
+    } catch (Exception $e) {
+        logDetalhado('ERRO_EXTRAIR_PROTOCOLO', 'Erro ao extrair protocolo', [
+            'erro' => $e->getMessage()
+        ], 'warning');
+        $xmlComProtocolo = $xmlAssinado;
+        $protocolo = 'ERRO_PROTOCOLO';
+        $recibo = 'ERRO_RECIBO';
+    }
+
+    // Extrair chave de acesso do XML (IGUAL AO emitir-nfce.php)
+    logDetalhado('EXTRAINDO_CHAVE', 'Extraindo chave de acesso do XML...');
+    try {
+        $xmlDom = new DOMDocument();
+        $xmlDom->loadXML($xmlAssinado);
+
+        $chaveNode = $xmlDom->getElementsByTagName('chNFe')->item(0);
+        $chaveNFe = $chaveNode ? $chaveNode->nodeValue : null;
+        logDetalhado('TENTATIVA_1_CHAVE', 'Tentativa 1 - chNFe', ['chave' => $chaveNFe ?? 'null']);
+
+        if (!$chaveNFe) {
+            // Tentar extrair da tag infNFe
+            logDetalhado('TENTATIVA_2_CHAVE', 'Tentativa 2 - extraindo de infNFe...');
+            $infNFeNodes = $xmlDom->getElementsByTagName('infNFe');
+            if ($infNFeNodes->length > 0) {
+                $idAttribute = $infNFeNodes->item(0)->getAttribute('Id');
+                $chaveNFe = str_replace('NFe', '', $idAttribute);
+                logDetalhado('ID_ATTRIBUTE', 'ID attribute extraído', [
+                    'id_attribute' => $idAttribute,
+                    'chave_extraida' => $chaveNFe
+                ]);
+            }
+        }
+
+        if (!$chaveNFe || strlen($chaveNFe) !== 44) {
+            logDetalhado('CHAVE_INVALIDA', 'Chave inválida', [
+                'chave' => $chaveNFe ?? 'null',
+                'tamanho' => strlen($chaveNFe ?? '')
+            ], 'error');
+            throw new Exception('Não foi possível extrair chave de acesso válida do XML');
+        }
+
+        logDetalhado('CHAVE_EXTRAIDA', 'Chave extraída com sucesso', ['chave' => $chaveNFe], 'success');
+
+    } catch (Exception $chaveError) {
+        logDetalhado('ERRO_EXTRAIR_CHAVE', 'Erro ao extrair chave', [
+            'erro' => $chaveError->getMessage()
+        ], 'error');
+        throw new Exception('Erro ao extrair chave de acesso: ' . $chaveError->getMessage());
+    }
     
     logDetalhado('NFCE_AUTORIZADA', 'NFC-e de devolução autorizada', [
         'chave' => $chaveNFe,
