@@ -73,6 +73,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const [selectedItens, setSelectedItens] = useState<Set<string>>(new Set());
   const [selectedVendas, setSelectedVendas] = useState<Set<string>>(new Set());
   const [loadingItens, setLoadingItens] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [showFinalizarModal, setShowFinalizarModal] = useState(false);
   const [showAvisoModal, setShowAvisoModal] = useState(false);
   const [avisoMensagem, setAvisoMensagem] = useState('');
@@ -299,16 +300,65 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
 
       if (error) throw error;
 
+      // Buscar dados fiscais dos produtos
+      const produtoIds = itensData?.map(item => item.produto_id).filter(Boolean) || [];
+      let dadosFiscais: {[produtoId: string]: any} = {};
+
+      if (produtoIds.length > 0) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+          const { data: usuarioData } = await supabase
+            .from('usuarios')
+            .select('empresa_id')
+            .eq('id', userData.user.id)
+            .single();
+
+          if (usuarioData?.empresa_id) {
+            const { data: produtosFiscais, error: fiscaisError } = await supabase
+              .from('produtos')
+              .select(`
+                id,
+                codigo,
+                ncm,
+                cfop,
+                origem_produto,
+                situacao_tributaria,
+                cst_icms,
+                csosn_icms,
+                cst_pis,
+                cst_cofins,
+                aliquota_icms,
+                aliquota_pis,
+                aliquota_cofins
+              `)
+              .in('id', produtoIds)
+              .eq('empresa_id', usuarioData.empresa_id);
+
+            if (!fiscaisError && produtosFiscais) {
+              produtosFiscais.forEach(produto => {
+                dadosFiscais[produto.id] = produto;
+              });
+            }
+          }
+        }
+      }
+
+      // Combinar dados dos itens com dados fiscais
+      const itensComDadosFiscais = itensData?.map(item => ({
+        ...item,
+        dadosFiscais: dadosFiscais[item.produto_id] || null
+      })) || [];
+
       // Atualizar a venda com os itens carregados
       setVendas(prev => prev.map(venda =>
         venda.id === vendaId
-          ? { ...venda, itens: itensData || [] }
+          ? { ...venda, itens: itensComDadosFiscais }
           : venda
       ));
 
       setFilteredVendas(prev => prev.map(venda =>
         venda.id === vendaId
-          ? { ...venda, itens: itensData || [] }
+          ? { ...venda, itens: itensComDadosFiscais }
           : venda
       ));
 
@@ -342,6 +392,18 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
         await loadItensVenda(vendaId);
       }
     }
+  };
+
+  const toggleItemExpansion = (itemId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
   };
 
   const handleVendaSelect = (venda: Venda) => {
@@ -520,6 +582,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
     setSelectedItens(new Set());
     setSelectedVendas(new Set());
     setLoadingItens(new Set());
+    setExpandedItems(new Set());
     onClose();
   };
 
@@ -873,6 +936,18 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                                       (Não disponível para devolução)
                                                     </span>
                                                   )}
+                                                  {/* Botão para expandir dados fiscais */}
+                                                  {item.dadosFiscais && (
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleItemExpansion(item.id);
+                                                      }}
+                                                      className="text-xs px-2 py-1 bg-orange-600/20 text-orange-400 rounded border border-orange-600/30 hover:bg-orange-600/30 transition-colors"
+                                                    >
+                                                      Dados Fiscais
+                                                    </button>
+                                                  )}
                                                 </div>
                                                 <span className={`font-medium ${
                                                   temDevolucao ? 'text-gray-400' : isItemValid ? 'text-white' : 'text-gray-500'
@@ -887,6 +962,43 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                                   <span className="text-orange-400">• Taxa/Serviço</span>
                                                 )}
                                               </div>
+
+                                              {/* Dados Fiscais Expandidos */}
+                                              {expandedItems.has(item.id) && item.dadosFiscais && (
+                                                <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                                                  <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-xs px-2 py-1 bg-orange-600/20 text-orange-400 rounded border border-orange-600/30">
+                                                      Dados Fiscais
+                                                    </span>
+                                                  </div>
+                                                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-xs">
+                                                    <div>
+                                                      <span className="text-gray-400">NCM:</span>
+                                                      <div className="text-white font-mono">{item.dadosFiscais.ncm || '-'}</div>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-gray-400">CFOP:</span>
+                                                      <div className="text-white font-mono">{item.dadosFiscais.cfop || '-'}</div>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-gray-400">CSOSN:</span>
+                                                      <div className="text-white font-mono">{item.dadosFiscais.csosn_icms || '-'}</div>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-gray-400">Alíquota:</span>
+                                                      <div className="text-white font-mono">{item.dadosFiscais.aliquota_icms ? `${item.dadosFiscais.aliquota_icms}%` : '-'}</div>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-gray-400">PIS:</span>
+                                                      <div className="text-white font-mono">{item.dadosFiscais.aliquota_pis ? `${item.dadosFiscais.aliquota_pis}%` : '-'}</div>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-gray-400">COFINS:</span>
+                                                      <div className="text-white font-mono">{item.dadosFiscais.aliquota_cofins ? `${item.dadosFiscais.aliquota_cofins}%` : '-'}</div>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                         );
@@ -1044,6 +1156,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 }) => {
   const [clienteId, setClienteId] = useState('');
   const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [itensComDadosFiscais, setItensComDadosFiscais] = useState<any[]>([]);
 
   // Função para formatar data (local do componente)
   const formatDate = (dateString: string) => {
@@ -1055,6 +1169,81 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       minute: '2-digit'
     });
   };
+
+  // Função para alternar expansão dos dados fiscais
+  const toggleItemExpansion = (itemId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  // Carregar dados fiscais dos itens selecionados
+  useEffect(() => {
+    const carregarDadosFiscais = async () => {
+      if (!isOpen) return;
+
+      const itensSelecionados = getItensSelecionados();
+      const produtoIds = itensSelecionados.map(item => item.produto_id).filter(Boolean);
+
+      if (produtoIds.length === 0) {
+        setItensComDadosFiscais(itensSelecionados);
+        return;
+      }
+
+      try {
+        const { data: produtosFiscais, error } = await supabase
+          .from('produtos')
+          .select(`
+            id,
+            codigo,
+            ncm,
+            cfop,
+            origem_produto,
+            situacao_tributaria,
+            cst_icms,
+            csosn_icms,
+            cst_pis,
+            cst_cofins,
+            aliquota_icms,
+            aliquota_pis,
+            aliquota_cofins
+          `)
+          .in('id', produtoIds)
+          .eq('empresa_id', empresaId);
+
+        if (error) {
+          console.error('Erro ao carregar dados fiscais:', error);
+          setItensComDadosFiscais(itensSelecionados);
+          return;
+        }
+
+        // Criar mapa de dados fiscais por produto_id
+        const dadosFiscaisMap: {[produtoId: string]: any} = {};
+        (produtosFiscais || []).forEach(produto => {
+          dadosFiscaisMap[produto.id] = produto;
+        });
+
+        // Combinar itens com dados fiscais
+        const itensComDados = itensSelecionados.map(item => ({
+          ...item,
+          dadosFiscais: dadosFiscaisMap[item.produto_id] || null
+        }));
+
+        setItensComDadosFiscais(itensComDados);
+      } catch (error) {
+        console.error('Erro ao buscar dados fiscais:', error);
+        setItensComDadosFiscais(itensSelecionados);
+      }
+    };
+
+    carregarDadosFiscais();
+  }, [isOpen, selectedItens, selectedVendas, vendas, empresaId]);
 
   // Função para obter todos os itens selecionados (excluindo taxa de entrega)
   const getItensSelecionados = () => {
@@ -1248,20 +1437,72 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
               Itens para Devolução ({itensSelecionados.length})
             </h3>
             <div className="space-y-2 max-h-60 overflow-y-auto">
-              {itensSelecionados.map((item, index) => (
+              {itensComDadosFiscais.map((item, index) => (
                 <div
                   key={`${item.id}-${index}`}
-                  className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700"
+                  className="bg-gray-800/50 rounded-lg border border-gray-700"
                 >
-                  <div className="flex-1">
-                    <div className="text-white font-medium">{item.nome_produto}</div>
-                    <div className="text-gray-400 text-sm">
-                      Qtd: {item.quantidade} | Unit: {formatCurrency(item.valor_unitario)}
+                  <div className="flex items-center justify-between p-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="text-white font-medium">{item.nome_produto}</div>
+                        {/* Botão para expandir dados fiscais */}
+                        {item.dadosFiscais && (
+                          <button
+                            onClick={() => toggleItemExpansion(item.id)}
+                            className="text-xs px-2 py-1 bg-orange-600/20 text-orange-400 rounded border border-orange-600/30 hover:bg-orange-600/30 transition-colors"
+                          >
+                            Dados Fiscais
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-gray-400 text-sm">
+                        Qtd: {item.quantidade} | Unit: {formatCurrency(item.valor_unitario)}
+                      </div>
+                    </div>
+                    <div className="text-white font-semibold">
+                      {formatCurrency(item.valor_total_item)}
                     </div>
                   </div>
-                  <div className="text-white font-semibold">
-                    {formatCurrency(item.valor_total_item)}
-                  </div>
+
+                  {/* Dados Fiscais Expandidos */}
+                  {expandedItems.has(item.id) && item.dadosFiscais && (
+                    <div className="px-3 pb-3">
+                      <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs px-2 py-1 bg-orange-600/20 text-orange-400 rounded border border-orange-600/30">
+                            Dados Fiscais
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-xs">
+                          <div>
+                            <span className="text-gray-400">NCM:</span>
+                            <div className="text-white font-mono">{item.dadosFiscais.ncm || '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">CFOP:</span>
+                            <div className="text-white font-mono">{item.dadosFiscais.cfop || '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">CSOSN:</span>
+                            <div className="text-white font-mono">{item.dadosFiscais.csosn_icms || '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Alíquota:</span>
+                            <div className="text-white font-mono">{item.dadosFiscais.aliquota_icms ? `${item.dadosFiscais.aliquota_icms}%` : '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">PIS:</span>
+                            <div className="text-white font-mono">{item.dadosFiscais.aliquota_pis ? `${item.dadosFiscais.aliquota_pis}%` : '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">COFINS:</span>
+                            <div className="text-white font-mono">{item.dadosFiscais.aliquota_cofins ? `${item.dadosFiscais.aliquota_cofins}%` : '-'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1281,7 +1522,11 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         {/* Rodapé */}
         <div className="flex-shrink-0 px-6 py-4 border-t border-gray-800 flex items-center justify-between">
           <button
-            onClick={onClose}
+            onClick={() => {
+              setExpandedItems(new Set());
+              setItensComDadosFiscais([]);
+              onClose();
+            }}
             className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
           >
             Cancelar
