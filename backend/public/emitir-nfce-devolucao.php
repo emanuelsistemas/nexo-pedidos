@@ -129,34 +129,16 @@ try {
     $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
     $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
 
-    // Buscar dados da empresa
-    $url = $supabaseUrl . "/rest/v1/empresas?id=eq.{$empresaId}&select=*";
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'apikey: ' . $supabaseKey,
-        'Authorization: Bearer ' . $supabaseKey,
-        'Content-Type: application/json'
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode !== 200 || !$response) {
-        throw new Exception('Erro ao buscar dados da empresa');
+    // Receber dados da empresa do payload (igual ao emitir-nfce.php)
+    if (!isset($nfceData['empresa'])) {
+        throw new Exception('Dados da empresa não informados no payload');
     }
 
-    $empresaData = json_decode($response, true);
-    if (empty($empresaData)) {
-        throw new Exception('Empresa não encontrada');
-    }
-
-    $empresa = $empresaData[0];
-    logDetalhado('EMPRESA_CARREGADA', 'Dados da empresa carregados', [
+    $empresa = $nfceData['empresa'];
+    logDetalhado('EMPRESA_RECEBIDA', 'Dados da empresa recebidos do payload', [
         'razao_social' => $empresa['razao_social'],
-        'cnpj' => $empresa['cnpj']
+        'cnpj' => $empresa['cnpj'],
+        'uf' => $empresa['uf']
     ]);
 
     // Buscar configuração NFe
@@ -213,9 +195,19 @@ try {
 
     $ambiente = ($nfeConfig['ambiente'] === 'producao') ? 1 : 2;
 
-    // Limpar CNPJ
-    $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa['cnpj']);
+    // Limpar CNPJ - usar campo 'documento' da tabela empresas
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa['documento']);
+    logDetalhado('CNPJ_PROCESSADO', 'CNPJ processado', [
+        'original' => $empresa['documento'],
+        'limpo' => $cnpjLimpo,
+        'tamanho' => strlen($cnpjLimpo)
+    ]);
+
     if (strlen($cnpjLimpo) !== 14) {
+        logDetalhado('CNPJ_ERROR', 'CNPJ com tamanho inválido', [
+            'cnpj' => $cnpjLimpo,
+            'tamanho' => strlen($cnpjLimpo)
+        ]);
         throw new Exception('CNPJ da empresa deve ter 14 dígitos');
     }
 
@@ -240,44 +232,41 @@ try {
     // Inicializar NFePHP Tools
     logDetalhado('INIT_NFEPHP', 'Inicializando classes NFePHP');
 
-    // Buscar certificado da empresa (mesmo padrão do emitir-nfce.php)
-    logDetalhado('CERT_SEARCH', 'Buscando certificado da empresa');
+    // Carregar certificado (mesmo padrão do emitir-nfce.php)
+    logDetalhado('CERT_LOAD', 'Carregando certificado da empresa');
 
-    $url = $supabaseUrl . "/rest/v1/certificados?empresa_id=eq.{$empresaId}&ativo=eq.true&select=*";
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'apikey: ' . $supabaseKey,
-        'Authorization: Bearer ' . $supabaseKey,
-        'Content-Type: application/json'
+    $certificadoPath = "../storage/certificados/empresa_{$empresaId}.pfx";
+    $metadataPath = "../storage/certificados/empresa_{$empresaId}.json";
+
+    logDetalhado('CERT_PATHS', 'Verificando caminhos do certificado', [
+        'certificado_path' => $certificadoPath,
+        'metadata_path' => $metadataPath,
+        'certificado_exists' => file_exists($certificadoPath),
+        'metadata_exists' => file_exists($metadataPath)
     ]);
 
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    $certificadoData = json_decode($response, true);
-    if (empty($certificadoData)) {
-        throw new Exception('Certificado digital não encontrado para a empresa');
+    if (!file_exists($certificadoPath)) {
+        throw new Exception('Certificado digital não encontrado para esta empresa');
     }
 
-    $certificado = $certificadoData[0];
-    logDetalhado('CERT_FOUND', 'Certificado encontrado', ['id' => $certificado['id']]);
-
-    // Decodificar certificado
-    $certificadoContent = base64_decode($certificado['arquivo_base64']);
-    if (!$certificadoContent) {
-        throw new Exception('Erro ao decodificar certificado');
+    if (!file_exists($metadataPath)) {
+        throw new Exception('Metadados do certificado não encontrados');
     }
 
-    logDetalhado('CERT_DECODED', 'Certificado decodificado', ['size' => strlen($certificadoContent)]);
+    $certificadoContent = file_get_contents($certificadoPath);
+    $metadata = json_decode(file_get_contents($metadataPath), true);
+
+    logDetalhado('CERT_LOADED', 'Certificado carregado', [
+        'size' => strlen($certificadoContent),
+        'metadata' => $metadata
+    ]);
 
     try {
-        $certificate = Certificate::readPfx($certificadoContent, $certificado['senha']);
+        $certificate = Certificate::readPfx($certificadoContent, $metadata['password'] ?? '');
         logDetalhado('CERT_PARSED', 'Certificado parseado com sucesso');
     } catch (Exception $certError) {
         logDetalhado('CERT_PARSE_ERROR', 'Erro ao parsear certificado', ['erro' => $certError->getMessage()]);
-        throw new Exception('Erro ao processar certificado: ' . $certError->getMessage());
+        throw new Exception('Erro no certificado: ' . $certError->getMessage());
     }
 
     try {

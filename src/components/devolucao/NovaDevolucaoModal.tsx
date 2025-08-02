@@ -1160,6 +1160,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [itensComDadosFiscais, setItensComDadosFiscais] = useState<any[]>([]);
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao' | null>(null);
+  const [empresaCompleta, setEmpresaCompleta] = useState<any>(null);
   const [showConfirmacaoManualModal, setShowConfirmacaoManualModal] = useState(false);
   const [confirmacaoTexto, setConfirmacaoTexto] = useState('');
 
@@ -1290,7 +1291,12 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       updateStep('geracao', 'loading');
       addLog('Preparando dados para NFC-e de devolução...');
 
+      if (!empresaCompleta) {
+        throw new Error('Dados da empresa não carregados');
+      }
+
       const dadosNFCe = {
+        empresa: empresaCompleta, // Dados completos da empresa (igual ao PDV)
         chave_nfe_original: vendaOrigem.chave_nfe,
         modelo_documento: 65, // NFC-e
         cfop_devolucao: '5202',
@@ -1551,6 +1557,55 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     };
 
     carregarAmbienteNFe();
+  }, [isOpen, empresaId]);
+
+  // Carregar dados completos da empresa (igual ao PDV)
+  useEffect(() => {
+    const carregarEmpresaCompleta = async () => {
+      if (!isOpen || !empresaId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('empresas')
+          .select('*')
+          .eq('id', empresaId)
+          .single();
+
+        if (error) {
+          console.error('Erro ao carregar dados da empresa:', error);
+          return;
+        }
+
+        // Formatar dados da empresa no mesmo padrão que o PDV envia
+        const empresaFormatada = {
+          razao_social: data.razao_social,
+          cnpj: data.documento, // PDV converte 'documento' para 'cnpj'
+          nome_fantasia: data.nome_fantasia,
+          inscricao_estadual: data.inscricao_estadual,
+          regime_tributario: data.regime_tributario || 1,
+          uf: data.uf,
+          codigo_municipio: parseInt(data.codigo_municipio) || 3524402,
+          endereco: {
+            logradouro: data.endereco,
+            numero: data.numero,
+            bairro: data.bairro,
+            cidade: data.cidade,
+            cep: data.cep
+          },
+          // Campos CSC para NFC-e
+          csc_homologacao: data.csc_homologacao,
+          csc_id_homologacao: data.csc_id_homologacao,
+          csc_producao: data.csc_producao,
+          csc_id_producao: data.csc_id_producao
+        };
+
+        setEmpresaCompleta(empresaFormatada);
+      } catch (error) {
+        console.error('Erro ao carregar dados da empresa:', error);
+      }
+    };
+
+    carregarEmpresaCompleta();
   }, [isOpen, empresaId]);
 
   // Função para obter todos os itens selecionados (excluindo taxa de entrega)
