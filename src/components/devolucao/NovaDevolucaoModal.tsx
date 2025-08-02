@@ -1212,7 +1212,12 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
             cst_cofins,
             aliquota_icms,
             aliquota_pis,
-            aliquota_cofins
+            aliquota_cofins,
+            unidade_medida:unidade_medida_id (
+              id,
+              sigla,
+              nome
+            )
           `)
           .in('id', produtoIds)
           .eq('empresa_id', empresaId);
@@ -1474,7 +1479,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                             Dados Fiscais
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-xs">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 text-xs">
                           <div>
                             <span className="text-gray-400">NCM:</span>
                             <div className="text-white font-mono">{item.dadosFiscais.ncm || '-'}</div>
@@ -1482,6 +1487,10 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                           <div>
                             <span className="text-gray-400">CFOP:</span>
                             <div className="text-white font-mono">{item.dadosFiscais.cfop || '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-red-400">CFOP Devolução:</span>
+                            <div className="text-red-300 font-mono font-semibold">5202</div>
                           </div>
                           <div>
                             <span className="text-gray-400">CSOSN:</span>
@@ -1498,6 +1507,22 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                           <div>
                             <span className="text-gray-400">COFINS:</span>
                             <div className="text-white font-mono">{item.dadosFiscais.aliquota_cofins ? `${item.dadosFiscais.aliquota_cofins}%` : '-'}</div>
+                          </div>
+                        </div>
+
+                        {/* Segunda linha com unidade de medida */}
+                        <div className="mt-3 pt-3 border-t border-gray-700">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div>
+                              <span className="text-gray-400">Unidade de Medida:</span>
+                              <div className="text-white font-mono">
+                                {item.dadosFiscais.unidade_medida?.sigla || 'UN'} - {item.dadosFiscais.unidade_medida?.nome || 'Unidade'}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Código Produto:</span>
+                              <div className="text-white font-mono">{item.dadosFiscais.codigo || '-'}</div>
+                            </div>
                           </div>
                         </div>
                       </div>
