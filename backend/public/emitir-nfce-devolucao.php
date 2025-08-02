@@ -250,7 +250,8 @@ try {
         "versao" => '4.00',
         "CSC" => $empresa[$cscField],
         "CSCid" => (string)$empresa[$cscIdField], // Converter para string
-        "cmun" => (int)$empresa['codigo_municipio'] // ✅ ADICIONADO: código do município
+        "cmun" => (int)$empresa['codigo_municipio'], // Código do município
+        "cUF" => (int)$empresa['codigo_uf'] // ✅ ADICIONADO: código da UF
     ];
 
     logDetalhado('CONFIG_NFEPHP', 'Configuração NFePHP preparada', $config, 'success');
@@ -467,12 +468,35 @@ try {
     $std->vNF = number_format($valorTotal, 2, '.', '');
     $make->tagICMSTot($std);
 
-    // Pagamento (devolução = estorno)
+    // ✅ TRANSPORTE (OBRIGATÓRIO) - FIXO PARA DEVOLUÇÃO CFOP 5202
+    // Para devolução: "9 = Sem Ocorrência de Transporte" (padrão para devoluções)
+    logDetalhado('TRANSPORTE_INICIANDO', 'Configurando transporte para devolução CFOP 5202');
     $std = new stdClass();
-    $std->indPag = 1; // Pagamento à vista
-    $std->tPag = 90; // Sem pagamento (devolução)
-    $std->vPag = number_format($valorTotal, 2, '.', '');
+    $std->modFrete = 9; // 9 = Sem Ocorrência de Transporte (FIXO para devolução)
+    $make->tagtransp($std);
+    logDetalhado('TRANSPORTE_CONFIGURADO', 'Transporte configurado para devolução', ['modFrete' => 9]);
+
+    // ✅ PAGAMENTO (OBRIGATÓRIO) - FIXO PARA DEVOLUÇÃO CFOP 5202
+    // Para devolução: "90 = Sem Pagamento" (padrão para devoluções)
+    logDetalhado('PAGAMENTO_INICIANDO', 'Configurando pagamento para devolução CFOP 5202');
+
+    // 1. Grupo PAG (container) - SEM TROCO para devolução
+    $std = new stdClass();
+    $std->vTroco = 0.00; // FIXO: Sem troco em devolução
     $make->tagpag($std);
+    logDetalhado('PAGAMENTO_GRUPO_CONFIGURADO', 'Grupo pagamento configurado', ['vTroco' => 0.00]);
+
+    // 2. Detalhes do pagamento - ESPECÍFICO PARA DEVOLUÇÃO
+    $std = new stdClass();
+    $std->indPag = 0; // 0 = Pagamento à vista (padrão)
+    $std->tPag = '90'; // 90 = Sem Pagamento (FIXO para devolução CFOP 5202)
+    $std->vPag = 0.00; // FIXO: Valor zero para devolução
+    $make->tagdetPag($std);
+    logDetalhado('PAGAMENTO_DETALHES_CONFIGURADO', 'Detalhes pagamento configurado para devolução', [
+        'indPag' => 0,
+        'tPag' => '90',
+        'vPag' => 0.00
+    ]);
 
     logDetalhado('TOTAIS_CONFIGURADOS', 'Totais da NFC-e configurados', [
         'valor_total' => $valorTotal
