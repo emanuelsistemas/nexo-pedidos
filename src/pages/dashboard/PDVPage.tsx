@@ -19076,10 +19076,15 @@ const PDVPage: React.FC = () => {
                           const itensTroca = carrinho.filter(item => item.isDevolucao);
                           const valorTotalTrocas = itensTroca.reduce((total, item) => total + Math.abs(item.subtotal), 0);
 
+                          // Obter número da troca do primeiro item de devolução
+                          const numeroTroca = itensTroca.length > 0 ? itensTroca[0].devolucao_codigo : null;
+
                           return itensTroca.length > 0 && (
                             <div className="flex justify-between items-center text-xs mb-1.5">
                               <div className="flex items-center gap-2">
-                                <span className="text-green-400">Devolução:</span>
+                                <span className="text-green-400">
+                                  Devolução{numeroTroca ? ` ${numeroTroca}` : ''}:
+                                </span>
                                 <button
                                   onClick={() => setShowRemoverTrocasModal(true)}
                                   className="text-red-400 hover:text-red-300 transition-colors"
