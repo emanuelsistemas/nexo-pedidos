@@ -1835,6 +1835,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     { id: 'validacao_xml', label: 'Validando geração do XML', status: 'pending', message: '' },
     { id: 'validacao_pdf', label: 'Validando geração do PDF', status: 'pending', message: '' },
     { id: 'banco', label: 'Salvando no banco de dados', status: 'pending', message: '' },
+    { id: 'devolucao', label: 'Gerando devolução', status: 'pending', message: '' },
+    { id: 'estoque', label: 'Atualizando estoque', status: 'pending', message: '' },
     { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
   ]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -3644,6 +3646,26 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   // ✅ NOVO: Função para criar registro de devolução na NFe
   const criarRegistroDevolucaoNFe = async (resultadoNFe: any, dadosDevolucao: any) => {
     try {
+      // ✅ NOVO: Buscar cliente dos dados da NFe (igual ao PDV)
+      let clienteId = dadosDevolucao.clienteId;
+
+      // Se não tem clienteId, buscar pelo documento do destinatário da NFe
+      if (!clienteId && nfeData.destinatario?.documento) {
+        console.log('🔍 Buscando cliente pelo documento da NFe:', nfeData.destinatario.documento);
+
+        const { data: clienteEncontrado } = await supabase
+          .from('clientes')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('documento', nfeData.destinatario.documento)
+          .single();
+
+        if (clienteEncontrado) {
+          clienteId = clienteEncontrado.id;
+          console.log('✅ Cliente encontrado pelo documento:', clienteId);
+        }
+      }
+
       // Preparar dados dos itens devolvidos
       const itensParaDevolucao = dadosDevolucao.produtos.map((produto: any) => {
         const quantidade = parseFloat(produto.quantidade) || 0;
@@ -3673,8 +3695,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       // Preparar dados da devolução
       const dadosDevolucaoFinal = {
         numeroTRC: dadosDevolucao.numeroTRC,
-        // ✅ NOVO: Incluir cliente da devolução
-        clienteId: dadosDevolucao.clienteId,
+        // ✅ NOVO: Incluir cliente da devolução (buscado pelo documento se necessário)
+        clienteId: clienteId,
         itens: itensParaDevolucao,
         valorTotal: valorTotal,
         tipoDevolucao: 'parcial',
@@ -3739,6 +3761,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       throw error;
     }
   };
+
+
 
   // Função para emitir NFe
   const handleEmitirNFe = async () => {
@@ -4682,6 +4706,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           addLog(`❌ Erro ao atualizar estoque: ${error.message}`);
           // Não interrompe o processo, apenas registra o erro
         }
+
+
       }
 
       updateStep('finalizacao', 'success', 'Processo concluído');
@@ -4949,7 +4975,15 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         // ✅ CORRIGIDO: Campo correto é informacoes_adicionais (plural)
         informacoes_adicionais: nfeData.identificacao.informacao_adicional || '',
         // ✅ NOVO: Salvar ambiente da NFe
-        ambiente: ambienteNFe
+        ambiente: ambienteNFe,
+        // ✅ NOVO: Incluir campos de devolução se for NFe de devolução
+        ...(isNFeDevolucao && dadosDevolucaoAtual ? {
+          devolucao_origem_id: dadosDevolucaoAtual.vendaOrigem?.id || null,
+          devolucao_origem_numero: dadosDevolucaoAtual.numeroTRC || null,
+          devolucao_origem_codigo: dadosDevolucaoAtual.numeroTRC || null,
+          venda_origem_troca_id: dadosDevolucaoAtual.vendaOrigem?.id || null,
+          venda_origem_troca_numero: dadosDevolucaoAtual.numeroTRC || null
+        } : {})
       };
 
       let error;

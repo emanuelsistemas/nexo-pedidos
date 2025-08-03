@@ -1236,7 +1236,8 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
           numeroTRC={numeroTRC}
           onConfirm={(dadosDevolucao) => {
             // Processar a devolução final
-            onConfirm('', dadosDevolucao);
+            // ✅ CORRIGIDO: Passar o clienteId dos dados da devolução
+            onConfirm(dadosDevolucao.clienteId || '', dadosDevolucao);
             if (!externalLoading) {
               setShowFinalizarModal(false);
               handleClose();
