@@ -1238,13 +1238,25 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
   // Estados para modal de progresso NFC-e
   const [showProgressModal, setShowProgressModal] = useState(false);
-  const [progressSteps, setProgressSteps] = useState([
-    { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
-    { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
-    { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
-    { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
-    { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
-  ]);
+  // ✅ NOVO: Verificar se é devolução real (vinda da página de devoluções)
+  const isDevolucaoReal = selectedItens.size > 0 || selectedVendas.size > 0;
+
+  const [progressSteps, setProgressSteps] = useState(() => {
+    const baseSteps = [
+      { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
+      { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
+      { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' }
+    ];
+
+    // ✅ Só adicionar etapa de estoque se for devolução real
+    if (isDevolucaoReal) {
+      baseSteps.push({ id: 'estoque', label: 'Atualizando estoque', status: 'pending', message: '' });
+    }
+
+    baseSteps.push({ id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' });
+    return baseSteps;
+  });
   const [logs, setLogs] = useState<string[]>([]);
   const [isEmitindoNFCe, setIsEmitindoNFCe] = useState(false);
 
@@ -1665,7 +1677,24 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       updateStep('banco', 'success', 'Devolução salva');
       addLog('✅ Devolução salva no sistema');
 
-      // ETAPA 5: FINALIZAÇÃO
+      // ✅ NOVO: ETAPA 5: ATUALIZAÇÃO DO ESTOQUE (só para devoluções reais)
+      if (isDevolucaoReal) {
+        updateStep('estoque', 'loading');
+        addLog('Atualizando estoque dos produtos devolvidos...');
+
+        try {
+          await atualizarEstoqueDevolucao(selectedItens, vendas);
+          updateStep('estoque', 'success', 'Estoque atualizado');
+          addLog('✅ Estoque atualizado com sucesso');
+        } catch (error) {
+          console.error('Erro ao atualizar estoque:', error);
+          updateStep('estoque', 'error', 'Erro ao atualizar estoque');
+          addLog(`❌ Erro ao atualizar estoque: ${error.message}`);
+          // Não interrompe o processo, apenas registra o erro
+        }
+      }
+
+      // ETAPA 6: FINALIZAÇÃO
       updateStep('finalizacao', 'loading');
       addLog('Finalizando processo...');
 
@@ -1734,14 +1763,119 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     ));
   };
 
+  // ✅ NOVO: Função para atualizar estoque na devolução
+  const atualizarEstoqueDevolucao = async (itensSelecionados: Set<string>, vendas: Venda[]) => {
+    try {
+      // Buscar informações dos produtos devolvidos
+      const itensParaAtualizar = [];
+
+      for (const itemId of itensSelecionados) {
+        // Encontrar o item na venda
+        for (const venda of vendas) {
+          const item = venda.itens?.find(i => i.id === itemId);
+          if (item) {
+            itensParaAtualizar.push({
+              produto_id: item.produto_id,
+              quantidade: item.quantidade,
+              venda_id: venda.id,
+              item_id: itemId
+            });
+            break;
+          }
+        }
+      }
+
+      console.log('📦 Itens para atualizar estoque:', itensParaAtualizar);
+
+      // Atualizar estoque de cada produto
+      for (const item of itensParaAtualizar) {
+        // 1. Buscar estoque atual do produto
+        const { data: estoqueAtual, error: estoqueError } = await supabase
+          .from('produtos')
+          .select('estoque_atual')
+          .eq('id', item.produto_id)
+          .single();
+
+        if (estoqueError) {
+          console.error('Erro ao buscar estoque atual:', estoqueError);
+          continue;
+        }
+
+        // 2. Calcular novo estoque (adicionar quantidade devolvida)
+        const novoEstoque = (estoqueAtual.estoque_atual || 0) + item.quantidade;
+
+        // 3. Atualizar estoque do produto
+        const { error: updateError } = await supabase
+          .from('produtos')
+          .update({ estoque_atual: novoEstoque })
+          .eq('id', item.produto_id);
+
+        if (updateError) {
+          console.error('Erro ao atualizar estoque:', updateError);
+          throw new Error(`Erro ao atualizar estoque do produto ${item.produto_id}`);
+        }
+
+        console.log(`✅ Estoque atualizado - Produto: ${item.produto_id}, Novo estoque: ${novoEstoque}`);
+      }
+
+      // 4. Atualizar campos na tabela PDV
+      await atualizarCamposPDV(numeroTRC, itensParaAtualizar);
+
+      return true;
+    } catch (error) {
+      console.error('Erro na atualização do estoque:', error);
+      throw error;
+    }
+  };
+
+  // ✅ NOVO: Função para atualizar campos na tabela PDV
+  const atualizarCamposPDV = async (numeroTRC: string, itensDevolvidos: any[]) => {
+    try {
+      // Buscar vendas únicas dos itens devolvidos
+      const vendasIds = [...new Set(itensDevolvidos.map(item => item.venda_id))];
+
+      for (const vendaId of vendasIds) {
+        // Atualizar campos na tabela PDV
+        const { error } = await supabase
+          .from('pdv')
+          .update({
+            devolucoes_origem_id: vendaId,
+            devolucoes_origem_numero: numeroTRC,
+            devolucoes_origem_codigo: numeroTRC,
+            venda_origem_troca_id: vendaId,
+            venda_origem_troca_numero: numeroTRC
+          })
+          .eq('id', vendaId);
+
+        if (error) {
+          console.error('Erro ao atualizar campos PDV:', error);
+          throw new Error(`Erro ao atualizar campos PDV para venda ${vendaId}`);
+        }
+
+        console.log(`✅ Campos PDV atualizados para venda: ${vendaId}`);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar campos PDV:', error);
+      throw error;
+    }
+  };
+
   const resetProgress = () => {
-    setProgressSteps([
+    const baseSteps = [
       { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
       { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
       { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
-      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
-      { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
-    ]);
+      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' }
+    ];
+
+    // ✅ Só adicionar etapa de estoque se for devolução real
+    if (isDevolucaoReal) {
+      baseSteps.push({ id: 'estoque', label: 'Atualizando estoque', status: 'pending', message: '' });
+    }
+
+    baseSteps.push({ id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' });
+
+    setProgressSteps(baseSteps);
     setLogs([]);
   };
 
@@ -2069,6 +2203,12 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
             {ambienteNFe === 'homologacao' && (
               <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full border bg-orange-500/10 text-orange-400 border-orange-500/20">
                 HOMOLOG.
+              </span>
+            )}
+            {/* ✅ NOVO: Tag do número TRC */}
+            {numeroTRC && (
+              <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                {numeroTRC}
               </span>
             )}
           </div>
