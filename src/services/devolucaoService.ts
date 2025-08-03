@@ -26,6 +26,8 @@ export interface CriarDevolucaoData {
   pedidoTipo?: 'pdv' | 'cardapio_digital';
   // ✅ NOVO: Número TRC já gerado no modal
   numeroTRC?: string;
+  // ✅ NOVO: Campo para número da NFe
+  nfe?: string;
 }
 
 // Interface para dados de atualização de devolução
@@ -185,6 +187,8 @@ export class DevolucaoService {
         forma_reembolso: dados.formaReembolso,
         motivo_geral: dados.motivoGeral || null,
         observacoes: dados.observacoes || null,
+        // ✅ NOVO: Incluir número da NFe se fornecido
+        nfe: dados.nfe || null,
         status: 'pendente'
       };
 

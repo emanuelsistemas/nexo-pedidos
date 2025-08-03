@@ -176,6 +176,12 @@ const DetalhesDevolucaoModal: React.FC<DetalhesDevolucaoModalProps> = ({
                   </label>
                   <p className="text-white font-mono">
                     #{devolucao.venda_origem_numero}
+                    {/* ✅ NOVO: Mostrar número da NFe se existir */}
+                    {devolucao.nfe && (
+                      <span className="text-green-400 text-sm ml-2 font-normal">
+                        | NFe: {devolucao.nfe}
+                      </span>
+                    )}
                   </p>
                 </div>
               )}

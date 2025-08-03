@@ -604,6 +604,12 @@ const DevolucoesPage: React.FC = () => {
                     {devolucao.venda_origem_numero && (
                       <p className="text-gray-500 text-xs">
                         Venda: #{devolucao.venda_origem_numero}
+                        {/* ✅ NOVO: Mostrar número da NFe se existir */}
+                        {devolucao.nfe && (
+                          <span className="text-green-400 ml-2">
+                            | NFe: {devolucao.nfe}
+                          </span>
+                        )}
                       </p>
                     )}
 

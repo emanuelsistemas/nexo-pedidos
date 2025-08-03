@@ -3673,12 +3673,16 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       // Preparar dados da devolução
       const dadosDevolucaoFinal = {
         numeroTRC: dadosDevolucao.numeroTRC,
+        // ✅ NOVO: Incluir cliente da devolução
+        clienteId: dadosDevolucao.clienteId,
         itens: itensParaDevolucao,
         valorTotal: valorTotal,
         tipoDevolucao: 'parcial',
         formaReembolso: 'credito',
         motivoGeral: 'Devolução via NFe de devolução',
         observacoes: `NFe: ${resultadoNFe.data.chave} - Protocolo: ${resultadoNFe.data.protocolo}`,
+        // ✅ NOVO: Incluir número da NFe
+        nfe: resultadoNFe.data.numero || resultadoNFe.data.chave,
         pedidoId: dadosDevolucao.vendaOrigem?.id,
         pedidoNumero: dadosDevolucao.vendaOrigem?.numero,
         pedidoTipo: 'pdv'
