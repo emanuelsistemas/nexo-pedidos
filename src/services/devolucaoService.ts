@@ -24,6 +24,8 @@ export interface CriarDevolucaoData {
   pedidoId?: string;
   pedidoNumero?: string;
   pedidoTipo?: 'pdv' | 'cardapio_digital';
+  // ✅ NOVO: Número TRC já gerado no modal
+  numeroTRC?: string;
 }
 
 // Interface para dados de atualização de devolução
@@ -126,7 +128,18 @@ class DevolucaoService {
 
       const empresaId = await this.obterEmpresaId();
       const numeroDevol = await this.obterProximoNumero(empresaId);
-      const codigoTroca = await this.gerarCodigoTroca(empresaId);
+
+      // ✅ NOVO: Usar TRC existente ou gerar novo se não houver
+      let codigoTroca: string;
+      if (dados.numeroTRC) {
+        // Usar o TRC que já foi gerado no modal
+        codigoTroca = dados.numeroTRC;
+        console.log('✅ Usando TRC existente do modal:', codigoTroca);
+      } else {
+        // Gerar novo TRC (fallback para casos antigos)
+        codigoTroca = await this.gerarCodigoTroca(empresaId);
+        console.log('✅ TRC gerado automaticamente:', codigoTroca);
+      }
 
       // Extrair dados da venda origem do primeiro item (todos os itens vêm da mesma venda)
       const primeiroItem = dados.itens[0];

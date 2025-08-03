@@ -3159,8 +3159,36 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           cidade: dadosDevolucao.cliente.cidade,
           uf: dadosDevolucao.cliente.uf,
           cep: dadosDevolucao.cliente.cep,
-          inscricao_estadual: dadosDevolucao.cliente.inscricao_estadual
+          inscricao_estadual: dadosDevolucao.cliente.inscricao_estadual,
+          // ✅ FISCAL: Aplicar lógica fiscal para devolução também
+          ie_destinatario: (() => {
+            const cliente = dadosDevolucao.cliente;
+            // Se tem indicador específico no banco, usar ele
+            if (cliente.indicador_ie && cliente.indicador_ie !== 0) {
+              return cliente.indicador_ie;
+            }
+            // Se tem IE preenchida, é contribuinte (1)
+            if (cliente.inscricao_estadual && cliente.inscricao_estadual.trim() &&
+                cliente.inscricao_estadual.trim().toUpperCase() !== 'ISENTO') {
+              return 1; // Contribuinte ICMS
+            }
+            // Se IE é "ISENTO", é isento (2)
+            if (cliente.inscricao_estadual && cliente.inscricao_estadual.trim().toUpperCase() === 'ISENTO') {
+              return 2; // Contribuinte isento
+            }
+            // Caso contrário, não contribuinte (9)
+            return 9; // Não contribuinte
+          })()
         } : {};
+
+        // ✅ NOVO: Preparar observação com número TRC e venda origem
+        let observacaoCompleta = 'Devolução de Mercadoria';
+        if (dadosDevolucao.numeroTRC) {
+          observacaoCompleta += ` - ${dadosDevolucao.numeroTRC}`;
+        }
+        if (dadosDevolucao.vendaOrigem?.numero) {
+          observacaoCompleta += ` - Ref. Venda: ${dadosDevolucao.vendaOrigem.numero}`;
+        }
 
         // ✅ NOVO: Preparar chave de referência se houver
         const chaveReferencia = dadosDevolucao.chave_nfce_original ? [{
@@ -3204,6 +3232,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             // ✅ NOVO: Incluir número da venda e observação do cliente
             informacao_adicional: (() => {
               const infos = [];
+
+              // ✅ NOVO: Adicionar número TRC primeiro
+              if (dadosDevolucao.numeroTRC) {
+                infos.push(`TROCA: ${dadosDevolucao.numeroTRC}`);
+              }
 
               // Adicionar número da venda (verificar múltiplos campos possíveis)
               const numeroVenda = dadosDevolucao.vendaOrigem?.numero_venda || dadosDevolucao.vendaOrigem?.numero;
@@ -6191,7 +6224,24 @@ const DestinatarioSection: React.FC<{
       emails: cliente.emails || [],
       // ✅ CORREÇÃO: Adicionar campos fiscais faltantes
       codigo_municipio: cliente.codigo_municipio || '',
-      ie_destinatario: cliente.indicador_ie || 9, // 9 = Não Contribuinte (padrão)
+      // ✅ FISCAL: Definir indicador IE baseado na presença da IE
+      ie_destinatario: (() => {
+        // Se tem indicador específico no banco, usar ele
+        if (cliente.indicador_ie && cliente.indicador_ie !== 0) {
+          return cliente.indicador_ie;
+        }
+        // Se tem IE preenchida, é contribuinte (1)
+        if (cliente.inscricao_estadual && cliente.inscricao_estadual.trim() &&
+            cliente.inscricao_estadual.trim().toUpperCase() !== 'ISENTO') {
+          return 1; // Contribuinte ICMS
+        }
+        // Se IE é "ISENTO", é isento (2)
+        if (cliente.inscricao_estadual && cliente.inscricao_estadual.trim().toUpperCase() === 'ISENTO') {
+          return 2; // Contribuinte isento
+        }
+        // Caso contrário, não contribuinte (9)
+        return 9; // Não contribuinte
+      })(),
       inscricao_estadual: cliente.inscricao_estadual || ''
     });
 

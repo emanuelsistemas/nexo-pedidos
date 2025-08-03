@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus, AlertCircle, AlertTriangle, Edit2 } from 'lucide-react';
+import { X, Search, Calendar, User, Package, DollarSign, Clock, Filter, ChevronDown, ChevronUp, Check, Minus, AlertCircle, AlertTriangle, Edit2, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ClienteDropdown from '../comum/ClienteDropdown';
 import ClienteFormCompleto from '../comum/ClienteFormCompleto';
@@ -60,6 +60,8 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const [clienteNome, setClienteNome] = useState('');
   const [clienteTelefone, setClienteTelefone] = useState('');
   const [empresaId, setEmpresaId] = useState('');
+  // ✅ NOVO: Estado para número TRC gerado automaticamente
+  const [numeroTRC, setNumeroTRC] = useState<string>('');
 
   // Estados das vendas
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -79,12 +81,58 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const [showAvisoModal, setShowAvisoModal] = useState(false);
   const [avisoMensagem, setAvisoMensagem] = useState('');
 
+  // ✅ NOVO: Função para gerar número TRC automaticamente
+  const gerarNumeroTRC = async () => {
+    if (!empresaId) return;
+
+    try {
+      // Buscar último número TRC da empresa
+      const { data, error } = await supabase
+        .from('devolucoes')
+        .select('codigo_troca')
+        .eq('empresa_id', empresaId)
+        .not('codigo_troca', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Erro ao buscar último TRC:', error);
+        return;
+      }
+
+      let proximoNumero = 1;
+      if (data && data.length > 0) {
+        const ultimoTRC = data[0].codigo_troca;
+        // Extrair número do formato TRC-XXXXXX
+        const match = ultimoTRC.match(/TRC-(\d+)/);
+        if (match) {
+          proximoNumero = parseInt(match[1]) + 1;
+        }
+      }
+
+      const novoTRC = `TRC-${proximoNumero.toString().padStart(6, '0')}`;
+      setNumeroTRC(novoTRC);
+      console.log('✅ Número TRC gerado:', novoTRC);
+      return novoTRC;
+    } catch (error) {
+      console.error('Erro ao gerar número TRC:', error);
+      return '';
+    }
+  };
+
   // Carregar empresa do usuário e vendas
   useEffect(() => {
     if (isOpen) {
       loadEmpresaIdAndVendas();
     }
   }, [isOpen]);
+
+  // ✅ NOVO: Gerar TRC quando empresaId estiver disponível
+  useEffect(() => {
+    if (isOpen && empresaId) {
+      gerarNumeroTRC();
+    }
+  }, [isOpen, empresaId]);
 
   // Aplicar filtros nas vendas
   useEffect(() => {
@@ -635,6 +683,19 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
             <h2 className="text-xl font-semibold text-white">
               Nova Devolução - Selecionar Venda
             </h2>
+            {/* ✅ NOVO: Exibir número TRC gerado */}
+            {numeroTRC && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-blue-600/20 border border-blue-600/30 rounded">
+                <span className="text-blue-400 text-sm font-medium">{numeroTRC}</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(numeroTRC)}
+                  className="text-blue-400 hover:text-blue-300 transition-colors"
+                  title="Copiar número TRC"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {(selectedItens.size > 0 || selectedVendas.size > 0) && (
@@ -1079,6 +1140,8 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
           empresaId={empresaId}
           valorTotal={getValorTotalSelecionado()}
           isLoading={externalLoading}
+          // ✅ NOVO: Passar número TRC gerado
+          numeroTRC={numeroTRC}
           onConfirm={(dadosDevolucao) => {
             // Processar a devolução final
             onConfirm('', dadosDevolucao);
@@ -1142,6 +1205,8 @@ interface FinalizarDevolucaoModalProps {
   empresaId: string;
   valorTotal: number;
   isLoading?: boolean;
+  // ✅ NOVO: Receber número TRC do componente pai
+  numeroTRC: string;
   onConfirm: (dadosDevolucao: any) => void;
 }
 
@@ -1155,6 +1220,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   empresaId,
   valorTotal,
   isLoading = false,
+  // ✅ NOVO: Receber número TRC do componente pai
+  numeroTRC,
   onConfirm
 }) => {
   const [clienteId, setClienteId] = useState('');
@@ -1337,7 +1404,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         cep: clienteCompleto.cep || '',
         inscricao_estadual: clienteCompleto.inscricao_estadual || '',
         observacao_nfe: clienteCompleto.observacao_nfe || ''
-      } : null
+      } : null,
+      // ✅ NOVO: Incluir número TRC para observação da NFe
+      numeroTRC: numeroTRC
     };
 
     console.log('📦 Dados da devolução preparados:', dadosDevolucao);
@@ -1843,13 +1912,12 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     carregarEmpresaCompleta();
   }, [isOpen, empresaId]);
 
-  // Carregar próximo número da NFC-e (igual ao PDV)
+  // Carregar próximo número da NFC-e quando o modal abrir
   useEffect(() => {
     const carregarProximoNumeroNFCe = async () => {
       if (!isOpen || !empresaId) return;
 
       try {
-        // Buscar último número da NFC-e (modelo 65) da empresa
         const { data, error } = await supabase
           .from('pdv')
           .select('numero_documento')
@@ -1974,6 +2042,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       itensIndividuais: Array.from(selectedItens),
       vendaOrigem: vendaOrigemInfo, // Adicionar informações da venda origem
       tipoConfirmacao, // Adicionar tipo de confirmação
+      // ✅ NOVO: Incluir número TRC para salvar no banco
+      numeroTRC: numeroTRC,
       ...dadosExtras // Adicionar dados extras (como dados da NFC-e)
     };
     onConfirm(dadosDevolucao);

@@ -222,6 +222,8 @@ const DevolucoesPage: React.FC = () => {
         motivoGeral: 'Devolução solicitada pelo cliente',
         observacoes: `Itens selecionados: ${itensFormatados.length} produtos (Valor: R$ ${valorTotalValido.toFixed(2)})${vendaData.vendaOrigem ? ` - Venda origem: #${vendaData.vendaOrigem.numero}` : ''}`,
         pedidoTipo: 'pdv',
+        // ✅ NOVO: Incluir número TRC gerado no modal
+        numeroTRC: vendaData.numeroTRC,
         // Adicionar informações da venda origem se disponível
         ...(vendaData.vendaOrigem && {
           pedidoId: vendaData.vendaOrigem.id,

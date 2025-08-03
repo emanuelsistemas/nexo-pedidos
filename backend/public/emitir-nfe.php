@@ -396,14 +396,47 @@ try {
 
     $std->xNome = $nomeDestinatario;
 
-    $documento = preg_replace('/[^0-9]/', '', $destinatario['documento'] ?? '');
+    // ✅ VALIDAÇÃO FISCAL OBRIGATÓRIA - SEM FALLBACKS
+    if (empty($destinatario['documento'])) {
+        throw new Exception('Documento do destinatário é obrigatório');
+    }
+
+    $documento = preg_replace('/[^0-9]/', '', $destinatario['documento']);
+
     if (strlen($documento) === 11) {
+        // PESSOA FÍSICA
         $std->CPF = $documento;
-        $std->indIEDest = 9; // 9=Não contribuinte (pessoa física)
-    } else {
+        $std->indIEDest = 9; // Pessoa física sempre não contribuinte
+    } elseif (strlen($documento) === 14) {
+        // PESSOA JURÍDICA
         $std->CNPJ = $documento;
-        $std->indIEDest = 9; // 9=Não contribuinte (assumindo não contribuinte)
-        // Para contribuintes: 1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte
+
+        // ✅ VALIDAÇÃO FISCAL: ie_destinatario é OBRIGATÓRIO para PJ
+        if (!isset($destinatario['ie_destinatario'])) {
+            throw new Exception('Indicador de IE do destinatário é obrigatório para pessoa jurídica');
+        }
+
+        $indIE = (int)$destinatario['ie_destinatario'];
+
+        // Validar valores permitidos: 1=Contribuinte, 2=Isento, 9=Não contribuinte
+        if (!in_array($indIE, [1, 2, 9])) {
+            throw new Exception('Indicador de IE inválido. Valores permitidos: 1=Contribuinte, 2=Isento, 9=Não contribuinte');
+        }
+
+        $std->indIEDest = $indIE;
+
+        // ✅ VALIDAÇÃO FISCAL: Se é contribuinte (1), IE é OBRIGATÓRIA
+        if ($indIE === 1) {
+            if (empty($destinatario['inscricao_estadual'])) {
+                throw new Exception('Inscrição Estadual do destinatário é obrigatória quando indicador IE = 1 (Contribuinte)');
+            }
+            $std->IE = $destinatario['inscricao_estadual'];
+            error_log("NFE: IE do destinatário adicionada: " . $destinatario['inscricao_estadual']);
+        }
+        // Para isento (2) e não contribuinte (9), IE não deve ser informada
+
+    } else {
+        throw new Exception('Documento do destinatário deve ter 11 dígitos (CPF) ou 14 dígitos (CNPJ)');
     }
 
     $make->tagdest($std);
