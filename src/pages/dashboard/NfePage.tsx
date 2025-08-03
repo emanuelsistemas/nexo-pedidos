@@ -3133,42 +3133,49 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         console.log('📦 Carregando produtos da devolução:', dadosDevolucao.produtos);
 
         // Estruturar produtos com todos os campos obrigatórios
-        const produtosFormatados = dadosDevolucao.produtos.map((produto: any, index: number) => ({
-          id: `devolucao_${index + 1}`,
-          produto_id: produto.produto_id || produto.id,
-          codigo: produto.codigo || produto.dadosFiscais?.codigo || '999999',
-          descricao: produto.descricao || `DEVOLUÇÃO - ${produto.nome_produto}`,
-          quantidade: produto.quantidade || 1,
-          valor_unitario: produto.valor_unitario || 0,
-          valor_total: produto.valor_total || produto.valor_total_item || 0,
+        const produtosFormatados = dadosDevolucao.produtos.map((produto: any, index: number) => {
+          // ✅ CORREÇÃO: Calcular valor unitário correto considerando promoções
+          const valorTotal = produto.valor_total || produto.valor_total_item || 0;
+          const quantidade = produto.quantidade || 1;
+          const valorUnitarioCorreto = valorTotal / quantidade;
 
-          // Dados fiscais obrigatórios
-          ncm: produto.ncm || produto.dadosFiscais?.ncm || '99999999',
-          cfop: produto.cfop || '5202', // CFOP automático para devolução
-          unidade: produto.unidade || produto.dadosFiscais?.unidade_medida?.sigla || 'UN',
-          ean: produto.ean || produto.dadosFiscais?.codigo_barras || 'SEM GTIN',
-          origem_produto: produto.origem_produto || produto.dadosFiscais?.origem || '0',
+          return {
+            id: `devolucao_${index + 1}`,
+            produto_id: produto.produto_id || produto.id,
+            codigo: produto.codigo || produto.dadosFiscais?.codigo || '999999',
+            descricao: produto.descricao || `DEVOLUÇÃO - ${produto.nome_produto}`,
+            quantidade: quantidade,
+            valor_unitario: valorUnitarioCorreto, // ✅ USAR VALOR CORRETO COM PROMOÇÃO
+            valor_total: valorTotal,
 
-          // CST/CSOSN
-          cst_icms: produto.cst_icms || produto.dadosFiscais?.cst_icms || '102',
-          csosn_icms: produto.csosn_icms || produto.dadosFiscais?.csosn_icms || '102',
-          cst_pis: produto.cst_pis || '07',
-          cst_cofins: produto.cst_cofins || '07',
-          cst_ipi: produto.cst_ipi || '99',
+            // Dados fiscais obrigatórios
+            ncm: produto.ncm || produto.dadosFiscais?.ncm || '99999999',
+            cfop: produto.cfop || '5202', // CFOP automático para devolução
+            unidade: produto.unidade || produto.dadosFiscais?.unidade_medida?.sigla || 'UN',
+            ean: produto.ean || produto.dadosFiscais?.codigo_barras || 'SEM GTIN',
+            origem_produto: produto.origem_produto || produto.dadosFiscais?.origem || '0',
 
-          // Alíquotas (zeradas para devolução)
-          aliquota_icms: produto.aliquota_icms || 0,
-          aliquota_pis: produto.aliquota_pis || 0,
-          aliquota_cofins: produto.aliquota_cofins || 0,
-          aliquota_ipi: produto.aliquota_ipi || 0,
+            // CST/CSOSN
+            cst_icms: produto.cst_icms || produto.dadosFiscais?.cst_icms || '102',
+            csosn_icms: produto.csosn_icms || produto.dadosFiscais?.csosn_icms || '102',
+            cst_pis: produto.cst_pis || '07',
+            cst_cofins: produto.cst_cofins || '07',
+            cst_ipi: produto.cst_ipi || '99',
 
-          // Valores de impostos (zerados para devolução)
-          valor_icms: produto.valor_icms || 0,
-          valor_pis: produto.valor_pis || 0,
-          valor_cofins: produto.valor_cofins || 0,
-          valor_ipi: produto.valor_ipi || 0,
-          base_calculo_icms: produto.base_calculo_icms || 0
-        }));
+            // Alíquotas (zeradas para devolução)
+            aliquota_icms: produto.aliquota_icms || 0,
+            aliquota_pis: produto.aliquota_pis || 0,
+            aliquota_cofins: produto.aliquota_cofins || 0,
+            aliquota_ipi: produto.aliquota_ipi || 0,
+
+            // Valores de impostos (zerados para devolução)
+            valor_icms: produto.valor_icms || 0,
+            valor_pis: produto.valor_pis || 0,
+            valor_cofins: produto.valor_cofins || 0,
+            valor_ipi: produto.valor_ipi || 0,
+            base_calculo_icms: produto.base_calculo_icms || 0
+          };
+        });
 
         // ✅ NOVO: Preparar dados do destinatário se houver cliente selecionado
         const destinatarioData = dadosDevolucao.cliente ? {

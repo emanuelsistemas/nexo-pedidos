@@ -1113,7 +1113,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
                                               </div>
                                               <div className="flex items-center gap-4 text-xs text-gray-400">
                                                 <span>Qtd: {item.quantidade}</span>
-                                                <span>Unit: {formatCurrency(item.valor_unitario)}</span>
+                                                <span>Unit: {formatCurrency(item.valor_total_item / item.quantidade)}</span>
                                                 {!isItemValid && (
                                                   <span className="text-orange-400">• Taxa/Serviço</span>
                                                 )}
@@ -1484,12 +1484,18 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     }
 
     // Preparar produtos com CFOP 5202 automático
-    const produtosDevolucao = itensComDadosFiscais.map(item => ({
-      ...item,
-      cfop: '5202', // CFOP automático para devolução
-      descricao: `DEVOLUÇÃO - ${item.nome_produto}`,
-      finalidade: 'devolucao'
-    }));
+    const produtosDevolucao = itensComDadosFiscais.map(item => {
+      // ✅ CORREÇÃO: Calcular valor unitário correto considerando promoções
+      const valorUnitarioCorreto = item.valor_total_item / item.quantidade;
+
+      return {
+        ...item,
+        valor_unitario: valorUnitarioCorreto, // ✅ USAR VALOR CORRETO COM PROMOÇÃO
+        cfop: '5202', // CFOP automático para devolução
+        descricao: `DEVOLUÇÃO - ${item.nome_produto}`,
+        finalidade: 'devolucao'
+      };
+    });
 
     // Preparar dados da devolução para o modal de NF-e
     const dadosDevolucao = {
@@ -1643,21 +1649,26 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         } : null,
 
         // Produtos da devolução com CFOP 5202 AUTOMÁTICO
-        produtos: itensComDadosFiscais.map((item, index) => ({
-          numero_item: index + 1,
-          codigo: item.dadosFiscais.codigo || '999999',
-          descricao: `DEVOLUÇÃO - ${item.nome_produto}`,
-          quantidade: item.quantidade,
-          valor_unitario: item.valor_unitario,
-          valor_total: item.valor_total_item,
-          codigo_barras: item.dadosFiscais.codigo_barras || '',
-          unidade: item.dadosFiscais.unidade_medida?.sigla || 'UN',
-          ncm: item.dadosFiscais.ncm || '99999999',
-          cfop: '5202', // ✅ CFOP 5202 AUTOMÁTICO PARA DEVOLUÇÃO
-          cst_icms: item.dadosFiscais.cst_icms || '102',
-          csosn_icms: item.dadosFiscais.csosn_icms || '102',
-          origem_produto: item.dadosFiscais.origem || '0'
-        })),
+        produtos: itensComDadosFiscais.map((item, index) => {
+          // ✅ CORREÇÃO: Calcular valor unitário correto considerando promoções
+          const valorUnitarioCorreto = item.valor_total_item / item.quantidade;
+
+          return {
+            numero_item: index + 1,
+            codigo: item.dadosFiscais.codigo || '999999',
+            descricao: `DEVOLUÇÃO - ${item.nome_produto}`,
+            quantidade: item.quantidade,
+            valor_unitario: valorUnitarioCorreto, // ✅ USAR VALOR CORRETO COM PROMOÇÃO
+            valor_total: item.valor_total_item,
+            codigo_barras: item.dadosFiscais.codigo_barras || '',
+            unidade: item.dadosFiscais.unidade_medida?.sigla || 'UN',
+            ncm: item.dadosFiscais.ncm || '99999999',
+            cfop: '5202', // ✅ CFOP 5202 AUTOMÁTICO PARA DEVOLUÇÃO
+            cst_icms: item.dadosFiscais.cst_icms || '102',
+            csosn_icms: item.dadosFiscais.csosn_icms || '102',
+            origem_produto: item.dadosFiscais.origem || '0'
+          };
+        }),
 
         // Totais da NFC-e de devolução
         totais: {
@@ -2578,7 +2589,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
                         )}
                       </div>
                       <div className="text-gray-400 text-sm">
-                        Qtd: {item.quantidade} | Unit: {formatCurrency(item.valor_unitario)}
+                        Qtd: {item.quantidade} | Unit: {formatCurrency(item.valor_total_item / item.quantidade)}
                       </div>
                     </div>
                     <div className="text-white font-semibold">
