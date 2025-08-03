@@ -1824,6 +1824,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   const [naturezasOperacao, setNaturezasOperacao] = useState<Array<{id: number, descricao: string}>>([]);
   const [apiStatus, setApiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [sefazStatus, setSefazStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  // ✅ NOVO: Estado para detectar se é NFe de devolução
+  const [isNFeDevolucao, setIsNFeDevolucao] = useState(false);
+  const [dadosDevolucaoAtual, setDadosDevolucaoAtual] = useState<any>(null);
+
   const [progressSteps, setProgressSteps] = useState([
     { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
     { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
@@ -2149,14 +2153,28 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   };
 
   const resetProgress = () => {
-    setProgressSteps([
-      { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
-      { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
-      { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
-      { id: 'banco', label: 'Salvando no banco de dados', status: 'pending', message: '' },
-      { id: 'email', label: 'Enviando por email', status: 'pending', message: '' },
-      { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
-    ]);
+    // ✅ NOVO: Etapas diferentes para NFe de devolução
+    if (isNFeDevolucao) {
+      setProgressSteps([
+        { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
+        { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
+        { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+        { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
+        { id: 'devolucao', label: 'Gerando devolução', status: 'pending', message: '' },
+        { id: 'estoque', label: 'Atualizando estoque', status: 'pending', message: '' },
+        { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
+      ]);
+    } else {
+      // Etapas normais para NFe comum
+      setProgressSteps([
+        { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
+        { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
+        { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+        { id: 'banco', label: 'Salvando no banco de dados', status: 'pending', message: '' },
+        { id: 'email', label: 'Enviando por email', status: 'pending', message: '' },
+        { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
+      ]);
+    }
     setLogs([]);
   };
 
@@ -3098,6 +3116,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     const handleLoadDevolucaoData = async (event: CustomEvent) => {
       const dadosDevolucao = event.detail;
       console.log('🎯 Evento loadDevolucaoData recebido:', dadosDevolucao);
+
+      // ✅ NOVO: Marcar como NFe de devolução
+      setIsNFeDevolucao(true);
+      setDadosDevolucaoAtual(dadosDevolucao);
+      console.log('✅ NFe marcada como devolução - etapas especiais serão usadas');
 
       // Gerar número da NF-e automaticamente (como faz em Nova NFe)
       console.log('🔍 Gerando número automático para devolução...');
@@ -4528,6 +4551,40 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       addLog(`Protocolo: ${result.data.protocolo || 'N/A'}`);
       addLog(`Número NFe: ${result.data.numero_nfe || 'N/A'}`);
       addLog(`Valor: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
+
+      // ✅ NOVO: ETAPAS ESPECÍFICAS PARA DEVOLUÇÃO
+      if (isNFeDevolucao && dadosDevolucaoAtual) {
+        // ETAPA: GERANDO DEVOLUÇÃO
+        updateStep('devolucao', 'loading');
+        addLog('Criando registro de devolução...');
+
+        try {
+          await criarRegistroDevolucaoNFe(result, dadosDevolucaoAtual);
+          updateStep('devolucao', 'success', 'Devolução criada');
+          addLog('✅ Registro de devolução criado com sucesso');
+        } catch (error) {
+          console.error('Erro ao criar devolução:', error);
+          updateStep('devolucao', 'error', 'Erro ao criar devolução');
+          addLog(`❌ Erro ao criar devolução: ${error.message}`);
+          // Não interrompe o processo, apenas registra o erro
+        }
+
+        // ETAPA: ATUALIZANDO ESTOQUE
+        updateStep('estoque', 'loading');
+        addLog('Atualizando estoque dos produtos devolvidos...');
+
+        try {
+          await atualizarEstoqueDevolucaoNFe(dadosDevolucaoAtual);
+          updateStep('estoque', 'success', 'Estoque atualizado');
+          addLog('✅ Estoque atualizado com sucesso');
+        } catch (error) {
+          console.error('Erro ao atualizar estoque:', error);
+          updateStep('estoque', 'error', 'Erro ao atualizar estoque');
+          addLog(`❌ Erro ao atualizar estoque: ${error.message}`);
+          // Não interrompe o processo, apenas registra o erro
+        }
+      }
+
       updateStep('finalizacao', 'success', 'Processo concluído');
 
       // ✅ A verificação de erro de email será feita via useEffect quando emailProcessCompleted for true
@@ -6703,6 +6760,92 @@ const ProdutosSection: React.FC<{
     } else {
       // Finalidade 1,2,3: CFOPs normais (não específicos de devolução)
       return tipo === 'devolucao' ? cfopsSaidaNormal : cfopsEntrada;
+    }
+  };
+
+  // ✅ NOVO: Função para criar registro de devolução na NFe
+  const criarRegistroDevolucaoNFe = async (resultadoNFe: any, dadosDevolucao: any) => {
+    try {
+      // Preparar dados dos itens devolvidos
+      const itensParaDevolucao = dadosDevolucao.produtos.map((produto: any) => ({
+        produto_id: produto.produto_id,
+        produto_nome: produto.descricao,
+        produto_codigo: produto.codigo,
+        pdv_item_id: null, // NFe não tem item específico do PDV
+        venda_origem_id: dadosDevolucao.vendaOrigem?.id,
+        venda_origem_numero: dadosDevolucao.vendaOrigem?.numero,
+        quantidade: produto.quantidade,
+        preco_unitario: produto.valor_unitario,
+        preco_total: produto.valor_total,
+        motivo: 'Devolução via NFe'
+      }));
+
+      // Calcular valor total
+      const valorTotal = itensParaDevolucao.reduce((acc: number, item: any) => acc + item.preco_total, 0);
+
+      // Preparar dados da devolução
+      const dadosDevolucaoFinal = {
+        numeroTRC: dadosDevolucao.numeroTRC,
+        itens: itensParaDevolucao,
+        valorTotal: valorTotal,
+        tipoDevolucao: 'parcial',
+        formaReembolso: 'credito',
+        motivoGeral: 'Devolução via NFe de devolução',
+        observacoes: `NFe: ${resultadoNFe.data.chave} - Protocolo: ${resultadoNFe.data.protocolo}`,
+        pedidoId: dadosDevolucao.vendaOrigem?.id,
+        pedidoNumero: dadosDevolucao.vendaOrigem?.numero,
+        pedidoTipo: 'pdv'
+      };
+
+      console.log('📋 Dados da devolução NFe preparados:', dadosDevolucaoFinal);
+
+      // Criar devolução usando o serviço
+      const { DevolucaoService } = await import('../../services/devolucaoService');
+      const devolucaoService = new DevolucaoService();
+      const devolucaoCriada = await devolucaoService.criarDevolucao(dadosDevolucaoFinal);
+
+      console.log('✅ Devolução NFe criada com sucesso:', devolucaoCriada);
+      return devolucaoCriada;
+
+    } catch (error) {
+      console.error('Erro ao criar registro de devolução NFe:', error);
+      throw error;
+    }
+  };
+
+  // ✅ NOVO: Função para atualizar estoque na devolução NFe
+  const atualizarEstoqueDevolucaoNFe = async (dadosDevolucao: any) => {
+    try {
+      console.log('📦 Atualizando estoque para devolução NFe:', dadosDevolucao);
+
+      // Atualizar estoque de cada produto
+      for (const produto of dadosDevolucao.produtos) {
+        // Pular produtos sem controle de estoque (código 999999)
+        if (produto.codigo === '999999') {
+          console.log(`⏭️ Pulando produto sem controle de estoque: ${produto.descricao}`);
+          continue;
+        }
+
+        // ✅ Usar função RPC igual ao PDV, mas com quantidade POSITIVA (entrada)
+        const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
+          p_produto_id: produto.produto_id,
+          p_quantidade: produto.quantidade, // ✅ Quantidade POSITIVA para entrada
+          p_tipo_operacao: 'devolucao_nfe',
+          p_observacao: `Devolução ${dadosDevolucao.numeroTRC} - NFe: ${dadosDevolucao.vendaOrigem?.numero || 'N/A'}`
+        });
+
+        if (estoqueError) {
+          console.error('Erro ao atualizar estoque via RPC:', estoqueError);
+          throw new Error(`Erro ao atualizar estoque do produto ${produto.descricao}: ${estoqueError.message}`);
+        }
+
+        console.log(`✅ Estoque NFe atualizado via RPC - Produto: ${produto.descricao}, Quantidade entrada: +${produto.quantidade}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na atualização do estoque NFe:', error);
+      throw error;
     }
   };
 

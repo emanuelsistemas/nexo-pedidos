@@ -81,13 +81,35 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
   const [showAvisoModal, setShowAvisoModal] = useState(false);
   const [avisoMensagem, setAvisoMensagem] = useState('');
 
-  // ✅ NOVO: Função para gerar número TRC automaticamente
+  // ✅ NOVO: Função para verificar se TRC já existe na tabela PDV
+  const verificarTRCExisteNoPDV = async (numeroTRC: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('pdv')
+        .select('id')
+        .eq('empresa_id', empresaId)
+        .or(`devolucoes_origem_numero.eq.${numeroTRC},devolucoes_origem_codigo.eq.${numeroTRC},venda_origem_troca_numero.eq.${numeroTRC}`)
+        .limit(1);
+
+      if (error) {
+        console.error('Erro ao verificar TRC no PDV:', error);
+        return false;
+      }
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Erro ao verificar TRC no PDV:', error);
+      return false;
+    }
+  };
+
+  // ✅ NOVO: Função para gerar número TRC automaticamente com verificação de duplicidade
   const gerarNumeroTRC = async () => {
     if (!empresaId) return;
 
     try {
-      // Buscar último número TRC da empresa
-      const { data, error } = await supabase
+      // 1. Buscar último número TRC da tabela devolucoes
+      const { data: devolucoes, error: errorDevolucoes } = await supabase
         .from('devolucoes')
         .select('codigo_troca')
         .eq('empresa_id', empresaId)
@@ -95,24 +117,97 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (error) {
-        console.error('Erro ao buscar último TRC:', error);
+      if (errorDevolucoes) {
+        console.error('Erro ao buscar último TRC das devoluções:', errorDevolucoes);
         return;
       }
 
-      let proximoNumero = 1;
-      if (data && data.length > 0) {
-        const ultimoTRC = data[0].codigo_troca;
-        // Extrair número do formato TRC-XXXXXX
-        const match = ultimoTRC.match(/TRC-(\d+)/);
-        if (match) {
-          proximoNumero = parseInt(match[1]) + 1;
-        }
+      // 2. Buscar último número TRC da tabela PDV
+      const { data: pdvData, error: errorPDV } = await supabase
+        .from('pdv')
+        .select('devolucoes_origem_numero, devolucoes_origem_codigo, venda_origem_troca_numero')
+        .eq('empresa_id', empresaId)
+        .or('devolucoes_origem_numero.not.is.null,devolucoes_origem_codigo.not.is.null,venda_origem_troca_numero.not.is.null')
+        .order('created_at', { ascending: false });
+
+      if (errorPDV) {
+        console.error('Erro ao buscar TRCs do PDV:', errorPDV);
+        return;
       }
 
-      const novoTRC = `TRC-${proximoNumero.toString().padStart(6, '0')}`;
+      // 3. Extrair todos os números TRC existentes
+      const numerosTRC: number[] = [];
+
+      // Da tabela devolucoes
+      if (devolucoes && devolucoes.length > 0) {
+        devolucoes.forEach(dev => {
+          if (dev.codigo_troca) {
+            const match = dev.codigo_troca.match(/TRC-(\d+)/);
+            if (match) {
+              numerosTRC.push(parseInt(match[1]));
+            }
+          }
+        });
+      }
+
+      // Da tabela PDV
+      if (pdvData && pdvData.length > 0) {
+        pdvData.forEach(pdv => {
+          [pdv.devolucoes_origem_numero, pdv.devolucoes_origem_codigo, pdv.venda_origem_troca_numero].forEach(campo => {
+            if (campo) {
+              const match = campo.match(/TRC-(\d+)/);
+              if (match) {
+                numerosTRC.push(parseInt(match[1]));
+              }
+            }
+          });
+        });
+      }
+
+      // 4. Encontrar o próximo número disponível
+      let proximoNumero = 1;
+      if (numerosTRC.length > 0) {
+        const maiorNumero = Math.max(...numerosTRC);
+        proximoNumero = maiorNumero + 1;
+      }
+
+      // 5. Verificar se o número gerado já existe (dupla verificação)
+      let tentativas = 0;
+      let novoTRC = '';
+
+      while (tentativas < 10) {
+        novoTRC = `TRC-${proximoNumero.toString().padStart(6, '0')}`;
+
+        // Verificar se já existe no PDV
+        const existeNoPDV = await verificarTRCExisteNoPDV(novoTRC);
+
+        // Verificar se já existe nas devoluções
+        const { data: existeNasDevolucoes } = await supabase
+          .from('devolucoes')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('codigo_troca', novoTRC)
+          .limit(1);
+
+        if (!existeNoPDV && (!existeNasDevolucoes || existeNasDevolucoes.length === 0)) {
+          // Número disponível encontrado
+          break;
+        }
+
+        // Se já existe, tentar próximo número
+        proximoNumero++;
+        tentativas++;
+      }
+
+      if (tentativas >= 10) {
+        console.error('❌ Não foi possível gerar TRC único após 10 tentativas');
+        return;
+      }
+
       setNumeroTRC(novoTRC);
-      console.log('✅ Número TRC gerado:', novoTRC);
+      console.log('✅ Número TRC gerado com verificação de duplicidade:', novoTRC);
+      console.log('📊 Números TRC existentes encontrados:', numerosTRC.sort((a, b) => a - b));
+      console.log('🔢 Próximo número escolhido:', proximoNumero);
       return novoTRC;
     } catch (error) {
       console.error('Erro ao gerar número TRC:', error);
@@ -1241,22 +1336,37 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
   // ✅ NOVO: Verificar se é devolução real (vinda da página de devoluções)
   const isDevolucaoReal = selectedItens.size > 0 || selectedVendas.size > 0;
 
-  const [progressSteps, setProgressSteps] = useState(() => {
+  const [progressSteps, setProgressSteps] = useState([
+    { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
+    { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
+    { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+    { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
+    { id: 'devolucao', label: 'Gerando devolução', status: 'pending', message: '' },
+    { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
+  ]);
+
+  // ✅ NOVO: Atualizar etapas dinamicamente quando isDevolucaoReal mudar
+  useEffect(() => {
     const baseSteps = [
       { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
       { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
       { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
-      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' }
+      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
+      // ✅ NOVO: Sempre adicionar etapa de geração da devolução
+      { id: 'devolucao', label: 'Gerando devolução', status: 'pending', message: '' }
     ];
 
     // ✅ Só adicionar etapa de estoque se for devolução real
     if (isDevolucaoReal) {
       baseSteps.push({ id: 'estoque', label: 'Atualizando estoque', status: 'pending', message: '' });
+      console.log('✅ Etapa de estoque adicionada - isDevolucaoReal:', isDevolucaoReal);
+    } else {
+      console.log('❌ Etapa de estoque NÃO adicionada - isDevolucaoReal:', isDevolucaoReal);
     }
 
     baseSteps.push({ id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' });
-    return baseSteps;
-  });
+    setProgressSteps(baseSteps);
+  }, [isDevolucaoReal]);
   const [logs, setLogs] = useState<string[]>([]);
   const [isEmitindoNFCe, setIsEmitindoNFCe] = useState(false);
 
@@ -1677,8 +1787,28 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       updateStep('banco', 'success', 'Devolução salva');
       addLog('✅ Devolução salva no sistema');
 
-      // ✅ NOVO: ETAPA 5: ATUALIZAÇÃO DO ESTOQUE (só para devoluções reais)
+      // ✅ NOVO: ETAPA 5: GERAÇÃO DA DEVOLUÇÃO
+      updateStep('devolucao', 'loading');
+      addLog('Criando registro de devolução...');
+
+      try {
+        await criarRegistroDevolucao(resultado, selectedItens, vendas);
+        updateStep('devolucao', 'success', 'Devolução criada');
+        addLog('✅ Registro de devolução criado com sucesso');
+      } catch (error) {
+        console.error('Erro ao criar devolução:', error);
+        updateStep('devolucao', 'error', 'Erro ao criar devolução');
+        addLog(`❌ Erro ao criar devolução: ${error.message}`);
+        // Não interrompe o processo, apenas registra o erro
+      }
+
+      // ✅ NOVO: ETAPA 6: ATUALIZAÇÃO DO ESTOQUE (só para devoluções reais)
+      console.log('🔍 Verificando se deve atualizar estoque - isDevolucaoReal:', isDevolucaoReal);
+      console.log('🔍 selectedItens.size:', selectedItens.size);
+      console.log('🔍 selectedVendas.size:', selectedVendas.size);
+
       if (isDevolucaoReal) {
+        console.log('✅ Iniciando atualização do estoque...');
         updateStep('estoque', 'loading');
         addLog('Atualizando estoque dos produtos devolvidos...');
 
@@ -1692,9 +1822,12 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           addLog(`❌ Erro ao atualizar estoque: ${error.message}`);
           // Não interrompe o processo, apenas registra o erro
         }
+      } else {
+        console.log('❌ Pulando atualização do estoque - não é devolução real');
+        addLog('ℹ️ Pulando atualização do estoque (NFe manual de devolução)');
       }
 
-      // ETAPA 6: FINALIZAÇÃO
+      // ETAPA 7: FINALIZAÇÃO
       updateStep('finalizacao', 'loading');
       addLog('Finalizando processo...');
 
@@ -1776,8 +1909,10 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
           if (item) {
             itensParaAtualizar.push({
               produto_id: item.produto_id,
+              produto_nome: item.produto_nome || item.nome,
               quantidade: item.quantidade,
               venda_id: venda.id,
+              venda_numero: venda.numero_venda || venda.numero,
               item_id: itemId
             });
             break;
@@ -1787,35 +1922,28 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
 
       console.log('📦 Itens para atualizar estoque:', itensParaAtualizar);
 
-      // Atualizar estoque de cada produto
+      // ✅ USAR A MESMA FUNÇÃO QUE O PDV USA (atualizar_estoque_produto)
       for (const item of itensParaAtualizar) {
-        // 1. Buscar estoque atual do produto
-        const { data: estoqueAtual, error: estoqueError } = await supabase
-          .from('produtos')
-          .select('estoque_atual')
-          .eq('id', item.produto_id)
-          .single();
-
-        if (estoqueError) {
-          console.error('Erro ao buscar estoque atual:', estoqueError);
+        // Pular produtos sem controle de estoque (código 999999)
+        if (item.produto_codigo === '999999') {
+          console.log(`⏭️ Pulando produto sem controle de estoque: ${item.produto_nome}`);
           continue;
         }
 
-        // 2. Calcular novo estoque (adicionar quantidade devolvida)
-        const novoEstoque = (estoqueAtual.estoque_atual || 0) + item.quantidade;
+        // ✅ Usar função RPC igual ao PDV, mas com quantidade POSITIVA (entrada)
+        const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
+          p_produto_id: item.produto_id,
+          p_quantidade: item.quantidade, // ✅ Quantidade POSITIVA para entrada
+          p_tipo_operacao: 'devolucao_troca',
+          p_observacao: `Devolução ${numeroTRC} - Ref. Venda: ${item.venda_numero}`
+        });
 
-        // 3. Atualizar estoque do produto
-        const { error: updateError } = await supabase
-          .from('produtos')
-          .update({ estoque_atual: novoEstoque })
-          .eq('id', item.produto_id);
-
-        if (updateError) {
-          console.error('Erro ao atualizar estoque:', updateError);
-          throw new Error(`Erro ao atualizar estoque do produto ${item.produto_id}`);
+        if (estoqueError) {
+          console.error('Erro ao atualizar estoque via RPC:', estoqueError);
+          throw new Error(`Erro ao atualizar estoque do produto ${item.produto_nome}: ${estoqueError.message}`);
         }
 
-        console.log(`✅ Estoque atualizado - Produto: ${item.produto_id}, Novo estoque: ${novoEstoque}`);
+        console.log(`✅ Estoque atualizado via RPC - Produto: ${item.produto_nome}, Quantidade entrada: +${item.quantidade}`);
       }
 
       // 4. Atualizar campos na tabela PDV
@@ -1824,6 +1952,69 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       return true;
     } catch (error) {
       console.error('Erro na atualização do estoque:', error);
+      throw error;
+    }
+  };
+
+  // ✅ NOVO: Função para criar registro de devolução
+  const criarRegistroDevolucao = async (resultadoNFe: any, selectedItens: Set<string>, vendas: Venda[]) => {
+    try {
+      // Preparar dados dos itens devolvidos
+      const itensParaDevolucao = [];
+
+      for (const itemId of selectedItens) {
+        // Encontrar o item na venda
+        for (const venda of vendas) {
+          const item = venda.itens?.find(i => i.id === itemId);
+          if (item) {
+            itensParaDevolucao.push({
+              produto_id: item.produto_id,
+              produto_nome: item.produto_nome || item.nome,
+              produto_codigo: item.produto_codigo || item.codigo,
+              pdv_item_id: item.id,
+              venda_origem_id: venda.id,
+              venda_origem_numero: venda.numero_venda || venda.numero,
+              quantidade: item.quantidade,
+              preco_unitario: item.preco_unitario || item.preco,
+              preco_total: item.preco_total || (item.quantidade * (item.preco_unitario || item.preco)),
+              motivo: 'Devolução via NFe'
+            });
+            break;
+          }
+        }
+      }
+
+      // Calcular valor total
+      const valorTotal = itensParaDevolucao.reduce((acc, item) => acc + item.preco_total, 0);
+
+      // Buscar informações da venda origem
+      const vendaOrigem = vendas[0]; // Primeira venda (pode ter múltiplas)
+
+      // Preparar dados da devolução
+      const dadosDevolucao = {
+        numeroTRC: numeroTRC,
+        itens: itensParaDevolucao,
+        valorTotal: valorTotal,
+        tipoDevolucao: 'parcial',
+        formaReembolso: 'credito',
+        motivoGeral: 'Devolução via NFe de devolução',
+        observacoes: `NFe: ${resultadoNFe.data.chave} - Protocolo: ${resultadoNFe.data.protocolo}`,
+        pedidoId: vendaOrigem?.id,
+        pedidoNumero: vendaOrigem?.numero_venda || vendaOrigem?.numero,
+        pedidoTipo: 'pdv'
+      };
+
+      console.log('📋 Dados da devolução preparados:', dadosDevolucao);
+
+      // Criar devolução usando o serviço
+      const devolucaoService = new (await import('../../services/devolucaoService')).DevolucaoService();
+      const devolucaoCriada = await devolucaoService.criarDevolucao(dadosDevolucao);
+
+      console.log('✅ Devolução criada com sucesso:', devolucaoCriada);
+      return devolucaoCriada;
+
+    } catch (error) {
+      console.error('Erro ao criar registro de devolução:', error);
       throw error;
     }
   };
@@ -1865,7 +2056,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       { id: 'validacao', label: 'Validando dados fiscais', status: 'pending', message: '' },
       { id: 'geracao', label: 'Gerando XML da NFC-e de devolução', status: 'pending', message: '' },
       { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
-      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' }
+      { id: 'banco', label: 'Salvando devolução', status: 'pending', message: '' },
+      // ✅ NOVO: Sempre adicionar etapa de geração da devolução
+      { id: 'devolucao', label: 'Gerando devolução', status: 'pending', message: '' }
     ];
 
     // ✅ Só adicionar etapa de estoque se for devolução real
