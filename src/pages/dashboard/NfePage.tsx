@@ -3646,6 +3646,24 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   // ✅ NOVO: Função para criar registro de devolução na NFe
   const criarRegistroDevolucaoNFe = async (resultadoNFe: any, dadosDevolucao: any) => {
     try {
+      // ✅ OBTER empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não identificada');
+      }
+
+      const empresaId = usuarioData.empresa_id;
+
       // ✅ NOVO: Buscar cliente dos dados da NFe (igual ao PDV)
       let clienteId = dadosDevolucao.clienteId;
 
@@ -4682,9 +4700,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog('Criando registro de devolução...');
 
         try {
-          await criarRegistroDevolucaoNFe(result, dadosDevolucaoAtual);
+          const devolucaoCriada = await criarRegistroDevolucaoNFe(result, dadosDevolucaoAtual);
           updateStep('devolucao', 'success', 'Devolução criada');
           addLog('✅ Registro de devolução criado com sucesso');
+
+          // ✅ NOVO: Armazenar ID da devolução criada para usar no salvamento da NFe
+          dadosDevolucaoAtual.devolucaoId = devolucaoCriada.id;
+          console.log('📝 ID da devolução criada:', devolucaoCriada.id);
         } catch (error) {
           console.error('Erro ao criar devolução:', error);
           updateStep('devolucao', 'error', 'Erro ao criar devolução');
@@ -4978,11 +5000,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         ambiente: ambienteNFe,
         // ✅ NOVO: Incluir campos de devolução se for NFe de devolução
         ...(isNFeDevolucao && dadosDevolucaoAtual ? {
-          devolucao_origem_id: dadosDevolucaoAtual.vendaOrigem?.id || null,
+          devolucao_origem_id: dadosDevolucaoAtual.devolucaoId || null, // ✅ CORRIGIDO: Usar ID da devolução criada
           devolucao_origem_numero: dadosDevolucaoAtual.numeroTRC || null,
           devolucao_origem_codigo: dadosDevolucaoAtual.numeroTRC || null,
           venda_origem_troca_id: dadosDevolucaoAtual.vendaOrigem?.id || null,
-          venda_origem_troca_numero: dadosDevolucaoAtual.numeroTRC || null
+          venda_origem_troca_numero: dadosDevolucaoAtual.vendaOrigem?.numero || dadosDevolucaoAtual.vendaOrigem?.numero_venda || null
         } : {})
       };
 
