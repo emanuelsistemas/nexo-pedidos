@@ -1947,8 +1947,21 @@ try {
             ];
         }
 
+        // ✅ CORREÇÃO: Usar o motivo específico como título se disponível
+        $titulo = 'Erro na Validação da NFe';
+        if (!empty($motivo) && $motivo !== 'N/A') {
+            // Se o motivo contém informações específicas, usar como título
+            if (strpos($motivo, 'Rejeição:') !== false) {
+                $titulo = str_replace('Rejeição: ', '', $motivo);
+            } elseif (strpos($motivo, ':') !== false) {
+                $titulo = $motivo;
+            } else {
+                $titulo = $motivo;
+            }
+        }
+
         return [
-            'titulo' => 'Erro na Validação da NFe',
+            'titulo' => $titulo,
             'descricao' => $motivo,
             'solucao' => 'Verifique os dados da NFe e tente novamente.',
             'status_original' => $status,
