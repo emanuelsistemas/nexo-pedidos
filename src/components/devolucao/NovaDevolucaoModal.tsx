@@ -88,7 +88,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
         .from('pdv')
         .select('id')
         .eq('empresa_id', empresaId)
-        .or(`devolucoes_origem_numero.eq.${numeroTRC},devolucoes_origem_codigo.eq.${numeroTRC},venda_origem_troca_numero.eq.${numeroTRC}`)
+        .or(`devolucao_origem_numero.eq.${numeroTRC},devolucao_origem_codigo.eq.${numeroTRC},venda_origem_troca_numero.eq.${numeroTRC}`)
         .limit(1);
 
       if (error) {
@@ -105,10 +105,17 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
 
   // ✅ NOVO: Função para gerar número TRC automaticamente com verificação de duplicidade
   const gerarNumeroTRC = async () => {
-    if (!empresaId) return;
+    console.log('🔍 [TRC] Iniciando geração do número TRC...');
+    console.log('🔍 [TRC] empresaId:', empresaId);
+
+    if (!empresaId) {
+      console.log('❌ [TRC] empresaId não disponível, cancelando geração');
+      return;
+    }
 
     try {
       // 1. Buscar último número TRC da tabela devolucoes
+      console.log('🔍 [TRC] Buscando TRCs na tabela devolucoes...');
       const { data: devolucoes, error: errorDevolucoes } = await supabase
         .from('devolucoes')
         .select('codigo_troca')
@@ -118,22 +125,27 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
         .limit(1);
 
       if (errorDevolucoes) {
-        console.error('Erro ao buscar último TRC das devoluções:', errorDevolucoes);
+        console.error('❌ [TRC] Erro ao buscar último TRC das devoluções:', errorDevolucoes);
         return;
       }
 
+      console.log('✅ [TRC] Devoluções encontradas:', devolucoes);
+
       // 2. Buscar último número TRC da tabela PDV
+      console.log('🔍 [TRC] Buscando TRCs na tabela PDV...');
       const { data: pdvData, error: errorPDV } = await supabase
         .from('pdv')
-        .select('devolucoes_origem_numero, devolucoes_origem_codigo, venda_origem_troca_numero')
+        .select('devolucao_origem_numero, devolucao_origem_codigo, venda_origem_troca_numero')
         .eq('empresa_id', empresaId)
-        .or('devolucoes_origem_numero.not.is.null,devolucoes_origem_codigo.not.is.null,venda_origem_troca_numero.not.is.null')
+        .or('devolucao_origem_numero.not.is.null,devolucao_origem_codigo.not.is.null,venda_origem_troca_numero.not.is.null')
         .order('created_at', { ascending: false });
 
       if (errorPDV) {
-        console.error('Erro ao buscar TRCs do PDV:', errorPDV);
+        console.error('❌ [TRC] Erro ao buscar TRCs do PDV:', errorPDV);
         return;
       }
+
+      console.log('✅ [TRC] Dados PDV encontrados:', pdvData);
 
       // 3. Extrair todos os números TRC existentes
       const numerosTRC: number[] = [];
@@ -153,7 +165,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
       // Da tabela PDV
       if (pdvData && pdvData.length > 0) {
         pdvData.forEach(pdv => {
-          [pdv.devolucoes_origem_numero, pdv.devolucoes_origem_codigo, pdv.venda_origem_troca_numero].forEach(campo => {
+          [pdv.devolucao_origem_numero, pdv.devolucao_origem_codigo, pdv.venda_origem_troca_numero].forEach(campo => {
             if (campo) {
               const match = campo.match(/TRC-(\d+)/);
               if (match) {
@@ -205,9 +217,11 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
       }
 
       setNumeroTRC(novoTRC);
-      console.log('✅ Número TRC gerado com verificação de duplicidade:', novoTRC);
-      console.log('📊 Números TRC existentes encontrados:', numerosTRC.sort((a, b) => a - b));
-      console.log('🔢 Próximo número escolhido:', proximoNumero);
+      console.log('✅ [TRC] Número TRC gerado com verificação de duplicidade:', novoTRC);
+      console.log('📊 [TRC] Números TRC existentes encontrados:', numerosTRC.sort((a, b) => a - b));
+      console.log('🔢 [TRC] Próximo número escolhido:', proximoNumero);
+      console.log('🎯 [TRC] Estado numeroTRC atualizado para:', novoTRC);
+
       return novoTRC;
     } catch (error) {
       console.error('Erro ao gerar número TRC:', error);
@@ -340,12 +354,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
         .in('devolucoes.status', ['pendente', 'processada'])
         .eq('devolucoes.empresa_id', empresaIdToUse);
 
-      // Debug: Log dos produtos pendentes/processados
-      console.log('🔍 Debug - Produtos em devoluções pendentes/processadas:', {
-        devolucoesPendentes,
-        errorPendentes,
-        empresaId: empresaIdToUse
-      });
+
 
       // Criar um Map com os produtos devolvidos para busca rápida
       // Incluir informações sobre status e código da troca
@@ -386,19 +395,7 @@ const NovaDevolucaoModal: React.FC<NovaDevolucaoModalProps> = ({
             const codigo_troca = infoItem?.codigo_troca || null;
             const tem_devolucao = devolucao_pendente || devolucao_processada;
 
-            // Debug: Log de itens marcados como devolvidos
-            if (tem_devolucao) {
-              console.log('🔍 Debug - Item com devolução:', {
-                item: item.nome_produto,
-                produto_id: item.produto_id,
-                pdv_item_id: item.id,
-                venda_id: venda.id,
-                status: infoItem?.status,
-                codigo_troca,
-                devolucao_pendente,
-                devolucao_processada
-              });
-            }
+
 
             return {
               ...item,
@@ -1359,9 +1356,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     // ✅ Só adicionar etapa de estoque se for devolução real
     if (isDevolucaoReal) {
       baseSteps.push({ id: 'estoque', label: 'Atualizando estoque', status: 'pending', message: '' });
-      console.log('✅ Etapa de estoque adicionada - isDevolucaoReal:', isDevolucaoReal);
     } else {
-      console.log('❌ Etapa de estoque NÃO adicionada - isDevolucaoReal:', isDevolucaoReal);
     }
 
     baseSteps.push({ id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' });
@@ -2030,9 +2025,9 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         const { error } = await supabase
           .from('pdv')
           .update({
-            devolucoes_origem_id: vendaId,
-            devolucoes_origem_numero: numeroTRC,
-            devolucoes_origem_codigo: numeroTRC,
+            devolucao_origem_id: vendaId,
+            devolucao_origem_numero: numeroTRC,
+            devolucao_origem_codigo: numeroTRC,
             venda_origem_troca_id: vendaId,
             venda_origem_troca_numero: numeroTRC
           })
@@ -2263,7 +2258,7 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
         const proximoNumero = ultimoNumero + 1;
 
         setProximoNumeroNFCe(proximoNumero);
-        console.log('✅ Próximo número NFC-e carregado:', proximoNumero);
+
       } catch (error) {
         console.error('Erro ao carregar próximo número NFC-e:', error);
       }
