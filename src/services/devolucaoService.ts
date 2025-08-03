@@ -40,7 +40,7 @@ export interface AtualizarDevolucaoData {
   status?: 'pendente' | 'processada' | 'cancelada';
 }
 
-class DevolucaoService {
+export class DevolucaoService {
   /**
    * Obter empresa_id do usuário logado
    */

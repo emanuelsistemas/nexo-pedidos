@@ -2352,10 +2352,68 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
     return null;
   };
 
+  // ✅ NOVO: Função para atualizar estoque na devolução manual
+  const atualizarEstoqueDevolucaoManual = async (selectedItens: Set<string>, vendas: Venda[], numeroTRC: string) => {
+    try {
+      // Buscar informações dos produtos devolvidos
+      const itensParaAtualizar = [];
+
+      for (const itemId of selectedItens) {
+        // Encontrar o item na venda
+        for (const venda of vendas) {
+          const item = venda.itens?.find(i => i.id === itemId);
+          if (item) {
+            itensParaAtualizar.push({
+              produto_id: item.produto_id,
+              produto_nome: item.produto_nome || item.nome,
+              produto_codigo: item.produto_codigo || item.codigo,
+              quantidade: item.quantidade,
+              venda_id: venda.id,
+              venda_numero: venda.numero_venda || venda.numero,
+              item_id: itemId
+            });
+            break;
+          }
+        }
+      }
+
+      console.log('📦 Itens para estorno manual:', itensParaAtualizar);
+
+      // ✅ Usar a mesma função RPC que o PDV e NFe usam
+      for (const item of itensParaAtualizar) {
+        // Pular produtos sem controle de estoque (código 999999)
+        if (item.produto_codigo === '999999') {
+          console.log(`⏭️ Pulando produto sem controle de estoque: ${item.produto_nome}`);
+          continue;
+        }
+
+        // ✅ Usar função RPC com quantidade POSITIVA (entrada)
+        const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
+          p_produto_id: item.produto_id,
+          p_quantidade: item.quantidade, // ✅ Quantidade POSITIVA para entrada
+          p_tipo_operacao: 'devolucao_manual',
+          p_observacao: `Devolução Manual ${numeroTRC} - Ref. Venda: ${item.venda_numero}`
+        });
+
+        if (estoqueError) {
+          console.error('Erro ao atualizar estoque via RPC:', estoqueError);
+          throw new Error(`Erro ao atualizar estoque do produto ${item.produto_nome}: ${estoqueError.message}`);
+        }
+
+        console.log(`✅ Estoque manual atualizado via RPC - Produto: ${item.produto_nome}, Quantidade entrada: +${item.quantidade}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na atualização do estoque manual:', error);
+      throw error;
+    }
+  };
+
   const itensSelecionados = getItensSelecionados();
   const vendaOrigemInfo = getVendaOrigemInfo();
 
-  const handleConfirm = (tipoConfirmacao: 'manual' | 'nfce' = 'manual', dadosExtras?: any) => {
+  const handleConfirm = async (tipoConfirmacao: 'manual' | 'nfce' = 'manual', dadosExtras?: any) => {
     const dadosDevolucao = {
       clienteId,
       itens: itensSelecionados,
@@ -2368,6 +2426,19 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
       numeroTRC: numeroTRC,
       ...dadosExtras // Adicionar dados extras (como dados da NFC-e)
     };
+
+    // ✅ NOVO: Se for devolução manual, fazer estorno no estoque
+    if (tipoConfirmacao === 'manual') {
+      try {
+        console.log('📦 Iniciando estorno no estoque para devolução manual...');
+        await atualizarEstoqueDevolucaoManual(selectedItens, vendas, numeroTRC);
+        console.log('✅ Estorno no estoque concluído com sucesso');
+      } catch (error) {
+        console.error('❌ Erro ao fazer estorno no estoque:', error);
+        // Não interrompe o processo, apenas registra o erro
+      }
+    }
+
     onConfirm(dadosDevolucao);
   };
 

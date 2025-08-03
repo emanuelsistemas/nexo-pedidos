@@ -3641,6 +3641,101 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     return erros;
   };
 
+  // ✅ NOVO: Função para criar registro de devolução na NFe
+  const criarRegistroDevolucaoNFe = async (resultadoNFe: any, dadosDevolucao: any) => {
+    try {
+      // Preparar dados dos itens devolvidos
+      const itensParaDevolucao = dadosDevolucao.produtos.map((produto: any) => {
+        const quantidade = parseFloat(produto.quantidade) || 0;
+        const precoUnitario = parseFloat(produto.valor_unitario) || 0;
+        const precoTotal = quantidade * precoUnitario;
+
+        return {
+          produto_id: produto.produto_id,
+          produto_nome: produto.descricao,
+          produto_codigo: produto.codigo,
+          pdv_item_id: null, // NFe não tem item específico do PDV
+          venda_origem_id: dadosDevolucao.vendaOrigem?.id,
+          venda_origem_numero: dadosDevolucao.vendaOrigem?.numero,
+          quantidade: quantidade,
+          preco_unitario: precoUnitario,
+          preco_total: precoTotal,
+          motivo: 'Devolução via NFe'
+        };
+      });
+
+      // Calcular valor total
+      const valorTotal = itensParaDevolucao.reduce((acc: number, item: any) => {
+        const precoTotal = parseFloat(item.preco_total) || 0;
+        return acc + precoTotal;
+      }, 0);
+
+      // Preparar dados da devolução
+      const dadosDevolucaoFinal = {
+        numeroTRC: dadosDevolucao.numeroTRC,
+        itens: itensParaDevolucao,
+        valorTotal: valorTotal,
+        tipoDevolucao: 'parcial',
+        formaReembolso: 'credito',
+        motivoGeral: 'Devolução via NFe de devolução',
+        observacoes: `NFe: ${resultadoNFe.data.chave} - Protocolo: ${resultadoNFe.data.protocolo}`,
+        pedidoId: dadosDevolucao.vendaOrigem?.id,
+        pedidoNumero: dadosDevolucao.vendaOrigem?.numero,
+        pedidoTipo: 'pdv'
+      };
+
+      console.log('📋 Dados da devolução NFe preparados:', dadosDevolucaoFinal);
+
+      // Criar devolução usando o serviço
+      const devolucaoServiceModule = await import('../../services/devolucaoService');
+      const devolucaoService = new devolucaoServiceModule.DevolucaoService();
+      const devolucaoCriada = await devolucaoService.criarDevolucao(dadosDevolucaoFinal);
+
+      console.log('✅ Devolução NFe criada com sucesso:', devolucaoCriada);
+      return devolucaoCriada;
+
+    } catch (error) {
+      console.error('Erro ao criar registro de devolução NFe:', error);
+      throw error;
+    }
+  };
+
+  // ✅ NOVO: Função para atualizar estoque na devolução NFe
+  const atualizarEstoqueDevolucaoNFe = async (dadosDevolucao: any) => {
+    try {
+      console.log('📦 Atualizando estoque para devolução NFe:', dadosDevolucao);
+
+      // Atualizar estoque de cada produto
+      for (const produto of dadosDevolucao.produtos) {
+        // Pular produtos sem controle de estoque (código 999999)
+        if (produto.codigo === '999999') {
+          console.log(`⏭️ Pulando produto sem controle de estoque: ${produto.descricao}`);
+          continue;
+        }
+
+        // ✅ Usar função RPC igual ao PDV, mas com quantidade POSITIVA (entrada)
+        const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
+          p_produto_id: produto.produto_id,
+          p_quantidade: produto.quantidade, // ✅ Quantidade POSITIVA para entrada
+          p_tipo_operacao: 'devolucao_nfe',
+          p_observacao: `Devolução ${dadosDevolucao.numeroTRC} - NFe: ${dadosDevolucao.vendaOrigem?.numero || 'N/A'}`
+        });
+
+        if (estoqueError) {
+          console.error('Erro ao atualizar estoque via RPC:', estoqueError);
+          throw new Error(`Erro ao atualizar estoque do produto ${produto.descricao}: ${estoqueError.message}`);
+        }
+
+        console.log(`✅ Estoque NFe atualizado via RPC - Produto: ${produto.descricao}, Quantidade entrada: +${produto.quantidade}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro na atualização do estoque NFe:', error);
+      throw error;
+    }
+  };
+
   // Função para emitir NFe
   const handleEmitirNFe = async () => {
     try {
@@ -6763,91 +6858,7 @@ const ProdutosSection: React.FC<{
     }
   };
 
-  // ✅ NOVO: Função para criar registro de devolução na NFe
-  const criarRegistroDevolucaoNFe = async (resultadoNFe: any, dadosDevolucao: any) => {
-    try {
-      // Preparar dados dos itens devolvidos
-      const itensParaDevolucao = dadosDevolucao.produtos.map((produto: any) => ({
-        produto_id: produto.produto_id,
-        produto_nome: produto.descricao,
-        produto_codigo: produto.codigo,
-        pdv_item_id: null, // NFe não tem item específico do PDV
-        venda_origem_id: dadosDevolucao.vendaOrigem?.id,
-        venda_origem_numero: dadosDevolucao.vendaOrigem?.numero,
-        quantidade: produto.quantidade,
-        preco_unitario: produto.valor_unitario,
-        preco_total: produto.valor_total,
-        motivo: 'Devolução via NFe'
-      }));
 
-      // Calcular valor total
-      const valorTotal = itensParaDevolucao.reduce((acc: number, item: any) => acc + item.preco_total, 0);
-
-      // Preparar dados da devolução
-      const dadosDevolucaoFinal = {
-        numeroTRC: dadosDevolucao.numeroTRC,
-        itens: itensParaDevolucao,
-        valorTotal: valorTotal,
-        tipoDevolucao: 'parcial',
-        formaReembolso: 'credito',
-        motivoGeral: 'Devolução via NFe de devolução',
-        observacoes: `NFe: ${resultadoNFe.data.chave} - Protocolo: ${resultadoNFe.data.protocolo}`,
-        pedidoId: dadosDevolucao.vendaOrigem?.id,
-        pedidoNumero: dadosDevolucao.vendaOrigem?.numero,
-        pedidoTipo: 'pdv'
-      };
-
-      console.log('📋 Dados da devolução NFe preparados:', dadosDevolucaoFinal);
-
-      // Criar devolução usando o serviço
-      const { DevolucaoService } = await import('../../services/devolucaoService');
-      const devolucaoService = new DevolucaoService();
-      const devolucaoCriada = await devolucaoService.criarDevolucao(dadosDevolucaoFinal);
-
-      console.log('✅ Devolução NFe criada com sucesso:', devolucaoCriada);
-      return devolucaoCriada;
-
-    } catch (error) {
-      console.error('Erro ao criar registro de devolução NFe:', error);
-      throw error;
-    }
-  };
-
-  // ✅ NOVO: Função para atualizar estoque na devolução NFe
-  const atualizarEstoqueDevolucaoNFe = async (dadosDevolucao: any) => {
-    try {
-      console.log('📦 Atualizando estoque para devolução NFe:', dadosDevolucao);
-
-      // Atualizar estoque de cada produto
-      for (const produto of dadosDevolucao.produtos) {
-        // Pular produtos sem controle de estoque (código 999999)
-        if (produto.codigo === '999999') {
-          console.log(`⏭️ Pulando produto sem controle de estoque: ${produto.descricao}`);
-          continue;
-        }
-
-        // ✅ Usar função RPC igual ao PDV, mas com quantidade POSITIVA (entrada)
-        const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
-          p_produto_id: produto.produto_id,
-          p_quantidade: produto.quantidade, // ✅ Quantidade POSITIVA para entrada
-          p_tipo_operacao: 'devolucao_nfe',
-          p_observacao: `Devolução ${dadosDevolucao.numeroTRC} - NFe: ${dadosDevolucao.vendaOrigem?.numero || 'N/A'}`
-        });
-
-        if (estoqueError) {
-          console.error('Erro ao atualizar estoque via RPC:', estoqueError);
-          throw new Error(`Erro ao atualizar estoque do produto ${produto.descricao}: ${estoqueError.message}`);
-        }
-
-        console.log(`✅ Estoque NFe atualizado via RPC - Produto: ${produto.descricao}, Quantidade entrada: +${produto.quantidade}`);
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Erro na atualização do estoque NFe:', error);
-      throw error;
-    }
-  };
 
   // ✅ FUNÇÃO: Buscar produto por código ou EAN
   const buscarProdutoPorCodigo = async (codigo: string) => {
