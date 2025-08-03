@@ -37,6 +37,7 @@ const NfePage: React.FC = () => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
 
+
   // Estados para modal de reenvio de email
   const [showReenvioModal, setShowReenvioModal] = useState(false);
   const [nfeParaReenvio, setNfeParaReenvio] = useState<NFe | null>(null);
@@ -3168,12 +3169,37 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           chave_formatada: dadosDevolucao.chave_nfce_original.replace(/(\d{4})/g, '$1 ').trim()
         }] : [];
 
+        // ✅ CORREÇÃO: Definir natureza da operação baseada nas naturezas carregadas
+        const naturezaParaDevolucao = (() => {
+          if (naturezasOperacao.length > 0) {
+            // Procurar por variações de "Devolução de Mercadoria" (com e sem acento)
+            const naturezaEncontrada = naturezasOperacao.find(n => {
+              const descricaoLower = n.descricao.toLowerCase();
+              return descricaoLower === 'devolução de mercadoria' ||
+                     descricaoLower === 'devolucao de mercadoria' ||
+                     descricaoLower.includes('devolucao') ||
+                     descricaoLower.includes('devolução');
+            });
+
+            if (naturezaEncontrada) {
+              console.log('✅ Natureza encontrada no banco:', naturezaEncontrada.descricao);
+              return naturezaEncontrada.descricao;
+            } else {
+              console.log('❌ Nenhuma natureza de devolução encontrada');
+              console.log('🔍 Naturezas disponíveis:', naturezasOperacao.map(n => n.descricao));
+            }
+          }
+          // Fallback para valor padrão
+          console.log('⚠️ Usando valor padrão para natureza da operação');
+          return dadosDevolucao.natureza_operacao || 'Devolução de Mercadoria';
+        })();
+
         setNfeData(prev => ({
           ...prev,
           produtos: produtosFormatados,
           identificacao: {
             ...prev.identificacao,
-            natureza_operacao: dadosDevolucao.natureza_operacao || 'Devolução de Mercadoria',
+            natureza_operacao: naturezaParaDevolucao,
             finalidade: dadosDevolucao.finalidade || '4',
             // ✅ NOVO: Incluir número da venda e observação do cliente
             informacao_adicional: (() => {
@@ -3232,8 +3258,14 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         }
 
         // ✅ DEBUG: Verificar se natureza da operação foi definida
-        console.log('🔍 DEBUG - Natureza da operação definida:', dadosDevolucao.natureza_operacao || 'Devolução de Mercadoria');
+        console.log('🔍 DEBUG - Natureza da operação definida:', naturezaParaDevolucao);
         console.log('🔍 DEBUG - Naturezas disponíveis:', naturezasOperacao.map(n => n.descricao));
+
+        // ✅ NOVO: Aguardar um pouco e verificar se o dropdown foi atualizado
+        setTimeout(() => {
+          console.log('🔍 VERIFICAÇÃO FINAL - Valor que deveria estar:', naturezaParaDevolucao);
+          console.log('🔍 VERIFICAÇÃO FINAL - Verificando se foi aplicado corretamente...');
+        }, 1000);
 
 
       }
@@ -3437,6 +3469,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         }
 
         setNaturezasOperacao(data || []);
+        console.log('✅ Naturezas de operação carregadas:', data?.map(n => n.descricao));
       } catch (error) {
         console.error('Erro ao carregar naturezas de operação:', error);
       }
@@ -3445,39 +3478,41 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     loadNaturezasOperacao();
   }, []);
 
-  // ✅ NOVO: useEffect para definir natureza da operação quando naturezas são carregadas
+  // ✅ NOVO: Debug para monitorar mudanças na natureza da operação
   useEffect(() => {
-    // Se há dados de devolução no localStorage e naturezas foram carregadas
-    const dadosDevolucao = localStorage.getItem('dadosDevolucao');
-    if (dadosDevolucao && naturezasOperacao.length > 0) {
-      try {
-        const dados = JSON.parse(dadosDevolucao);
-        if (dados.tipo === 'devolucao') {
-          console.log('🔄 Definindo natureza da operação após carregamento das naturezas...');
-          console.log('🔍 Naturezas disponíveis:', naturezasOperacao.map(n => n.descricao));
+    if (nfeData.identificacao.natureza_operacao) {
+      console.log('🔍 MONITOR - Natureza da operação atual:', nfeData.identificacao.natureza_operacao);
+    }
+  }, [nfeData.identificacao.natureza_operacao]);
 
-          // Verificar se "Devolução de Mercadoria" existe nas naturezas
-          const naturezaDevolucao = naturezasOperacao.find(n =>
-            n.descricao === 'Devolução de Mercadoria' ||
-            n.descricao.toLowerCase().includes('devolução')
-          );
+  // ✅ NOVO: Forçar atualização da natureza quando naturezas são carregadas e há dados de devolução
+  useEffect(() => {
+    if (naturezasOperacao.length > 0 && nfeData.identificacao.natureza_operacao === 'Devolução de Mercadoria') {
+      console.log('🔄 Forçando atualização da natureza da operação após carregamento das naturezas...');
 
-          if (naturezaDevolucao) {
-            console.log('✅ Definindo natureza da operação:', naturezaDevolucao.descricao);
-            setNfeData(prev => ({
-              ...prev,
-              identificacao: {
-                ...prev.identificacao,
-                natureza_operacao: naturezaDevolucao.descricao
-              }
-            }));
+      // Procurar pela natureza correta no banco
+      const naturezaEncontrada = naturezasOperacao.find(n => {
+        const descricaoLower = n.descricao.toLowerCase();
+        return descricaoLower === 'devolução de mercadoria' ||
+               descricaoLower === 'devolucao de mercadoria' ||
+               descricaoLower.includes('devolucao') ||
+               descricaoLower.includes('devolução');
+      });
+
+      if (naturezaEncontrada) {
+        console.log('✅ FORÇANDO - Natureza encontrada:', naturezaEncontrada.descricao);
+        setNfeData(prev => ({
+          ...prev,
+          identificacao: {
+            ...prev.identificacao,
+            natureza_operacao: naturezaEncontrada.descricao
           }
-        }
-      } catch (error) {
-        console.error('Erro ao processar dados de devolução:', error);
+        }));
       }
     }
-  }, [naturezasOperacao]); // Executar quando naturezas são carregadas
+  }, [naturezasOperacao, nfeData.identificacao.natureza_operacao]);
+
+
 
   // Verificar status da API e SEFAZ ao carregar a página
   useEffect(() => {
