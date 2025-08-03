@@ -23,6 +23,13 @@ export const SEFAZ_ERRORS: Record<string, SefazError> = {
     solucao: 'Use um número diferente ou verifique se a numeração não foi inutilizada.',
     categoria: 'duplicidade'
   },
+  '232': {
+    codigo: '232',
+    titulo: 'IE do Destinatário Não Informada',
+    descricao: 'A Inscrição Estadual do destinatário é obrigatória e não foi informada.',
+    solucao: 'Preencha a Inscrição Estadual do destinatário ou use "ISENTO" se for pessoa física ou empresa isenta.',
+    categoria: 'documento'
+  },
   '539': {
     codigo: '539',
     titulo: 'NFe Duplicada',

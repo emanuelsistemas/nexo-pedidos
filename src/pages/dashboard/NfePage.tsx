@@ -4220,11 +4220,26 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           addLog(`   Motivo: ${erroEspecifico.detalhes_tecnicos?.motivo || 'N/A'}`);
           throw new Error(`${erroEspecifico.titulo}: ${erroEspecifico.descricao}`);
         } else {
-          // Fallback para erro HTTP genérico
-          updateStep('geracao', 'error', `Erro HTTP ${response.status}`);
-          addLog(`ERRO: Falha no processamento completo - HTTP ${response.status}`);
-          addLog(`Detalhes: ${errorText}`);
-          throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+          // ✅ CORREÇÃO: Extrair erro real da resposta para mostrar no modal
+          let erroParaExibir = `Erro HTTP ${response.status}`;
+          try {
+            const errorData = JSON.parse(errorText);
+            if (errorData.error) {
+              erroParaExibir = errorData.error;
+            } else if (errorData.message) {
+              erroParaExibir = errorData.message;
+            }
+          } catch (parseError) {
+            // Se não conseguir fazer parse, usar o texto original
+            if (errorText && errorText.trim()) {
+              erroParaExibir = errorText;
+            }
+          }
+
+          updateStep('geracao', 'error', erroParaExibir);
+          addLog(`ERRO: ${erroParaExibir}`);
+          addLog(`Detalhes HTTP: Status ${response.status}`);
+          throw new Error(erroParaExibir);
         }
       }
 
@@ -4273,12 +4288,16 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             addLog(`   Status SEFAZ: ${erroJson.detalhes_tecnicos.status}`);
             addLog(`   Motivo: ${erroJson.detalhes_tecnicos.motivo}`);
 
+            // ✅ CORREÇÃO: Usar o motivo real da SEFAZ no modal
+            updateStep('geracao', 'error', erroJson.detalhes_tecnicos.motivo || erroJson.titulo);
             throw new Error(`${erroJson.titulo}: ${erroJson.descricao}`);
           }
         } catch (parseError) {
           // Se não conseguir fazer parse, usar erro original
         }
 
+        // ✅ CORREÇÃO: Mostrar erro detalhado no modal
+        updateStep('geracao', 'error', erroDetalhado);
         addLog(`Detalhes: ${erroDetalhado}`);
         throw new Error(erroDetalhado);
       }
@@ -4489,10 +4508,23 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       addLog('❌ ERRO CRÍTICO NO PROCESSO');
       addLog(`Detalhes: ${error.message || 'Erro desconhecido'}`);
 
-      // Determinar qual etapa falhou e marcar como erro
+      // ✅ CORREÇÃO: Determinar qual etapa falhou e mostrar erro real
       const currentStep = progressSteps.find(step => step.status === 'loading');
       if (currentStep) {
-        updateStep(currentStep.id, 'error', 'Falha na execução');
+        // Extrair mensagem de erro mais específica
+        let mensagemErro = 'Falha na execução';
+        const errorMessage = error.message || '';
+
+        // Se o erro contém informações específicas da SEFAZ, usar elas
+        if (errorMessage.includes('Status SEFAZ:') || errorMessage.includes('Rejeição:')) {
+          mensagemErro = errorMessage;
+        } else if (errorMessage.includes('IE do destinatário')) {
+          mensagemErro = 'IE do destinatário não informada';
+        } else if (errorMessage.length > 0 && errorMessage !== 'Erro desconhecido') {
+          mensagemErro = errorMessage;
+        }
+
+        updateStep(currentStep.id, 'error', mensagemErro);
       }
 
       // Buscar logs da API automaticamente quando houver erro

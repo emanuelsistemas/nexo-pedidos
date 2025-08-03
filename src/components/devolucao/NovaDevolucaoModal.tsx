@@ -2053,69 +2053,8 @@ const FinalizarDevolucaoModal: React.FC<FinalizarDevolucaoModalProps> = ({
               </div>
               </div>
 
-              {/* NFC-e de Devolução - DIREITA */}
-              {vendaOrigemInfo.modelo_documento === 65 && (
-                <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-green-400 mb-3">
-                    📄 NFC-e de Devolução
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 bg-blue-600/20 text-blue-400 text-sm rounded border border-blue-600/30">
-                        Série: {vendaOrigemInfo.serie_documento || 'N/A'}
-                      </span>
-
-                      {/* Campo de número editável */}
-                      <div className="flex items-center gap-2">
-                        {editandoNumeroNFCe ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              value={numeroNFCeEditado}
-                              onChange={(e) => setNumeroNFCeEditado(e.target.value)}
-                              className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-                              placeholder="Número"
-                              min="1"
-                            />
-                            <button
-                              onClick={salvarNumeroEditado}
-                              className="p-1 text-green-400 hover:text-green-300 transition-colors"
-                              title="Salvar número"
-                            >
-                              <Check size={16} />
-                            </button>
-                            <button
-                              onClick={cancelarEdicaoNumero}
-                              className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                              title="Cancelar edição"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 bg-orange-600/20 text-orange-400 text-sm rounded border border-orange-600/30">
-                              Próximo Número: #{proximoNumeroNFCe || 'Carregando...'}
-                            </span>
-                            {proximoNumeroNFCe && (
-                              <button
-                                onClick={iniciarEdicaoNumero}
-                                className="p-1 text-gray-400 hover:text-orange-400 transition-colors"
-                                title="Editar número"
-                              >
-                                <Edit2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-green-400 text-sm">
-                      Nova NFC-e será gerada automaticamente
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* NFC-e de Devolução - DIREITA - OCULTO */}
+              {/* Seção removida conforme solicitado */}
             </div>
           )}
 
