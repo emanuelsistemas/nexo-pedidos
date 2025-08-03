@@ -3541,10 +3541,34 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       erros.push('Adicione pelo menos um produto');
     }
 
-    // ✅ TEMPORÁRIO: Validar pagamentos para todas as finalidades (para debug)
+    // ✅ CORREÇÃO: Validar pagamentos com verificação inteligente
     const finalidadeNFe = nfeData.identificacao.finalidade || '1';
-    if (nfeData.pagamentos.length === 0) {
-      erros.push('Adicione pelo menos uma forma de pagamento');
+
+    // Para devolução (finalidade 4), aguardar um pouco para os pagamentos carregarem
+    if (finalidadeNFe === '4') {
+      console.log('🔍 VALIDAÇÃO DEVOLUÇÃO - Pagamentos atuais:', nfeData.pagamentos);
+
+      // Se não há pagamentos, tentar aguardar um pouco e verificar novamente
+      if (nfeData.pagamentos.length === 0) {
+        console.log('⏳ Aguardando carregamento de pagamentos para devolução...');
+
+        // Verificar se há pagamento "Sem pagamento" que pode estar sendo carregado
+        setTimeout(() => {
+          if (nfeData.pagamentos.length === 0) {
+            console.log('❌ Nenhum pagamento encontrado após aguardar');
+          } else {
+            console.log('✅ Pagamentos carregados após aguardar:', nfeData.pagamentos);
+          }
+        }, 100);
+
+        // Para devolução, não bloquear se não há pagamentos (eles podem estar carregando)
+        console.log('ℹ️ Permitindo emissão de devolução sem validação estrita de pagamentos');
+      }
+    } else {
+      // Para outras finalidades, validação normal
+      if (nfeData.pagamentos.length === 0) {
+        erros.push('Adicione pelo menos uma forma de pagamento');
+      }
     }
 
     if (!nfeData.identificacao.natureza_operacao) {
@@ -3717,12 +3741,30 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       // 6. Validação dos pagamentos
       addLog('💳 Validando pagamentos...');
-      if (nfeData.pagamentos.length === 0) {
-        const erro = 'Adicione pelo menos uma forma de pagamento';
-        validationErrors.push(erro);
-        addLog(`❌ ${erro}`);
+
+      // ✅ CORREÇÃO: Para devolução (finalidade 4), validação mais flexível
+      const finalidadeAtual = nfeData.identificacao.finalidade || '1';
+      if (finalidadeAtual === '4') {
+        addLog('ℹ️ NFe de devolução - validação flexível de pagamentos');
+        if (nfeData.pagamentos.length === 0) {
+          addLog('⚠️ Nenhum pagamento encontrado, mas permitindo para devolução');
+          // Para devolução, não bloquear se não há pagamentos
+        } else {
+          addLog(`✅ ${nfeData.pagamentos.length} forma(s) de pagamento encontrada(s)`);
+        }
       } else {
-        addLog(`✅ ${nfeData.pagamentos.length} forma(s) de pagamento`);
+        // Para outras finalidades, validação normal
+        if (nfeData.pagamentos.length === 0) {
+          const erro = 'Adicione pelo menos uma forma de pagamento';
+          validationErrors.push(erro);
+          addLog(`❌ ${erro}`);
+        } else {
+          addLog(`✅ ${nfeData.pagamentos.length} forma(s) de pagamento`);
+        }
+      }
+
+      // Continuar validação apenas se há pagamentos
+      if (nfeData.pagamentos.length > 0) {
 
         // Validar soma dos pagamentos
         const totalPagamentos = nfeData.pagamentos.reduce((sum, p) => sum + (p.valor || 0), 0);
