@@ -448,6 +448,12 @@ const PDVPage: React.FC = () => {
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
+
+  // ✅ NOVO: Estados para controle de caixa
+  const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
+  const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
+  const [caixaAberto, setCaixaAberto] = useState(false);
+  const [loadingCaixa, setLoadingCaixa] = useState(true);
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1378,6 +1384,155 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função para verificar status do caixa
+  const verificarStatusCaixa = async () => {
+    try {
+      setLoadingCaixa(true);
+
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Verificar se há caixa aberto para este usuário hoje
+      const hoje = new Date().toISOString().split('T')[0];
+
+      const { data: caixaData, error } = await supabase
+        .from('caixa_controle')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', authData.user.id)
+        .eq('status_caixa', true)
+        .gte('data_abertura', `${hoje}T00:00:00`)
+        .lte('data_abertura', `${hoje}T23:59:59`)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao verificar status do caixa:', error);
+        return;
+      }
+
+      // Se encontrou caixa aberto, definir como aberto
+      if (caixaData) {
+        setCaixaAberto(true);
+      } else {
+        // Se não encontrou caixa aberto e controle de caixa está habilitado, mostrar modal
+        if (pdvConfig?.controla_caixa) {
+          setCaixaAberto(false);
+          setShowAberturaCaixaModal(true);
+        } else {
+          setCaixaAberto(true); // Se não controla caixa, permitir operação
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status do caixa:', error);
+    } finally {
+      setLoadingCaixa(false);
+    }
+  };
+
+  // ✅ NOVO: Função para abrir o caixa
+  const abrirCaixa = async () => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Converter valor de abertura para número
+      const valorNumerico = desformatarValorMonetario(valorAberturaCaixa);
+
+      // Criar registro de abertura de caixa
+      const { data: caixaData, error } = await supabase
+        .from('caixa_controle')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          usuario_id: authData.user.id,
+          data_abertura: new Date().toISOString(),
+          status_caixa: true,
+          status: 'aberto',
+          suprimento: valorNumerico, // Valor inicial como suprimento
+          observacao_abertura: `Abertura de caixa com valor inicial de ${formatarPreco(valorNumerico)}`
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao abrir caixa:', error);
+        toast.error('Erro ao abrir caixa');
+        return;
+      }
+
+      // Registrar o valor inicial como tipo de pagamento (se houver valor)
+      if (valorNumerico > 0) {
+        await supabase
+          .from('tipo_pagamentos')
+          .insert({
+            caixa_controle_id: caixaData.id,
+            empresa_id: usuarioData.empresa_id,
+            tipo_pagamento: 'dinheiro',
+            valor: valorNumerico,
+            descricao: 'Valor inicial de abertura de caixa'
+          });
+      }
+
+      // Atualizar estados
+      setCaixaAberto(true);
+      setShowAberturaCaixaModal(false);
+      setValorAberturaCaixa('');
+
+      toast.success('Caixa aberto com sucesso!');
+    } catch (error) {
+      console.error('Erro ao abrir caixa:', error);
+      toast.error('Erro ao abrir caixa');
+    }
+  };
+
+  // ✅ NOVO: Função para formatar valor monetário
+  const formatarValorMonetario = (valor: string): string => {
+    // Remove todos os caracteres não numéricos
+    let valorLimpo = valor.replace(/\D/g, '');
+
+    // Se não houver valor, retorna vazio
+    if (!valorLimpo) return '';
+
+    // Converte para número (centavos)
+    const valorNumerico = parseInt(valorLimpo) / 100;
+
+    // Formata apenas o número, sem símbolo da moeda
+    return valorNumerico.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  // ✅ NOVO: Função para desformatar valor monetário
+  const desformatarValorMonetario = (valorFormatado: string): number => {
+    // Remove todos os caracteres não numéricos, exceto vírgula e ponto
+    const valorLimpo = valorFormatado.replace(/[^\d,\.]/g, '');
+
+    // Substitui vírgula por ponto para conversão correta
+    const valorComPonto = valorLimpo.replace(',', '.');
+
+    // Converte para número
+    const valorNumerico = parseFloat(valorComPonto);
+
+    // Retorna 0 se não for um número válido
+    return isNaN(valorNumerico) ? 0 : valorNumerico;
+  };
+
   // Função para carregar descontos do cliente
   const carregarDescontosCliente = async (clienteId: string) => {
     try {
@@ -1734,6 +1889,11 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Detectar e corrigir vendas órfãs após carregar dados
       await detectarECorrigirVendasOrfas();
+
+      // ✅ NOVO: Verificar status do caixa após carregar todas as configurações
+      setTimeout(() => {
+        verificarStatusCaixa();
+      }, 1500);
     };
 
     initializeData();
@@ -16953,6 +17113,39 @@ const PDVPage: React.FC = () => {
     );
   }
 
+  // ✅ NOVO: Verificar se caixa está carregando
+  if (loadingCaixa) {
+    return (
+      <LoadingScreen
+        message="Verificando status do caixa..."
+        subMessage="Aguarde enquanto verificamos se o caixa está aberto"
+      />
+    );
+  }
+
+  // ✅ NOVO: Bloquear PDV se controle de caixa estiver habilitado e caixa não estiver aberto
+  if (pdvConfig?.controla_caixa && !caixaAberto) {
+    return (
+      <div className="bg-background-dark h-screen flex items-center justify-center">
+        <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4 text-center">
+          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <X size={32} className="text-red-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">Caixa Fechado</h2>
+          <p className="text-gray-400 mb-6">
+            O controle de caixa está habilitado. É necessário abrir o caixa antes de operar o PDV.
+          </p>
+          <button
+            onClick={() => setShowAberturaCaixaModal(true)}
+            className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+          >
+            Abrir Caixa
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-background-dark overflow-hidden flex" style={{ height: '100vh' }}>
       {/* Sidebar do menu - aparece quando showMenuPDV é true */}
@@ -29609,6 +29802,110 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
                 >
                   Remover Trocas
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Abertura de Caixa */}
+      <AnimatePresence>
+        {showAberturaCaixaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-xl border border-green-500/30 p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 bg-green-500/20 rounded-lg">
+                  <DollarSign className="w-8 h-8 text-green-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">
+                    Abertura de Caixa
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Registre a abertura do caixa para iniciar as operações
+                  </p>
+                </div>
+              </div>
+
+              {/* Informações do usuário e data */}
+              <div className="space-y-4 mb-6">
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <User size={16} className="text-blue-400" />
+                      <div>
+                        <span className="text-sm text-gray-400">Operador:</span>
+                        <span className="text-white font-medium ml-2">
+                          {userData?.nome || 'Usuário'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Clock size={16} className="text-blue-400" />
+                      <div>
+                        <span className="text-sm text-gray-400">Data/Hora:</span>
+                        <span className="text-white font-medium ml-2">
+                          {formatDateTime(currentDateTime)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Campo de valor de abertura */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Valor de Abertura
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-medium">
+                      R$
+                    </span>
+                    <input
+                      type="text"
+                      value={valorAberturaCaixa}
+                      onChange={(e) => setValorAberturaCaixa(formatarValorMonetario(e.target.value))}
+                      placeholder="0,00"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-12 pr-4 py-3 text-white text-lg font-medium focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
+                      autoFocus
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Informe o valor inicial em dinheiro no caixa (opcional)
+                  </p>
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowAberturaCaixaModal(false);
+                    setValorAberturaCaixa('');
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={abrirCaixa}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Abrir Caixa
                 </button>
               </div>
             </motion.div>
