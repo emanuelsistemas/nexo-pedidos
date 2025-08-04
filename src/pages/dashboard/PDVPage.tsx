@@ -454,6 +454,9 @@ const PDVPage: React.FC = () => {
   const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
   const [caixaAberto, setCaixaAberto] = useState(false);
   const [loadingCaixa, setLoadingCaixa] = useState(false); // Iniciar como false
+
+  // ✅ CONTADOR PARA DEBUG - para verificar re-renderização
+  const [contadorCliques, setContadorCliques] = useState(0);
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -17177,28 +17180,202 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Bloquear PDV se controle de caixa estiver habilitado e caixa não estiver aberto
   if (pdvConfig?.controla_caixa && !caixaAberto) {
     return (
-      <div className="bg-background-dark h-screen flex items-center justify-center">
-        <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4 text-center">
-          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <X size={32} className="text-red-400" />
+      <>
+        {/* Modal de Bloqueio */}
+        <div className="bg-background-dark h-screen flex items-center justify-center">
+          <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4 text-center">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <X size={32} className="text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Caixa Fechado</h2>
+            <p className="text-gray-400 mb-4">
+              O controle de caixa está habilitado. É necessário abrir o caixa antes de operar o PDV.
+            </p>
+
+            {/* ✅ DEBUG: Informações de estado */}
+            <div className="bg-gray-700 rounded-lg p-3 mb-4 text-left text-sm">
+              <div className="text-yellow-400 font-bold mb-2">🔍 DEBUG INFO:</div>
+              <div className="text-white">Cliques: <span className="text-green-400 font-bold">{contadorCliques}</span></div>
+              <div className="text-white">Modal Abertura: <span className={showAberturaCaixaModal ? 'text-green-400' : 'text-red-400'}>{showAberturaCaixaModal ? 'TRUE' : 'FALSE'}</span></div>
+              <div className="text-white">Caixa Aberto: <span className={caixaAberto ? 'text-green-400' : 'text-red-400'}>{caixaAberto ? 'TRUE' : 'FALSE'}</span></div>
+              <div className="text-white">Loading: <span className={loadingCaixa ? 'text-yellow-400' : 'text-gray-400'}>{loadingCaixa ? 'TRUE' : 'FALSE'}</span></div>
+            </div>
+
+            <button
+              onClick={() => {
+                console.log('🔘 Botão "Abrir Caixa" clicado');
+                console.log('📊 Estado antes:', { showAberturaCaixaModal, contadorCliques });
+
+                // Incrementar contador para verificar re-renderização
+                setContadorCliques(prev => prev + 1);
+                setShowAberturaCaixaModal(true);
+
+                console.log('📊 setShowAberturaCaixaModal(true) executado');
+                console.log('📊 Contador incrementado para:', contadorCliques + 1);
+              }}
+              className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+            >
+              Abrir Caixa (#{contadorCliques})
+            </button>
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Caixa Fechado</h2>
-          <p className="text-gray-400 mb-6">
-            O controle de caixa está habilitado. É necessário abrir o caixa antes de operar o PDV.
-          </p>
-          <button
-            onClick={() => {
-              console.log('🔘 Botão "Abrir Caixa" clicado');
-              console.log('📊 Estado antes:', { showAberturaCaixaModal });
-              setShowAberturaCaixaModal(true);
-              console.log('📊 setShowAberturaCaixaModal(true) executado');
-            }}
-            className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-          >
-            Abrir Caixa
-          </button>
         </div>
-      </div>
+
+        {/* ✅ MODAL DE ABERTURA - AGORA DENTRO DO RETURN */}
+        {showAberturaCaixaModal && (
+          <div
+            style={{
+              position: 'fixed',
+              top: '0px',
+              left: '0px',
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
+              zIndex: 999999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px'
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: '#1f2937',
+                borderRadius: '12px',
+                border: '2px solid #10b981',
+                padding: '24px',
+                maxWidth: '400px',
+                width: '100%',
+                color: 'white'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+                <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  💰 Abertura de Caixa
+                </h3>
+                <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+                  Registre a abertura do caixa para iniciar as operações
+                </p>
+              </div>
+
+              {/* Informações do usuário */}
+              <div style={{
+                backgroundColor: '#374151',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px',
+                border: '1px solid #4b5563'
+              }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ fontSize: '14px', color: '#9ca3af' }}>👤 Operador: </span>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {userData?.nome || 'Usuário'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '14px', color: '#9ca3af' }}>🕒 Data/Hora: </span>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {formatDateTime(currentDateTime)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Campo de valor */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  color: '#9ca3af',
+                  marginBottom: '8px',
+                  fontWeight: 'bold'
+                }}>
+                  Valor de Abertura
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#9ca3af',
+                    fontWeight: 'bold'
+                  }}>
+                    R$
+                  </span>
+                  <input
+                    type="text"
+                    value={valorAberturaCaixa}
+                    onChange={(e) => setValorAberturaCaixa(formatarValorMonetario(e.target.value))}
+                    placeholder="0,00"
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#374151',
+                      border: '1px solid #4b5563',
+                      borderRadius: '8px',
+                      paddingLeft: '40px',
+                      paddingRight: '16px',
+                      paddingTop: '12px',
+                      paddingBottom: '12px',
+                      color: 'white',
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      outline: 'none'
+                    }}
+                    autoFocus
+                  />
+                </div>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Informe o valor inicial em dinheiro no caixa (opcional)
+                </p>
+              </div>
+
+              {/* Botões */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => {
+                    console.log('🚫 Botão Cancelar clicado');
+                    setShowAberturaCaixaModal(false);
+                    setValorAberturaCaixa('');
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#4b5563',
+                    color: 'white',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('✅ Botão Abrir Caixa clicado');
+                    abrirCaixa();
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  Abrir Caixa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -29865,7 +30042,7 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* ✅ NOVO: Modal de Abertura de Caixa */}
+      {/* ✅ MODAL DE ABERTURA DE CAIXA - VERSÃO SIMPLES PARA TESTE */}
       {console.log('🔍 Renderizando componente, showAberturaCaixaModal:', showAberturaCaixaModal)}
 
       {/* TESTE: Elemento simples SEM condição para verificar se está renderizando */}
@@ -29920,119 +30097,161 @@ const PDVPage: React.FC = () => {
         </div>
       )}
 
-      <AnimatePresence>
-        {showAberturaCaixaModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4"
+      {/* MODAL ULTRA SIMPLES - TESTE MÁXIMO */}
+      {showAberturaCaixaModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '0px',
+            left: '0px',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
             style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 99999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              backgroundColor: '#1f2937',
+              borderRadius: '12px',
+              border: '2px solid #10b981',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              color: 'white'
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-gray-900 rounded-xl border border-green-500/30 p-6 max-w-md w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 bg-green-500/20 rounded-lg">
-                  <DollarSign className="w-8 h-8 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-white">
-                    Abertura de Caixa
-                  </h3>
-                  <p className="text-sm text-gray-400">
-                    Registre a abertura do caixa para iniciar as operações
-                  </p>
-                </div>
+            {/* Header */}
+            <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+              <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                💰 Abertura de Caixa
+              </h3>
+              <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+                Registre a abertura do caixa para iniciar as operações
+              </p>
+            </div>
+
+            {/* Informações do usuário */}
+            <div style={{
+              backgroundColor: '#374151',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '20px',
+              border: '1px solid #4b5563'
+            }}>
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{ fontSize: '14px', color: '#9ca3af' }}>👤 Operador: </span>
+                <span style={{ fontWeight: 'bold' }}>
+                  {userData?.nome || 'Usuário'}
+                </span>
               </div>
-
-              {/* Informações do usuário e data */}
-              <div className="space-y-4 mb-6">
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <User size={16} className="text-blue-400" />
-                      <div>
-                        <span className="text-sm text-gray-400">Operador:</span>
-                        <span className="text-white font-medium ml-2">
-                          {userData?.nome || 'Usuário'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Clock size={16} className="text-blue-400" />
-                      <div>
-                        <span className="text-sm text-gray-400">Data/Hora:</span>
-                        <span className="text-white font-medium ml-2">
-                          {formatDateTime(currentDateTime)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Campo de valor de abertura */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Valor de Abertura
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-medium">
-                      R$
-                    </span>
-                    <input
-                      type="text"
-                      value={valorAberturaCaixa}
-                      onChange={(e) => setValorAberturaCaixa(formatarValorMonetario(e.target.value))}
-                      placeholder="0,00"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-12 pr-4 py-3 text-white text-lg font-medium focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
-                      autoFocus
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Informe o valor inicial em dinheiro no caixa (opcional)
-                  </p>
-                </div>
+              <div>
+                <span style={{ fontSize: '14px', color: '#9ca3af' }}>🕒 Data/Hora: </span>
+                <span style={{ fontWeight: 'bold' }}>
+                  {formatDateTime(currentDateTime)}
+                </span>
               </div>
+            </div>
 
-              {/* Botões */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowAberturaCaixaModal(false);
-                    setValorAberturaCaixa('');
+            {/* Campo de valor */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                color: '#9ca3af',
+                marginBottom: '8px',
+                fontWeight: 'bold'
+              }}>
+                Valor de Abertura
+              </label>
+              <div style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#9ca3af',
+                  fontWeight: 'bold'
+                }}>
+                  R$
+                </span>
+                <input
+                  type="text"
+                  value={valorAberturaCaixa}
+                  onChange={(e) => setValorAberturaCaixa(formatarValorMonetario(e.target.value))}
+                  placeholder="0,00"
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#374151',
+                    border: '1px solid #4b5563',
+                    borderRadius: '8px',
+                    paddingLeft: '40px',
+                    paddingRight: '16px',
+                    paddingTop: '12px',
+                    paddingBottom: '12px',
+                    color: 'white',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    outline: 'none'
                   }}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={abrirCaixa}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
-                >
-                  Abrir Caixa
-                </button>
+                  autoFocus
+                />
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                Informe o valor inicial em dinheiro no caixa (opcional)
+              </p>
+            </div>
+
+            {/* Botões */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  console.log('🚫 Botão Cancelar clicado');
+                  setShowAberturaCaixaModal(false);
+                  setValorAberturaCaixa('');
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#4b5563',
+                  color: 'white',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  console.log('✅ Botão Abrir Caixa clicado');
+                  abrirCaixa();
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                Abrir Caixa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
