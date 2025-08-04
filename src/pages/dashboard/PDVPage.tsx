@@ -1575,52 +1575,33 @@ const PDVPage: React.FC = () => {
       console.log('✅ Dados do caixa carregados:', caixaComUsuario);
       setDadosCaixa(caixaComUsuario);
 
-      // Buscar formas de pagamento da empresa (usando tabela alternativa)
+      // Buscar formas de pagamento da empresa
       const { data: formasData, error: formasError } = await supabase
-        .from('formas_pagamento_tipos')
-        .select('*')
-        .eq('empresa_id', usuarioData.empresa_id);
+        .from('formas_pagamento_empresa')
+        .select(`
+          *,
+          forma_pagamento_opcoes:forma_pagamento_opcao_id (
+            id,
+            nome,
+            tipo
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true);
 
       if (formasError) {
         console.error('❌ Erro ao buscar formas de pagamento:', formasError);
-        console.log('🔄 Tentando criar formas de pagamento padrão...');
-
-        // Se não encontrar, criar formas padrão
-        const formasPadrao = [
-          { nome: 'Dinheiro', tipo: 'dinheiro' },
-          { nome: 'PIX', tipo: 'pix' },
-          { nome: 'Cartão de Crédito', tipo: 'cartao_credito' },
-          { nome: 'Cartão de Débito', tipo: 'cartao_debito' }
-        ];
-
-        setFormasPagamentoCaixa(formasPadrao.map((forma, index) => ({
-          id: `default_${index}`,
-          nome: forma.nome,
-          tipo: forma.tipo,
-          forma_pagamento_opcoes: { nome: forma.nome, tipo: forma.tipo }
-        })));
-
-        console.log('✅ Formas de pagamento padrão carregadas');
+        toast.error('Erro ao carregar formas de pagamento.');
         return;
       }
 
-      // Transformar dados para o formato esperado
-      const formasFormatadas = formasData?.map(forma => ({
-        ...forma,
-        forma_pagamento_opcao_id: forma.id,
-        forma_pagamento_opcoes: {
-          nome: forma.nome,
-          tipo: forma.tipo
-        }
-      })) || [];
-
-      console.log('✅ Formas de pagamento carregadas:', formasFormatadas);
-      setFormasPagamentoCaixa(formasFormatadas);
+      console.log('✅ Formas de pagamento carregadas:', formasData);
+      setFormasPagamentoCaixa(formasData || []);
 
       // Inicializar valores do caixa (todos zerados)
       const valoresIniciais: {[key: string]: string} = {};
-      formasFormatadas.forEach(forma => {
-        valoresIniciais[forma.forma_pagamento_opcao_id || forma.id] = '0,00';
+      formasData?.forEach(forma => {
+        valoresIniciais[forma.forma_pagamento_opcao_id] = '0,00';
       });
       setValoresCaixa(valoresIniciais);
 
@@ -2518,7 +2499,10 @@ const PDVPage: React.FC = () => {
 
         // Carregar dados do caixa e formas de pagamento
         await carregarDadosCaixa();
+
+        console.log('🎭 Definindo showCaixaModal = true');
         setShowCaixaModal(true);
+        console.log('🎭 showCaixaModal definido como true');
       }
     }
   ];
@@ -9460,7 +9444,15 @@ const PDVPage: React.FC = () => {
     });
   };
 
-  const formatDateTime = (date: Date) => {
+  const formatDateTime = (dateInput: Date | string) => {
+    // Converter string para Date se necessário
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+
+    // Verificar se é uma data válida
+    if (isNaN(date.getTime())) {
+      return 'Data inválida';
+    }
+
     const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
     const diaSemana = diasSemana[date.getDay()];
 
@@ -17495,213 +17487,7 @@ const PDVPage: React.FC = () => {
           </div>
         )}
 
-        {/* ✅ MODAL DE CONTROLE DE CAIXA */}
-        {showCaixaModal && (
-          <div
-            style={{
-              position: 'fixed',
-              top: '0px',
-              left: '0px',
-              width: '100vw',
-              height: '100vh',
-              backgroundColor: 'rgba(0, 0, 0, 0.9)',
-              zIndex: 999999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px'
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: '#1f2937',
-                borderRadius: '12px',
-                border: '2px solid #10b981',
-                padding: '24px',
-                maxWidth: '600px',
-                width: '100%',
-                color: 'white',
-                maxHeight: '90vh',
-                overflowY: 'auto'
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-                <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
-                  💰 Controle de Caixa
-                </h3>
-                <p style={{ fontSize: '14px', color: '#9ca3af' }}>
-                  Gerencie o status e valores do caixa
-                </p>
-              </div>
 
-              {/* Informações do caixa */}
-              {dadosCaixa && (
-                <div style={{
-                  backgroundColor: '#374151',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  marginBottom: '20px',
-                  border: '1px solid #4b5563'
-                }}>
-                  <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: '#10b981' }}>
-                    📊 Status da Abertura
-                  </h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>👤 Operador: </span>
-                      <span style={{ fontWeight: 'bold' }}>
-                        {dadosCaixa.usuario_nome || 'N/A'}
-                      </span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>🕒 Abertura: </span>
-                      <span style={{ fontWeight: 'bold' }}>
-                        {formatDateTime(dadosCaixa.data_abertura)}
-                      </span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>💵 Valor Inicial: </span>
-                      <span style={{ fontWeight: 'bold', color: '#10b981' }}>
-                        R$ {formatarValorMonetario(dadosCaixa.valor_abertura?.toString() || '0')}
-                      </span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>📈 Status: </span>
-                      <span style={{ fontWeight: 'bold', color: '#10b981' }}>
-                        ABERTO
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Formas de pagamento */}
-              <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#10b981' }}>
-                  💳 Formas de Pagamento
-                </h4>
-
-                {formasPagamentoCaixa.length > 0 ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    {formasPagamentoCaixa.map((forma) => {
-                      const formaId = forma.forma_pagamento_opcao_id || forma.id;
-                      return (
-                        <div
-                          key={formaId}
-                          style={{
-                            backgroundColor: '#374151',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            border: '1px solid #4b5563'
-                          }}
-                        >
-                          <div style={{ marginBottom: '8px' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
-                              {forma.forma_pagamento_opcoes?.nome || forma.nome || 'N/A'}
-                            </span>
-                          </div>
-
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
-                              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
-                                R$ 0,00
-                              </span>
-                            </div>
-
-                            <div style={{ marginTop: '8px' }}>
-                              <label style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px', display: 'block' }}>
-                                Informar Valor:
-                              </label>
-                              <input
-                                type="text"
-                                value={valoresCaixa[formaId] || '0,00'}
-                                onChange={(e) => {
-                                  const novoValor = formatarValorMonetario(e.target.value);
-                                  setValoresCaixa(prev => ({
-                                    ...prev,
-                                    [formaId]: novoValor
-                                  }));
-                                }}
-                                placeholder="0,00"
-                                style={{
-                                  width: '100%',
-                                  backgroundColor: '#1f2937',
-                                  border: '1px solid #4b5563',
-                                  borderRadius: '4px',
-                                  padding: '6px 8px',
-                                  color: 'white',
-                                  fontSize: '12px',
-                                  outline: 'none'
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div style={{
-                    textAlign: 'center',
-                    padding: '20px',
-                    color: '#9ca3af',
-                    backgroundColor: '#374151',
-                    borderRadius: '8px'
-                  }}>
-                    Nenhuma forma de pagamento configurada
-                  </div>
-                )}
-              </div>
-
-              {/* Botões */}
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  onClick={() => {
-                    setShowCaixaModal(false);
-                    setDadosCaixa(null);
-                    setFormasPagamentoCaixa([]);
-                    setValoresCaixa({});
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#4b5563',
-                    color: 'white',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontSize: '16px'
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    // TODO: Implementar fechamento de caixa
-                    toast.info('Funcionalidade de fechamento será implementada em breve');
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#dc2626',
-                    color: 'white',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontSize: '16px'
-                  }}
-                >
-                  Fechar Caixa
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </>
     );
   }
@@ -30519,6 +30305,233 @@ const PDVPage: React.FC = () => {
                 }}
               >
                 Abrir Caixa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MODAL DE CONTROLE DE CAIXA - MOVIDO PARA FORA DA ESTRUTURA CONDICIONAL */}
+      {console.log('🎭 Renderizando modal de caixa, showCaixaModal:', showCaixaModal)}
+
+      {/* TESTE: Elemento simples para verificar renderização */}
+      {showCaixaModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '100px',
+            right: '100px',
+            background: 'orange',
+            color: 'white',
+            padding: '20px',
+            zIndex: 999999,
+            fontSize: '20px',
+            fontWeight: 'bold',
+            borderRadius: '8px'
+          }}
+        >
+          MODAL CAIXA ATIVO!
+        </div>
+      )}
+
+      {showCaixaModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '0px',
+            left: '0px',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#1f2937',
+              borderRadius: '12px',
+              border: '2px solid #10b981',
+              padding: '24px',
+              maxWidth: '600px',
+              width: '100%',
+              color: 'white',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+              <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                💰 Controle de Caixa
+              </h3>
+              <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+                Gerencie o status e valores do caixa
+              </p>
+            </div>
+
+            {/* Informações do caixa */}
+            {dadosCaixa && (
+              <div style={{
+                backgroundColor: '#374151',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px',
+                border: '1px solid #4b5563'
+              }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: '#10b981' }}>
+                  📊 Status da Abertura
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>👤 Operador: </span>
+                    <span style={{ fontWeight: 'bold' }}>
+                      {dadosCaixa.usuario_nome || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>🕒 Abertura: </span>
+                    <span style={{ fontWeight: 'bold' }}>
+                      {formatDateTime(dadosCaixa.data_abertura)}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>💵 Valor Inicial: </span>
+                    <span style={{ fontWeight: 'bold', color: '#10b981' }}>
+                      R$ {formatarValorMonetario(dadosCaixa.valor_abertura?.toString() || '0')}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>📈 Status: </span>
+                    <span style={{ fontWeight: 'bold', color: '#10b981' }}>
+                      ABERTO
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Formas de pagamento */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#10b981' }}>
+                💳 Formas de Pagamento
+              </h4>
+
+              {formasPagamentoCaixa.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {formasPagamentoCaixa.map((forma) => (
+                    <div
+                      key={forma.forma_pagamento_opcao_id}
+                      style={{
+                        backgroundColor: '#374151',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        border: '1px solid #4b5563'
+                      }}
+                    >
+                      <div style={{ marginBottom: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                          {forma.forma_pagamento_opcoes?.nome || 'N/A'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
+                            R$ 0,00
+                          </span>
+                        </div>
+
+                        <div style={{ marginTop: '8px' }}>
+                          <label style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px', display: 'block' }}>
+                            Informar Valor:
+                          </label>
+                          <input
+                            type="text"
+                            value={valoresCaixa[forma.forma_pagamento_opcao_id] || '0,00'}
+                            onChange={(e) => {
+                              const novoValor = formatarValorMonetario(e.target.value);
+                              setValoresCaixa(prev => ({
+                                ...prev,
+                                [forma.forma_pagamento_opcao_id]: novoValor
+                              }));
+                            }}
+                            placeholder="0,00"
+                            style={{
+                              width: '100%',
+                              backgroundColor: '#1f2937',
+                              border: '1px solid #4b5563',
+                              borderRadius: '4px',
+                              padding: '6px 8px',
+                              color: 'white',
+                              fontSize: '12px',
+                              outline: 'none'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '20px',
+                  color: '#9ca3af',
+                  backgroundColor: '#374151',
+                  borderRadius: '8px'
+                }}>
+                  Nenhuma forma de pagamento configurada
+                </div>
+              )}
+            </div>
+
+            {/* Botões */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setShowCaixaModal(false);
+                  setDadosCaixa(null);
+                  setFormasPagamentoCaixa([]);
+                  setValoresCaixa({});
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#4b5563',
+                  color: 'white',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  // TODO: Implementar fechamento de caixa
+                  toast.info('Funcionalidade de fechamento será implementada em breve');
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+              >
+                Fechar Caixa
               </button>
             </div>
           </div>

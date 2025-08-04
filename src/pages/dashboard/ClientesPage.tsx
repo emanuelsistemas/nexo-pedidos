@@ -570,7 +570,7 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
       tipo_documento: tipo,
       documento: '', // Limpar documento ao mudar tipo
       indicador_ie: indicadorIE,
-      inscricao_estadual: tipo === 'CPF' ? '' : formData.inscricao_estadual // Limpar IE se for CPF
+      inscricao_estadual: tipo === 'CPF' ? '' : (indicadorIE === 2 ? 'ISENTO' : '') // Limpar IE se for CPF, ou preencher ISENTO se for isento
     });
   };
 
@@ -2466,7 +2466,17 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
                     </label>
                     <select
                       value={formData.indicador_ie}
-                      onChange={(e) => setFormData({ ...formData, indicador_ie: parseInt(e.target.value) })}
+                      onChange={(e) => {
+                        const novoIndicador = parseInt(e.target.value);
+                        setFormData({
+                          ...formData,
+                          indicador_ie: novoIndicador,
+                          // Preencher automaticamente IE baseado no indicador
+                          inscricao_estadual: novoIndicador === 2 ? 'ISENTO' :
+                                            novoIndicador === 9 ? '' :
+                                            formData.inscricao_estadual
+                        });
+                      }}
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                     >
                       <option value={1}>1 - Contribuinte ICMS</option>
@@ -2478,28 +2488,43 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
                     </p>
                   </div>
 
-                  {/* Inscrição Estadual (apenas se for contribuinte) */}
-                  {formData.indicador_ie === 1 && (
+                  {/* Inscrição Estadual */}
+                  {(formData.indicador_ie === 1 || formData.indicador_ie === 2) && (
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-1">
-                        Inscrição Estadual <span className="text-red-500">*</span>
+                        Inscrição Estadual {formData.indicador_ie === 1 && <span className="text-red-500">*</span>}
                       </label>
                       <input
                         type="text"
                         value={formData.inscricao_estadual}
                         onChange={(e) => {
-                          // Formatar IE: apenas números, máximo 12 dígitos
-                          const numbersOnly = e.target.value.replace(/\D/g, '').slice(0, 12);
-                          setFormData({ ...formData, inscricao_estadual: numbersOnly });
+                          if (formData.indicador_ie === 1) {
+                            // Contribuinte ICMS: apenas números, máximo 12 dígitos
+                            const numbersOnly = e.target.value.replace(/\D/g, '').slice(0, 12);
+                            setFormData({ ...formData, inscricao_estadual: numbersOnly });
+                          } else if (formData.indicador_ie === 2) {
+                            // Contribuinte isento: permitir "ISENTO" ou deixar vazio
+                            const valor = e.target.value.toUpperCase();
+                            if (valor === '' || valor === 'ISENTO' || 'ISENTO'.startsWith(valor)) {
+                              setFormData({ ...formData, inscricao_estadual: valor });
+                            }
+                          }
                         }}
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="123456789012 (12 dígitos)"
-                        maxLength={12}
-                        pattern="[0-9]{12}"
+                        placeholder={
+                          formData.indicador_ie === 1
+                            ? "123456789012 (12 dígitos)"
+                            : "ISENTO"
+                        }
+                        maxLength={formData.indicador_ie === 1 ? 12 : 6}
                         required={formData.indicador_ie === 1}
+                        readOnly={formData.indicador_ie === 2}
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        Apenas números, exatamente 12 dígitos
+                        {formData.indicador_ie === 1
+                          ? "Apenas números, exatamente 12 dígitos"
+                          : "Automaticamente preenchido com 'ISENTO' para contribuinte isento"
+                        }
                       </p>
                     </div>
                   )}

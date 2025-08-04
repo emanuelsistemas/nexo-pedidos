@@ -111,17 +111,20 @@ const FormCadastro: React.FC = () => {
 
       if (configError) throw configError;
 
-      // 6. Create initial store status
-      const { error: statusError } = await supabase
-        .from('status_loja')
+      // 6. Create initial PDV configuration with store status
+      const { error: pdvConfigError } = await supabase
+        .from('pdv_config')
         .insert([{
           empresa_id: empresaData.id,
-          aberto: false,
-          aberto_manual: true,
-          modo_operacao: 'manual'
+          cardapio_loja_aberta: false,
+          cardapio_abertura_tipo: 'manual',
+          controla_caixa: false,
+          comandas: false,
+          mesas: false,
+          vendedor: false
         }]);
 
-      if (statusError) throw statusError;
+      if (pdvConfigError) throw pdvConfigError;
 
       // 7. Create initial stock control configuration
       try {

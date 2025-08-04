@@ -1178,7 +1178,16 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
                   </label>
                   <select
                     value={formData.indicador_ie}
-                    onChange={(e) => handleInputChange('indicador_ie', parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const novoIndicador = parseInt(e.target.value);
+                      handleInputChange('indicador_ie', novoIndicador);
+                      // Preencher automaticamente IE baseado no indicador
+                      if (novoIndicador === 2) {
+                        handleInputChange('inscricao_estadual', 'ISENTO');
+                      } else if (novoIndicador === 9) {
+                        handleInputChange('inscricao_estadual', '');
+                      }
+                    }}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                   >
                     <option value={1}>1 - Contribuinte ICMS</option>
@@ -1187,6 +1196,47 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
                   </select>
                   <p className="text-xs text-gray-500 mt-1">Automaticamente definido: CPF = Não contribuinte, CNPJ = Contribuinte</p>
                 </div>
+
+                {/* Inscrição Estadual */}
+                {(formData.indicador_ie === 1 || formData.indicador_ie === 2) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">
+                      Inscrição Estadual {formData.indicador_ie === 1 && <span className="text-red-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.inscricao_estadual}
+                      onChange={(e) => {
+                        if (formData.indicador_ie === 1) {
+                          // Contribuinte ICMS: apenas números, máximo 12 dígitos
+                          const numbersOnly = e.target.value.replace(/\D/g, '').slice(0, 12);
+                          handleInputChange('inscricao_estadual', numbersOnly);
+                        } else if (formData.indicador_ie === 2) {
+                          // Contribuinte isento: permitir "ISENTO" ou deixar vazio
+                          const valor = e.target.value.toUpperCase();
+                          if (valor === '' || valor === 'ISENTO' || 'ISENTO'.startsWith(valor)) {
+                            handleInputChange('inscricao_estadual', valor);
+                          }
+                        }
+                      }}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                      placeholder={
+                        formData.indicador_ie === 1
+                          ? "123456789012 (12 dígitos)"
+                          : "ISENTO"
+                      }
+                      maxLength={formData.indicador_ie === 1 ? 12 : 6}
+                      required={formData.indicador_ie === 1}
+                      readOnly={formData.indicador_ie === 2}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formData.indicador_ie === 1
+                        ? "Apenas números, exatamente 12 dígitos"
+                        : "Automaticamente preenchido com 'ISENTO' para contribuinte isento"
+                      }
+                    </p>
+                  </div>
+                )}
 
                 {/* Tipos de Cliente */}
                 <div className="bg-gray-800/30 rounded-lg p-4">

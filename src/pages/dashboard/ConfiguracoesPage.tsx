@@ -935,13 +935,16 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (activeSection === 'status') {
         const { data: statusData } = await supabase
-          .from('status_loja')
-          .select('*')
+          .from('pdv_config')
+          .select('cardapio_loja_aberta, cardapio_abertura_tipo')
           .eq('empresa_id', usuarioData.empresa_id)
           .single();
 
         if (statusData) {
-          setStoreStatus(statusData);
+          setStoreStatus({
+            aberto: statusData.cardapio_loja_aberta !== false,
+            modo_operacao: statusData.cardapio_abertura_tipo || 'manual'
+          });
         }
       }
 
@@ -1639,14 +1642,18 @@ const ConfiguracoesPage: React.FC = () => {
         } else {
           console.log('⚠️ Certificado não encontrado ou já removido');
         }
-      } catch (certError) {
+      } catch (certError: any) {
         console.warn('⚠️ Erro ao remover certificado (continuando com deleção):', certError);
+        // Se o erro for "certificado não encontrado", não é um problema
+        if (!certError.message?.includes('não encontrado')) {
+          console.error('❌ Erro inesperado ao remover certificado:', certError);
+        }
         // Não interromper o processo se falhar ao remover certificado
       }
 
       // 2. SEGUNDO: Executar o script de exclusão completa da empresa
       console.log('🗑️ Deletando empresa completa...');
-      const { error } = await supabase.rpc('deletar_empresa_completa', {
+      const { error } = await supabase.rpc('deletar_empresa_simples', {
         empresa_uuid: empresaId
       });
 
@@ -1964,8 +1971,8 @@ const ConfiguracoesPage: React.FC = () => {
       if (!usuarioData?.empresa_id) return;
 
       const { error } = await supabase
-        .from('status_loja')
-        .update({ modo_operacao: mode })
+        .from('pdv_config')
+        .update({ cardapio_abertura_tipo: mode })
         .eq('empresa_id', usuarioData.empresa_id);
 
       if (error) throw error;

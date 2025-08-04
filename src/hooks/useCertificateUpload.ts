@@ -139,7 +139,12 @@ export const useCertificateUpload = () => {
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || 'Erro ao remover certificado');
+        // Se o erro for "certificado não encontrado", considerar como sucesso
+        if (result.error?.includes('não encontrado')) {
+          console.log('ℹ️ Certificado não encontrado - considerando como já removido');
+        } else {
+          throw new Error(result.error || 'Erro ao remover certificado');
+        }
       }
 
       // Limpar metadados no Supabase

@@ -639,6 +639,7 @@ const EntradaManualTab: React.FC<{
   const [showNovoFornecedorModal, setShowNovoFornecedorModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [produtos, setProdutos] = useState<any[]>([]);
+  const [showModalExcluirProcessada, setShowModalExcluirProcessada] = useState(false);
   const [showProdutoModal, setShowProdutoModal] = useState(false);
 
   // Carregar empresa e usuário
@@ -707,14 +708,26 @@ const EntradaManualTab: React.FC<{
           .eq('deletado', false);
 
         if (produtosData && produtosData.length > 0) {
+          console.log('📦 Produtos carregados da entrada:', produtosData);
+
           const produtosFormatados = produtosData.map(item => ({
-            id: item.produto?.id || item.produto_id,
+            produto_id: item.produto?.id || item.produto_id,
+            id: item.produto?.id || item.produto_id, // Para compatibilidade
             nome: item.produto?.nome || item.nome_produto,
             codigo: item.produto?.codigo || item.codigo_produto,
+            unidade_medida: item.produto?.unidade_medida || item.unidade_medida || 'UN',
             quantidade: item.quantidade,
-            preco_unitario: item.preco_custo || item.preco_unitario,
-            preco_total: item.preco_total
+            preco_custo: item.preco_custo || 0,
+            preco_venda: item.preco_venda || item.preco_unitario || 0,
+            margem_percentual: item.margem_percentual || 0,
+            preco_total: item.preco_total || 0,
+            // Campos adicionais que podem ser necessários
+            categoria: item.produto?.categoria || '',
+            descricao: item.produto?.descricao || '',
+            estoque_atual: item.produto?.estoque_atual || 0
           }));
+
+          console.log('📦 Produtos formatados:', produtosFormatados);
           setProdutos(produtosFormatados);
         }
 
@@ -1013,6 +1026,158 @@ const EntradaManualTab: React.FC<{
     }
   };
 
+  // ✅ NOVA FUNÇÃO: Reprocessar entrada (atualizar estoque novamente)
+  const handleReprocessarEntrada = async () => {
+    if (!empresaId || !usuarioId || !entradaParaEditar) {
+      showMessage('error', 'Dados necessários não encontrados');
+      return;
+    }
+
+    if (produtos.length === 0) {
+      showMessage('error', 'Adicione pelo menos um produto para reprocessar');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setShowModalReprocessar(false);
+
+      console.log('🔄 Reprocessando entrada:', entradaParaEditar.numero);
+
+      // ✅ ATUALIZAR ESTOQUE DOS PRODUTOS
+      console.log('📦 Atualizando estoque dos produtos...');
+      try {
+        await atualizarEstoqueEntrada(produtos, entradaParaEditar.numero);
+        showMessage('success', 'Estoque reprocessado com sucesso!');
+      } catch (error) {
+        console.error('Erro ao reprocessar estoque:', error);
+        showMessage('error', 'Erro ao reprocessar estoque dos produtos');
+        return;
+      }
+
+      // Atualizar status da entrada para indicar reprocessamento
+      const { error: updateError } = await supabase
+        .from('entrada_mercadoria')
+        .update({
+          updated_at: new Date().toISOString(),
+          observacoes: (entradaParaEditar.observacoes || '') + `\n[REPROCESSADO EM ${new Date().toLocaleString()}]`
+        })
+        .eq('id', entradaParaEditar.id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar entrada:', updateError);
+      }
+
+      showMessage('success', `Entrada reprocessada com sucesso! Número: ${entradaParaEditar.numero}`);
+      onSave();
+
+    } catch (error) {
+      console.error('Erro ao reprocessar entrada:', error);
+      showMessage('error', 'Erro ao reprocessar entrada de mercadoria');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ NOVA FUNÇÃO: Cancelar entrada processada (alterando status e removendo do estoque)
+  const handleExcluirEntradaProcessada = async () => {
+    if (!empresaId || !usuarioId || !entradaParaEditar) {
+      showMessage('error', 'Dados necessários não encontrados');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setShowModalExcluirProcessada(false);
+
+      console.log('❌ Cancelando entrada processada:', entradaParaEditar.numero);
+
+      // ✅ REMOVER DO ESTOQUE (quantidade negativa para reverter a entrada)
+      console.log('📦 Removendo produtos do estoque...');
+
+      // Filtrar produtos válidos (não código 999999)
+      const produtosValidos = produtos.filter(produto =>
+        produto.codigo !== '999999' && produto.produto_id
+      );
+
+      console.log('📋 Produtos a remover do estoque:', produtosValidos.map(p => ({
+        nome: p.nome,
+        codigo: p.codigo,
+        quantidade: p.quantidade
+      })));
+
+      for (const produto of produtosValidos) {
+        try {
+          console.log(`🔄 Removendo ${produto.quantidade} unidades do produto ${produto.nome} (${produto.codigo})`);
+
+          // Chamar função RPC para remover do estoque (quantidade negativa)
+          const { data, error } = await supabase.rpc('atualizar_estoque_produto', {
+            p_empresa_id: empresaId,
+            p_produto_id: produto.produto_id,
+            p_quantidade: -produto.quantidade, // QUANTIDADE NEGATIVA para remover
+            p_tipo_operacao: 'cancelamento_entrada',
+            p_observacao: `Cancelamento da entrada ${entradaParaEditar.numero} - Fornecedor: ${entradaParaEditar.fornecedor_nome}`
+          });
+
+          if (error) {
+            console.error(`❌ Erro ao remover produto ${produto.nome} do estoque:`, error);
+            throw new Error(`Erro ao remover produto ${produto.nome} do estoque: ${error.message}`);
+          }
+
+          console.log(`✅ Produto ${produto.nome} removido do estoque. Resultado:`, data);
+        } catch (error) {
+          console.error(`❌ Erro ao processar produto ${produto.nome}:`, error);
+          throw error;
+        }
+      }
+
+      console.log('✅ Todos os produtos removidos do estoque');
+
+      // ✅ MARCAR COMO DELETADO (não excluir do banco)
+      const { error: updateError } = await supabase
+        .from('entrada_mercadoria')
+        .update({
+          deletado: true,
+          deletado_em: new Date().toISOString(),
+          deletado_por_usuario_id: usuarioId,
+          observacoes: (entradaParaEditar.observacoes || '') + `\n[CANCELADA EM ${new Date().toLocaleString()} - Estoque ajustado]`
+        })
+        .eq('id', entradaParaEditar.id);
+
+      if (updateError) {
+        console.error('Erro ao marcar entrada como deletada:', updateError);
+        showMessage('error', 'Erro ao cancelar entrada de mercadoria');
+        return;
+      }
+
+      // ✅ MARCAR ITENS COMO DELETADOS (não excluir)
+      const { error: updateItensError } = await supabase
+        .from('entrada_mercadoria_itens')
+        .update({
+          estoque_atualizado: false,
+          deletado: true,
+          deletado_em: new Date().toISOString(),
+          deletado_por_usuario_id: usuarioId
+        })
+        .eq('entrada_mercadoria_id', entradaParaEditar.id);
+
+      if (updateItensError) {
+        console.error('Erro ao marcar itens como cancelados:', updateItensError);
+        // Não retorna erro aqui pois o principal já foi feito
+      }
+
+      showMessage('success', `Entrada cancelada e estoque ajustado! Número: ${entradaParaEditar.numero}`);
+      onSave();
+      onClose();
+
+    } catch (error) {
+      console.error('Erro ao cancelar entrada:', error);
+      showMessage('error', 'Erro ao cancelar entrada de mercadoria');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Função para salvar alterações (edição)
   const handleSalvarAlteracoes = async () => {
     if (!empresaId || !usuarioId || !entradaParaEditar) {
@@ -1301,19 +1466,47 @@ const EntradaManualTab: React.FC<{
           </Button>
 
           {entradaParaEditar ? (
-            // Modo edição - apenas botão Salvar Alterações
-            <Button
-              variant="primary"
-              onClick={handleSalvarAlteracoes}
-              disabled={isLoading || !fornecedorId}
-            >
-              {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              ) : (
-                <Save size={16} className="mr-2" />
-              )}
-              Salvar Alterações
-            </Button>
+            // Modo edição - botões baseados no status
+            entradaParaEditar.status === 'processada' ? (
+              // Entrada já processada - só pode cancelar
+              <Button
+                variant="destructive"
+                onClick={() => setShowModalExcluirProcessada(true)}
+                disabled={isLoading}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <X size={16} className="mr-2" />
+                Cancelar Entrada
+              </Button>
+            ) : (
+              // Entrada rascunho - pode editar e processar
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleSalvarAlteracoes}
+                  disabled={isLoading || !fornecedorId}
+                >
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <Save size={16} className="mr-2" />
+                  )}
+                  Salvar Rascunho
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleProcessarEntrada}
+                  disabled={isLoading || !fornecedorId}
+                >
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <Package size={16} className="mr-2" />
+                  )}
+                  Processar Entrada
+                </Button>
+              </>
+            )
           ) : (
             // Modo criação - botões Salvar Rascunho e Processar Entrada
             <>
@@ -1391,6 +1584,113 @@ const EntradaManualTab: React.FC<{
           modoEdicao={!!entradaParaEditar}
         />
       )}
+
+      {/* ✅ NOVO MODAL: Confirmação de Exclusão de Entrada Processada */}
+      <AnimatePresence>
+        {showModalExcluirProcessada && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed top-0 left-0 right-0 bottom-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-lg border border-red-500/30 w-full max-w-md"
+            >
+              {/* Cabeçalho */}
+              <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                    <Trash2 size={20} className="text-red-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Cancelar Entrada Processada</h2>
+                    <p className="text-gray-400 text-sm">Número: {entradaParaEditar?.numero}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowModalExcluirProcessada(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-white text-xs font-bold">!</span>
+                      </div>
+                      <div>
+                        <h4 className="text-red-400 font-medium mb-1">Atenção - Cancelamento de Entrada</h4>
+                        <p className="text-gray-300 text-sm">
+                          Esta entrada já foi processada e o estoque foi atualizado.
+                          Ao cancelar, os produtos serão <strong>removidos do estoque</strong> e a entrada ficará com status "cancelada".
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800/50 rounded-lg p-4">
+                    <h4 className="text-white font-medium mb-2">O que será feito:</h4>
+                    <ul className="space-y-1 text-sm text-gray-300">
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full"></span>
+                        Remover {produtos.length} produto(s) do estoque
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-orange-400 rounded-full"></span>
+                        Marcar itens como cancelados
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-red-400 rounded-full"></span>
+                        Alterar status da entrada para "cancelada"
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                    <p className="text-yellow-400 text-sm">
+                      <strong>Certifique-se</strong> de que realmente deseja cancelar esta entrada.
+                      O estoque será ajustado automaticamente.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rodapé */}
+              <div className="px-6 py-4 border-t border-gray-700 flex items-center justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowModalExcluirProcessada(false)}
+                  disabled={isLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleExcluirEntradaProcessada}
+                  disabled={isLoading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <X size={16} className="mr-2" />
+                  )}
+                  Confirmar Cancelamento
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

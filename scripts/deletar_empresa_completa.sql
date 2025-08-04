@@ -83,7 +83,6 @@ BEGIN
     DELETE FROM conexao WHERE empresa_id = empresa_uuid;
     DELETE FROM configuracoes WHERE empresa_id = empresa_uuid;
     DELETE FROM horario_atendimento WHERE empresa_id = empresa_uuid;
-    DELETE FROM status_loja WHERE empresa_id = empresa_uuid;
     DELETE FROM taxa_entrega WHERE empresa_id = empresa_uuid;
     DELETE FROM tipo_controle_estoque_config WHERE empresa_id = empresa_uuid;
     DELETE FROM pedidos_config WHERE empresa_id = empresa_uuid;
