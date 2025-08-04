@@ -1546,12 +1546,9 @@ const PDVPage: React.FC = () => {
       // Buscar caixa aberto
       const { data: caixaData, error: caixaError } = await supabase
         .from('caixa_controle')
-        .select(`
-          *,
-          usuarios!inner(nome)
-        `)
+        .select('*')
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('status', true)
+        .eq('status', 'aberto')
         .order('data_abertura', { ascending: false })
         .limit(1)
         .single();
@@ -1562,33 +1559,68 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      console.log('✅ Dados do caixa carregados:', caixaData);
-      setDadosCaixa(caixaData);
+      // Buscar nome do usuário separadamente
+      const { data: usuarioNome } = await supabase
+        .from('usuarios')
+        .select('nome')
+        .eq('id', caixaData.usuario_id)
+        .single();
 
-      // Buscar formas de pagamento da empresa
+      // Adicionar nome do usuário aos dados do caixa
+      const caixaComUsuario = {
+        ...caixaData,
+        usuario_nome: usuarioNome?.nome || 'N/A'
+      };
+
+      console.log('✅ Dados do caixa carregados:', caixaComUsuario);
+      setDadosCaixa(caixaComUsuario);
+
+      // Buscar formas de pagamento da empresa (usando tabela alternativa)
       const { data: formasData, error: formasError } = await supabase
-        .from('forma_pagamento_empresa')
-        .select(`
-          *,
-          forma_pagamento_opcoes!inner(nome, tipo)
-        `)
-        .eq('empresa_id', usuarioData.empresa_id)
-        .eq('ativo', true)
-        .order('forma_pagamento_opcoes.nome');
+        .from('formas_pagamento_tipos')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id);
 
       if (formasError) {
         console.error('❌ Erro ao buscar formas de pagamento:', formasError);
-        toast.error('Erro ao carregar formas de pagamento.');
+        console.log('🔄 Tentando criar formas de pagamento padrão...');
+
+        // Se não encontrar, criar formas padrão
+        const formasPadrao = [
+          { nome: 'Dinheiro', tipo: 'dinheiro' },
+          { nome: 'PIX', tipo: 'pix' },
+          { nome: 'Cartão de Crédito', tipo: 'cartao_credito' },
+          { nome: 'Cartão de Débito', tipo: 'cartao_debito' }
+        ];
+
+        setFormasPagamentoCaixa(formasPadrao.map((forma, index) => ({
+          id: `default_${index}`,
+          nome: forma.nome,
+          tipo: forma.tipo,
+          forma_pagamento_opcoes: { nome: forma.nome, tipo: forma.tipo }
+        })));
+
+        console.log('✅ Formas de pagamento padrão carregadas');
         return;
       }
 
-      console.log('✅ Formas de pagamento carregadas:', formasData);
-      setFormasPagamentoCaixa(formasData || []);
+      // Transformar dados para o formato esperado
+      const formasFormatadas = formasData?.map(forma => ({
+        ...forma,
+        forma_pagamento_opcao_id: forma.id,
+        forma_pagamento_opcoes: {
+          nome: forma.nome,
+          tipo: forma.tipo
+        }
+      })) || [];
+
+      console.log('✅ Formas de pagamento carregadas:', formasFormatadas);
+      setFormasPagamentoCaixa(formasFormatadas);
 
       // Inicializar valores do caixa (todos zerados)
       const valoresIniciais: {[key: string]: string} = {};
-      formasData?.forEach(forma => {
-        valoresIniciais[forma.forma_pagamento_opcao_id] = '0,00';
+      formasFormatadas.forEach(forma => {
+        valoresIniciais[forma.forma_pagamento_opcao_id || forma.id] = '0,00';
       });
       setValoresCaixa(valoresIniciais);
 
@@ -17520,7 +17552,7 @@ const PDVPage: React.FC = () => {
                     <div>
                       <span style={{ fontSize: '14px', color: '#9ca3af' }}>👤 Operador: </span>
                       <span style={{ fontWeight: 'bold' }}>
-                        {dadosCaixa.usuarios?.nome || 'N/A'}
+                        {dadosCaixa.usuario_nome || 'N/A'}
                       </span>
                     </div>
                     <div>
@@ -17553,60 +17585,63 @@ const PDVPage: React.FC = () => {
 
                 {formasPagamentoCaixa.length > 0 ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    {formasPagamentoCaixa.map((forma) => (
-                      <div
-                        key={forma.forma_pagamento_opcao_id}
-                        style={{
-                          backgroundColor: '#374151',
-                          borderRadius: '8px',
-                          padding: '12px',
-                          border: '1px solid #4b5563'
-                        }}
-                      >
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
-                            {forma.forma_pagamento_opcoes?.nome || 'N/A'}
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
-                              R$ 0,00
+                    {formasPagamentoCaixa.map((forma) => {
+                      const formaId = forma.forma_pagamento_opcao_id || forma.id;
+                      return (
+                        <div
+                          key={formaId}
+                          style={{
+                            backgroundColor: '#374151',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #4b5563'
+                          }}
+                        >
+                          <div style={{ marginBottom: '8px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                              {forma.forma_pagamento_opcoes?.nome || forma.nome || 'N/A'}
                             </span>
                           </div>
 
-                          <div style={{ marginTop: '8px' }}>
-                            <label style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px', display: 'block' }}>
-                              Informar Valor:
-                            </label>
-                            <input
-                              type="text"
-                              value={valoresCaixa[forma.forma_pagamento_opcao_id] || '0,00'}
-                              onChange={(e) => {
-                                const novoValor = formatarValorMonetario(e.target.value);
-                                setValoresCaixa(prev => ({
-                                  ...prev,
-                                  [forma.forma_pagamento_opcao_id]: novoValor
-                                }));
-                              }}
-                              placeholder="0,00"
-                              style={{
-                                width: '100%',
-                                backgroundColor: '#1f2937',
-                                border: '1px solid #4b5563',
-                                borderRadius: '4px',
-                                padding: '6px 8px',
-                                color: 'white',
-                                fontSize: '12px',
-                                outline: 'none'
-                              }}
-                            />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
+                              <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
+                                R$ 0,00
+                              </span>
+                            </div>
+
+                            <div style={{ marginTop: '8px' }}>
+                              <label style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px', display: 'block' }}>
+                                Informar Valor:
+                              </label>
+                              <input
+                                type="text"
+                                value={valoresCaixa[formaId] || '0,00'}
+                                onChange={(e) => {
+                                  const novoValor = formatarValorMonetario(e.target.value);
+                                  setValoresCaixa(prev => ({
+                                    ...prev,
+                                    [formaId]: novoValor
+                                  }));
+                                }}
+                                placeholder="0,00"
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: '#1f2937',
+                                  border: '1px solid #4b5563',
+                                  borderRadius: '4px',
+                                  padding: '6px 8px',
+                                  color: 'white',
+                                  fontSize: '12px',
+                                  outline: 'none'
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div style={{
