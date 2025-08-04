@@ -453,7 +453,7 @@ const PDVPage: React.FC = () => {
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
   const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
   const [caixaAberto, setCaixaAberto] = useState(false);
-  const [loadingCaixa, setLoadingCaixa] = useState(true);
+  const [loadingCaixa, setLoadingCaixa] = useState(false); // Iniciar como false
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1387,10 +1387,17 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função para verificar status do caixa
   const verificarStatusCaixa = async () => {
     try {
+      console.log('🔍 Verificando status do caixa...');
+      console.log('📋 pdvConfig:', pdvConfig);
+      console.log('🔧 controla_caixa:', pdvConfig?.controla_caixa);
+
       setLoadingCaixa(true);
 
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) return;
+      if (!authData.user) {
+        console.log('❌ Usuário não autenticado');
+        return;
+      }
 
       const { data: usuarioData } = await supabase
         .from('usuarios')
@@ -1398,10 +1405,17 @@ const PDVPage: React.FC = () => {
         .eq('id', authData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id) return;
+      if (!usuarioData?.empresa_id) {
+        console.log('❌ Empresa não encontrada');
+        return;
+      }
+
+      console.log('🏢 Empresa ID:', usuarioData.empresa_id);
+      console.log('👤 Usuário ID:', authData.user.id);
 
       // Verificar se há caixa aberto para este usuário hoje
       const hoje = new Date().toISOString().split('T')[0];
+      console.log('📅 Data hoje:', hoje);
 
       const { data: caixaData, error } = await supabase
         .from('caixa_controle')
@@ -1413,6 +1427,9 @@ const PDVPage: React.FC = () => {
         .lte('data_abertura', `${hoje}T23:59:59`)
         .single();
 
+      console.log('💰 Dados do caixa encontrados:', caixaData);
+      console.log('❌ Erro na consulta:', error);
+
       if (error && error.code !== 'PGRST116') {
         console.error('Erro ao verificar status do caixa:', error);
         return;
@@ -1420,13 +1437,17 @@ const PDVPage: React.FC = () => {
 
       // Se encontrou caixa aberto, definir como aberto
       if (caixaData) {
+        console.log('✅ Caixa encontrado - definindo como aberto');
         setCaixaAberto(true);
       } else {
+        console.log('❌ Nenhum caixa aberto encontrado');
         // Se não encontrou caixa aberto e controle de caixa está habilitado, mostrar modal
-        if (pdvConfig?.controla_caixa) {
+        if (pdvConfig?.controla_caixa === true) {
+          console.log('🔒 Controle de caixa habilitado - bloqueando PDV');
           setCaixaAberto(false);
           setShowAberturaCaixaModal(true);
         } else {
+          console.log('🔓 Controle de caixa desabilitado - permitindo operação');
           setCaixaAberto(true); // Se não controla caixa, permitir operação
         }
       }
@@ -1889,11 +1910,6 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Detectar e corrigir vendas órfãs após carregar dados
       await detectarECorrigirVendasOrfas();
-
-      // ✅ NOVO: Verificar status do caixa após carregar todas as configurações
-      setTimeout(() => {
-        verificarStatusCaixa();
-      }, 1500);
     };
 
     initializeData();
@@ -1917,6 +1933,36 @@ const PDVPage: React.FC = () => {
       }
     };
   }, []); // Array vazio para executar apenas uma vez
+
+  // ✅ NOVO: useEffect para verificar status do caixa quando pdvConfig for carregado
+  useEffect(() => {
+    console.log('🔄 useEffect pdvConfig disparado:', { pdvConfig, loadingCaixa, isLoading });
+
+    if (pdvConfig !== null && !isLoading) {
+      console.log('🔧 pdvConfig carregado, verificando status do caixa...');
+      console.log('📋 Configuração controla_caixa:', pdvConfig?.controla_caixa);
+      verificarStatusCaixa();
+    } else {
+      console.log('⏳ Aguardando carregamento completo...', {
+        pdvConfigNull: pdvConfig === null,
+        isLoading,
+        loadingCaixa
+      });
+    }
+  }, [pdvConfig, isLoading]);
+
+  // ✅ NOVO: Timeout de segurança para evitar travamento
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loadingCaixa) {
+        console.log('⚠️ Timeout de segurança - forçando liberação do caixa');
+        setLoadingCaixa(false);
+        setCaixaAberto(true);
+      }
+    }, 10000); // 10 segundos
+
+    return () => clearTimeout(timeout);
+  }, [loadingCaixa]);
 
   // useEffect separado para event listeners - SEM dependências para evitar recarregamentos
   useEffect(() => {
@@ -17136,7 +17182,10 @@ const PDVPage: React.FC = () => {
             O controle de caixa está habilitado. É necessário abrir o caixa antes de operar o PDV.
           </p>
           <button
-            onClick={() => setShowAberturaCaixaModal(true)}
+            onClick={() => {
+              console.log('🔘 Botão "Abrir Caixa" clicado');
+              setShowAberturaCaixaModal(true);
+            }}
             className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
           >
             Abrir Caixa
@@ -29811,7 +29860,9 @@ const PDVPage: React.FC = () => {
 
       {/* ✅ NOVO: Modal de Abertura de Caixa */}
       <AnimatePresence>
-        {showAberturaCaixaModal && (
+        {showAberturaCaixaModal && (() => {
+          console.log('🎭 Renderizando modal de abertura de caixa');
+          return (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -29910,7 +29961,8 @@ const PDVPage: React.FC = () => {
               </div>
             </motion.div>
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
     </div>
   );
