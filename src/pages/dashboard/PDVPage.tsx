@@ -5376,6 +5376,25 @@ const PDVPage: React.FC = () => {
           toast.error('Venda cancelada, mas houve erro ao liberar devoluções');
         } else {
           console.log('✅ Devoluções liberadas com sucesso');
+
+          // ✅ NOVO: Remover foreign key devolucao_origem_id da tabela PDV
+          console.log(`🔄 Removendo referência de devolução da venda #${vendaParaCancelar.numero_venda}...`);
+          const { error: errorRemoverReferencia } = await supabase
+            .from('pdv')
+            .update({
+              devolucao_origem_id: null,
+              devolucao_origem_numero: null,
+              devolucao_origem_codigo: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', vendaParaCancelar.id);
+
+          if (errorRemoverReferencia) {
+            console.error('❌ Erro ao remover referência de devolução:', errorRemoverReferencia);
+          } else {
+            console.log('✅ Referência de devolução removida da venda');
+          }
+
           toast.success(`Venda cancelada e ${devolucoesProcesadas.length} devolução(ões) liberada(s) para exclusão`);
         }
       } else {
