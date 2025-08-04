@@ -243,3 +243,32 @@ export interface Devolucao {
     data_pedido: string;
   };
 }
+
+// ✅ NOVO: Interfaces para controle de caixa
+export interface CaixaControle {
+  id?: string;
+  empresa_id: string;
+  usuario_id: string; // Caixa (usuário logado)
+  data_abertura: string;
+  data_fechamento?: string;
+  sangria?: number;
+  suprimento?: number;
+  status?: 'aberto' | 'fechado';
+  status_caixa?: boolean; // FALSE = fechado, TRUE = aberto
+  observacao_abertura?: string;
+  observacao_fechamento?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TipoPagamento {
+  id?: string;
+  caixa_controle_id: string;
+  empresa_id: string;
+  tipo_pagamento: string; // 'dinheiro', 'pix', 'cartao_credito', 'cartao_debito', etc.
+  valor: number;
+  descricao?: string;
+  referencia_venda_id?: string; // Referência para tabela PDV se for pagamento de venda
+  created_at?: string;
+  updated_at?: string;
+}

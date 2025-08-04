@@ -1511,7 +1511,7 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
           itens:devolucao_itens(*)
         `)
         .eq('cliente_id', clienteIdParam)
-        .eq('empresa_id', currentEmpresaId)
+        .eq('empresa_id', formData.empresa_id)
         .eq('deletado', false)
         .order('created_at', { ascending: false });
 
@@ -3140,32 +3140,35 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
                     </div>
                   ) : null}
 
-                  <div className="flex gap-4 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowSidebar(false)}
-                      className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                          <span>Salvando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Check size={18} />
-                          <span>Salvar</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  {/* ✅ NOVO: Ocultar botões na aba de devoluções */}
+                  {activeTab !== 'devolucoes' && (
+                    <div className="flex gap-4 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowSidebar(false)}
+                        className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <span>Salvando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check size={18} />
+                            <span>Salvar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </form>
               </div>
             </motion.div>
