@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Phone, Mail, MapPin, FileText, Building, Search, Plus, Trash2 } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, FileText, Building, Search, Plus, Trash2, Package, Calendar, DollarSign, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
+import { Devolucao } from '../../types';
+import { formatarPreco } from '../../utils/formatters';
 
 interface Telefone {
   numero: string;
@@ -17,6 +19,7 @@ interface ClienteFormCompletoProps {
   onClienteCreated: (clienteId: string) => void;
   fornecedorMode?: boolean;
   showAllTabs?: boolean; // Nova prop para controlar se mostra todas as abas
+  clienteIdEdicao?: string; // ✅ NOVO: ID do cliente para edição (para carregar devoluções)
 }
 
 const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
@@ -25,11 +28,17 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
   empresaId,
   onClienteCreated,
   fornecedorMode = false,
-  showAllTabs = false // Por padrão, não mostra todas as abas (só mostra "Geral")
+  showAllTabs = false, // Por padrão, não mostra todas as abas (só mostra "Geral")
+  clienteIdEdicao // ✅ NOVO: ID do cliente para edição
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'dados-gerais' | 'descontos' | 'financeiro' | 'observacao' | 'devolucoes' | 'faturamentos'>('dados-gerais');
+
+  // ✅ NOVO: Estados para devoluções do cliente
+  const [devolucoes, setDevolucoes] = useState<Devolucao[]>([]);
+  const [loadingDevolucoes, setLoadingDevolucoes] = useState(false);
+  const [clienteId, setClienteId] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     tipo_documento: 'CNPJ',
@@ -449,6 +458,51 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
     setDescontosValor(novosDescontos);
   };
 
+  // ✅ NOVO: Função para carregar devoluções do cliente
+  const carregarDevolucoes = async (clienteIdParam: string) => {
+    try {
+      setLoadingDevolucoes(true);
+
+      const { data, error } = await supabase
+        .from('devolucoes')
+        .select(`
+          *,
+          itens:devolucao_itens(*)
+        `)
+        .eq('cliente_id', clienteIdParam)
+        .eq('empresa_id', empresaId)
+        .eq('deletado', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar devoluções:', error);
+        toast.error('Erro ao carregar devoluções do cliente');
+        return;
+      }
+
+      setDevolucoes(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar devoluções:', error);
+      toast.error('Erro ao carregar devoluções do cliente');
+    } finally {
+      setLoadingDevolucoes(false);
+    }
+  };
+
+  // ✅ NOVO: Definir clienteId quando for edição
+  useEffect(() => {
+    if (clienteIdEdicao) {
+      setClienteId(clienteIdEdicao);
+    }
+  }, [clienteIdEdicao]);
+
+  // ✅ NOVO: Carregar devoluções quando a aba for ativada e houver clienteId
+  useEffect(() => {
+    if (activeTab === 'devolucoes' && clienteId) {
+      carregarDevolucoes(clienteId);
+    }
+  }, [activeTab, clienteId]);
+
   // Função para formatar preço
   const formatarPreco = (valor: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -576,6 +630,7 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
       }
 
       toast.success(`${fornecedorMode ? 'Fornecedor' : 'Cliente'} criado com sucesso!`);
+      setClienteId(data.id); // ✅ NOVO: Definir clienteId após criação
       onClienteCreated(data.id);
       onClose();
     } catch (error: any) {
@@ -1478,44 +1533,123 @@ const ClienteFormCompleto: React.FC<ClienteFormCompletoProps> = ({
             {/* Conteúdo da aba Devoluções */}
             {showAllTabs && activeTab === 'devolucoes' && (
               <div className="space-y-6">
-                <div className="text-center py-8">
-                  <div className="mx-auto w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4">
-                    <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m5 5v1a4 4 0 01-4 4H8m0 0l3-3m-3 3l3 3" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-white mb-2">Histórico de Devoluções</h3>
-                  <p className="text-gray-400 mb-6">
-                    Aqui você poderá visualizar todas as devoluções realizadas por este cliente.
-                  </p>
-
-                  {/* Placeholder para futuras funcionalidades */}
-                  <div className="bg-gray-800/30 rounded-lg p-6 text-left">
-                    <h4 className="text-white font-medium mb-3">Funcionalidades Planejadas:</h4>
-                    <ul className="space-y-2 text-sm text-gray-400">
-                      <li className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                        Histórico completo de devoluções
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                        Motivos das devoluções
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                        Valores devolvidos
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                        Status das devoluções
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                        Relatórios de devolução
-                      </li>
-                    </ul>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-white">Histórico de Devoluções</h3>
+                  {clienteId && (
+                    <button
+                      onClick={() => carregarDevolucoes(clienteId)}
+                      disabled={loadingDevolucoes}
+                      className="px-3 py-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded text-sm transition-colors"
+                    >
+                      {loadingDevolucoes ? 'Carregando...' : 'Atualizar'}
+                    </button>
+                  )}
                 </div>
+
+                {!clienteId ? (
+                  <div className="text-center py-8">
+                    <div className="mx-auto w-16 h-16 bg-gray-500/20 rounded-full flex items-center justify-center mb-4">
+                      <AlertCircle className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-400">
+                      Salve o cliente primeiro para visualizar o histórico de devoluções
+                    </p>
+                  </div>
+                ) : loadingDevolucoes ? (
+                  <div className="text-center py-8">
+                    <div className="mx-auto w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                      <Package className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <p className="text-gray-400">Carregando devoluções...</p>
+                  </div>
+                ) : devolucoes.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="mx-auto w-16 h-16 bg-gray-500/20 rounded-full flex items-center justify-center mb-4">
+                      <Package className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-400">Nenhuma devolução encontrada para este cliente</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {devolucoes.map((devolucao) => (
+                      <div key={devolucao.id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                              <Package className="w-5 h-5 text-blue-400" />
+                            </div>
+                            <div>
+                              <h4 className="text-white font-medium">{devolucao.codigo_troca || devolucao.numero}</h4>
+                              <p className="text-sm text-gray-400">
+                                {devolucao.tipo_devolucao === 'total' ? 'Devolução Total' : 'Devolução Parcial'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {devolucao.status === 'pendente' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+                                <Clock className="w-3 h-3" />
+                                Pendente
+                              </span>
+                            )}
+                            {devolucao.status === 'processada' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
+                                <CheckCircle className="w-3 h-3" />
+                                Processada
+                              </span>
+                            )}
+                            {devolucao.status === 'cancelada' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">
+                                <X className="w-3 h-3" />
+                                Cancelada
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-400">Valor:</span>
+                            <p className="text-white font-medium">{formatarPreco(devolucao.valor_total)}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Forma:</span>
+                            <p className="text-white">
+                              {devolucao.forma_reembolso === 'dinheiro' && 'Dinheiro'}
+                              {devolucao.forma_reembolso === 'credito' && 'Crédito'}
+                              {devolucao.forma_reembolso === 'troca' && 'Troca'}
+                              {devolucao.forma_reembolso === 'estorno_cartao' && 'Estorno Cartão'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Data:</span>
+                            <p className="text-white">
+                              {new Date(devolucao.created_at).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Itens:</span>
+                            <p className="text-white">{devolucao.itens?.length || 0} item(s)</p>
+                          </div>
+                        </div>
+
+                        {devolucao.motivo_geral && (
+                          <div className="mt-3 pt-3 border-t border-gray-700">
+                            <span className="text-gray-400 text-sm">Motivo:</span>
+                            <p className="text-white text-sm mt-1">{devolucao.motivo_geral}</p>
+                          </div>
+                        )}
+
+                        {devolucao.venda_origem_numero && (
+                          <div className="mt-2">
+                            <span className="text-gray-400 text-sm">Venda origem:</span>
+                            <span className="text-blue-400 text-sm ml-1">{devolucao.venda_origem_numero}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
