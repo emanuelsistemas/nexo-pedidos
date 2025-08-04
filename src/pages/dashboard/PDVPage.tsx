@@ -490,6 +490,19 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Estados para modal de remoção de trocas
   const [showRemoverTrocasModal, setShowRemoverTrocasModal] = useState(false);
+
+  // ✅ NOVO: Função para verificar se é troca exata
+  const isTrocaExata = () => {
+    const itensTroca = carrinho.filter(item => item.isDevolucao);
+    const itensNormais = carrinho.filter(item => !item.isDevolucao);
+
+    if (itensTroca.length === 0) return false;
+
+    const valorItensNormais = itensNormais.reduce((total, item) => total + item.subtotal, 0);
+    const valorTrocas = Math.abs(itensTroca.reduce((total, item) => total + item.subtotal, 0));
+
+    return Math.abs(valorItensNormais - valorTrocas) < 0.01; // Tolerância para arredondamento
+  };
   const [isVendaComTroca, setIsVendaComTroca] = useState(false);
   const [devolucaoAplicada, setDevolucaoAplicada] = useState<any>(null);
   const modalCardapioAbertoRef = useRef(false);
@@ -13213,10 +13226,23 @@ const PDVPage: React.FC = () => {
         });
       }
 
-      // Se for venda com troca (valor zero), adicionar observação específica
-      if (isVendaComTroca && devolucaoAplicada && Math.abs(valorTotal) < 0.01) {
-        const observacaoTroca = `TROCA - Devolução #${devolucaoAplicada.numero}${devolucaoAplicada.codigo_troca ? ` (${devolucaoAplicada.codigo_troca})` : ''}`;
-        observacaoFinal = observacaoFinal ? `${observacaoFinal} | ${observacaoTroca}` : observacaoTroca;
+      // ✅ NOVO: Adicionar informação de devolução na observação sempre que houver itens de devolução
+      if (itensDevolucao.length > 0) {
+        const itensTroca = carrinho.filter(item => item.isDevolucao);
+        if (itensTroca.length > 0) {
+          // Obter número da troca do primeiro item de devolução
+          const numeroTroca = itensTroca[0].devolucao_codigo;
+
+          if (Math.abs(valorTotal) < 0.01) {
+            // Se for troca exata (valor zero)
+            const observacaoTroca = `TROCA EXATA - Devolução ${numeroTroca}`;
+            observacaoFinal = observacaoFinal ? `${observacaoFinal} | ${observacaoTroca}` : observacaoTroca;
+          } else {
+            // Se for venda com devolução (mas não troca exata)
+            const observacaoTroca = `Venda com devolução ${numeroTroca}`;
+            observacaoFinal = observacaoFinal ? `${observacaoFinal} | ${observacaoTroca}` : observacaoTroca;
+          }
+        }
       }
 
       const vendaData = {
@@ -19223,17 +19249,48 @@ const PDVPage: React.FC = () => {
                         setShowFinalizacaoFinal(true);
                       }
                     }}
-                    disabled={tipoPagamento === 'parcial' && calcularRestante() > 0}
+                    disabled={(() => {
+                      // Se for pagamento parcial e ainda falta pagar, desabilitar
+                      if (tipoPagamento === 'parcial' && calcularRestante() > 0) return true;
+
+                      // Se total da venda for 0, só permitir se for troca exata
+                      if (calcularTotal() === 0) return !isTrocaExata();
+
+                      // Se total da venda for negativo, sempre desabilitar
+                      if (calcularTotal() < 0) return true;
+
+                      return false;
+                    })()}
                     className={`flex-1 py-2 px-3 rounded border transition-colors text-sm ${
-                      tipoPagamento === 'parcial' && calcularRestante() > 0
-                        ? 'bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed'
-                        : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-white'
+                      (() => {
+                        if (tipoPagamento === 'parcial' && calcularRestante() > 0) {
+                          return 'bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed';
+                        }
+                        if (calcularTotal() === 0 && !isTrocaExata()) {
+                          return 'bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed';
+                        }
+                        if (calcularTotal() < 0) {
+                          return 'bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed';
+                        }
+                        return 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-white';
+                      })()
                     }`}
                   >
-                    {tipoPagamento === 'parcial' && calcularRestante() > 0
-                      ? `Falta ${formatCurrency(calcularRestante())}`
-                      : 'Confirmar'
-                    }
+                    {(() => {
+                      if (tipoPagamento === 'parcial' && calcularRestante() > 0) {
+                        return `Falta ${formatCurrency(calcularRestante())}`;
+                      }
+                      if (calcularTotal() === 0 && isTrocaExata()) {
+                        return 'Confirmar Troca';
+                      }
+                      if (calcularTotal() === 0 && !isTrocaExata()) {
+                        return 'Total deve ser > R$ 0,00';
+                      }
+                      if (calcularTotal() < 0) {
+                        return 'Valor negativo';
+                      }
+                      return 'Confirmar';
+                    })()}
                   </button>
                 </div>
               </div>
@@ -19272,7 +19329,7 @@ const PDVPage: React.FC = () => {
             >
 
             {/* Formas de Pagamento Utilizadas - Compacto */}
-            {(tipoPagamento === 'vista' && formaPagamentoSelecionada) || (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) ? (
+            {!isTrocaExata() && ((tipoPagamento === 'vista' && formaPagamentoSelecionada) || (tipoPagamento === 'parcial' && pagamentosParciais.length > 0)) ? (
               <div className="bg-gray-800/50 rounded-lg p-3 mb-3">
                 <div className="text-sm font-medium text-white mb-2">Pagamentos:</div>
                 <div className="space-y-1">
@@ -19348,7 +19405,7 @@ const PDVPage: React.FC = () => {
             </div>
 
             {/* Campo CPF/CNPJ - Compacto */}
-            {temBotaoNfceAtivo() && (
+            {temBotaoNfceAtivo() && !isTrocaExata() && (
               <div className="mb-3">
                 <div className="space-y-2">
                   {/* Botões CPF/CNPJ */}
@@ -19486,9 +19543,10 @@ const PDVPage: React.FC = () => {
                 )}
 
                 {/* Grupo: NFC-e */}
-                <div className="space-y-2">
-                  {/* NFC-e com Impressão */}
-                  {!pdvConfig?.ocultar_nfce_com_impressao && (
+                {!isTrocaExata() && (
+                  <div className="space-y-2">
+                    {/* NFC-e com Impressão */}
+                    {!pdvConfig?.ocultar_nfce_com_impressao && (
                     <button
                       onClick={() => {
                         if (isDocumentoInvalido()) {
@@ -19545,8 +19603,9 @@ const PDVPage: React.FC = () => {
                         </div>
                       )}
                     </button>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Grupo: Delivery Local - Aparece apenas se configuração habilitada E há cliente */}
                 {pdvConfig?.delivery && (clienteSelecionado || (pedidosImportados.length > 0 && pedidosImportados[0]?.cliente) || clienteEncontrado) && (
