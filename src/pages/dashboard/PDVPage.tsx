@@ -5308,7 +5308,7 @@ const PDVPage: React.FC = () => {
           protocolo_nfe: vendaParaCancelar.protocolo_nfe
         };
 
-        const cancelamentoResponse = await fetch('http://31.97.166.71/backend/public/cancelar-nfce.php', {
+        const cancelamentoResponse = await fetch('/backend/public/cancelar-nfce.php', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
