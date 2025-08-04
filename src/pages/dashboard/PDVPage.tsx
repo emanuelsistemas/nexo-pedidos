@@ -13179,8 +13179,8 @@ const PDVPage: React.FC = () => {
           .reduce((total, item) => total + (item.desconto?.valorDesconto || 0), 0) * 100
       ) / 100;
 
-      // Desconto total inclui desconto global + valor das devoluções
-      const valorDescontoTotal = Math.round((descontoGlobal + valorDevolucoes) * 100) / 100;
+      // ✅ CORRIGIDO: Desconto total apenas do desconto global (sem incluir devoluções)
+      const valorDescontoTotal = Math.round(descontoGlobal * 100) / 100;
 
       // ✅ NOVO: Preparar observação da venda incluindo informações de troca
       let observacaoFinal = observacaoVenda || '';
@@ -23153,12 +23153,7 @@ const PDVPage: React.FC = () => {
                         {vendaParaExibirItens.created_at} • Total: {formatCurrency(vendaParaExibirItens.valor_final)}
                       </p>
                     </div>
-                    {/* ✅ ETAPA 1: Indicador de itens de devolução */}
-                    {itensVenda.some(item => item.isDevolucao) && (
-                      <div className="px-3 py-1.5 bg-red-500/20 text-red-400 text-sm font-medium rounded-full border border-red-500/30">
-                        Contém Devoluções
-                      </div>
-                    )}
+
                   </div>
                   <button
                     onClick={fecharModalItens}
@@ -23318,61 +23313,72 @@ const PDVPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* ✅ NOVO: Tabela de itens com dados fiscais editáveis (apenas para vendas sem NFC-e) */}
-                    {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
-                      <div className="bg-gray-800/30 rounded-lg p-4 mb-4">
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="text-lg font-medium text-white flex items-center gap-2">
-                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    {/* ✅ CORRIGIDO: Tabela de itens - sempre exibir */}
+                    <div className="bg-gray-800/30 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-medium text-white flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada'
+                            ? 'Dados Fiscais (Editáveis para NFC-e)'
+                            : 'Itens da Venda'
+                          }
+                        </h4>
+                        {/* ✅ Botão de atualizar dados apenas para vendas sem NFC-e */}
+                        {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && itensVenda.length > 0 && (
+                          <button
+                            onClick={handleAtualizarDadosProdutosNfce}
+                            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                            title="Atualizar dados fiscais dos produtos com informações do cadastro"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                              <path d="M21 3v5h-5"/>
+                              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                              <path d="M3 21v-5h5"/>
                             </svg>
-                            Dados Fiscais (Editáveis para NFC-e)
-                          </h4>
-                          {itensVenda.length > 0 && (
-                            <button
-                              onClick={handleAtualizarDadosProdutosNfce}
-                              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                              title="Atualizar dados fiscais dos produtos com informações do cadastro"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                                <path d="M21 3v5h-5"/>
-                                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                                <path d="M3 21v-5h5"/>
-                              </svg>
-                              Atualizar dados dos produtos
-                            </button>
-                          )}
-                        </div>
+                            Atualizar dados dos produtos
+                          </button>
+                        )}
+                      </div>
+                      {/* ✅ Descrição apenas para vendas editáveis */}
+                      {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
                         <p className="text-gray-400 text-sm mb-4">
                           Revise e corrija os dados fiscais dos produtos. Clique no ícone de lápis para editar os campos CFOP, NCM, CEST, Margem, Aliquota, CST ou CSOSN.
                         </p>
+                      )}
 
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="border-b border-gray-700">
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Item</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Código</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Cód. Barras</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Nome</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Qtd</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Preço</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Total</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">NCM</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CFOP</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CEST</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Margem</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Aliquota</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">
-                                  {itensVenda[0]?.regime_tributario === 1 ? 'CSOSN' : 'CST'}
-                                </th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Unidade</th>
-                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Vendedor</th>
-                              </tr>
-                            </thead>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-700">
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Item</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Código</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Cód. Barras</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Nome</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Qtd</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Preço</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Total</th>
+                              {/* ✅ Campos fiscais apenas para vendas editáveis */}
+                              {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
+                                <>
+                                  <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">NCM</th>
+                                  <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CFOP</th>
+                                  <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CEST</th>
+                                  <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Margem</th>
+                                  <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Aliquota</th>
+                                  <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">
+                                    {itensVenda[0]?.regime_tributario === 1 ? 'CSOSN' : 'CST'}
+                                  </th>
+                                </>
+                              )}
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Unidade</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Vendedor</th>
+                            </tr>
+                          </thead>
                             <tbody>
-                              {itensVenda.map((item, index) => (
+                              {itensVenda.filter(item => !item.isDevolucao).map((item, index) => (
                                 <tr key={item.id} className={`border-b border-gray-800/50 ${
                                   item.isDevolucao ? 'bg-red-900/20 border-red-600/30' : ''
                                 }`}>
@@ -23393,8 +23399,11 @@ const PDVPage: React.FC = () => {
                                   <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
                                   <td className="py-3 px-2 text-primary-400 font-medium">{formatCurrency(item.valor_total_item)}</td>
 
-                                  {/* NCM */}
-                                  <td className="py-3 px-2">
+                                  {/* ✅ Campos fiscais apenas para vendas editáveis */}
+                                  {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
+                                    <>
+                                      {/* NCM */}
+                                      <td className="py-3 px-2">
                                     <div className="flex items-center gap-2">
                                       {item.editando_ncm ? (
                                         <div className="flex items-center gap-1">
@@ -23737,6 +23746,8 @@ const PDVPage: React.FC = () => {
                                       )}
                                     </div>
                                   </td>
+                                    </>
+                                  )}
 
                                   {/* Unidade */}
                                   <td className="py-3 px-2 text-gray-300">{item.produto?.unidade_medida?.sigla || 'UN'}</td>
@@ -23750,17 +23761,16 @@ const PDVPage: React.FC = () => {
                             </tbody>
                           </table>
                         </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
                 {/* ✅ NOVO: Seção de Vendedores da Venda */}
                 {!loadingItensVenda && itensVenda.length > 0 && (() => {
-                  // Buscar vendedores únicos dos itens
+                  // Buscar vendedores únicos dos itens (excluindo devoluções)
                   const vendedoresUnicos = new Map();
 
-                  itensVenda.forEach(item => {
+                  itensVenda.filter(item => !item.isDevolucao).forEach(item => {
                     if (item.vendedor_id && item.vendedor_nome) {
                       vendedoresUnicos.set(item.vendedor_id, item.vendedor_nome);
                     }
@@ -23789,15 +23799,18 @@ const PDVPage: React.FC = () => {
                     <h4 className="text-lg font-medium text-white mb-4">Resumo da Venda</h4>
 
                     {(() => {
+                      // ✅ CORRIGIDO: Filtrar apenas itens que não são devolução
+                      const itensVendaFiltrados = itensVenda.filter(item => !item.isDevolucao);
+
                       // Calcular subtotal sem descontos (preço original * quantidade)
-                      const subtotalSemDescontos = itensVenda.reduce((total, item) => {
+                      const subtotalSemDescontos = itensVendaFiltrados.reduce((total, item) => {
                         // ✅ CORRIGIDO: Usar valor_unitario * quantidade para garantir o valor original
                         const valorOriginal = item.valor_unitario * item.quantidade;
                         return total + valorOriginal;
                       }, 0);
 
                       // Calcular total com descontos aplicados nos itens
-                      const totalComDescontosItens = itensVenda.reduce((total, item) => {
+                      const totalComDescontosItens = itensVendaFiltrados.reduce((total, item) => {
                         return total + (item.valor_total_item || 0);
                       }, 0);
 
@@ -23806,15 +23819,14 @@ const PDVPage: React.FC = () => {
                       let descontoTotal = vendaParaExibirItens.valor_desconto_total || 0;
                       const descontoPrazo = vendaParaExibirItens.valor_desconto || 0;
 
-                      // ✅ NOVO: Para vendas antigas, calcular descontos dinamicamente
+                      // ✅ CORRIGIDO: Para vendas antigas, calcular apenas desconto nos itens dinamicamente
                       if (descontoItens === 0 && descontoTotal === 0) {
                         // Calcular desconto nos itens (diferença entre subtotal original e total com desconto)
                         descontoItens = Math.max(0, subtotalSemDescontos - totalComDescontosItens);
 
-                        // Calcular desconto no total (diferença entre total dos itens e valor final da venda)
-                        const valorFinalVenda = vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final || 0;
-                        const totalAposDescontoItens = totalComDescontosItens - descontoPrazo; // Remover desconto por prazo
-                        descontoTotal = Math.max(0, totalAposDescontoItens - valorFinalVenda);
+                        // ✅ CORRIGIDO: Desconto no total deve ser 0 se não estiver salvo no banco
+                        // Não calcular dinamicamente pois isso incluiria devoluções
+                        descontoTotal = 0;
                       }
 
                       return (
@@ -23822,7 +23834,7 @@ const PDVPage: React.FC = () => {
                           {/* Itens */}
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-white">Itens:</span>
-                            <span className="text-white">{itensVenda.reduce((total, item) => total + item.quantidade, 0)}</span>
+                            <span className="text-white">{itensVendaFiltrados.reduce((total, item) => total + item.quantidade, 0)}</span>
                           </div>
 
                           {/* Subtotal */}
@@ -23882,8 +23894,9 @@ const PDVPage: React.FC = () => {
                             <span className="text-primary-400">{formatCurrency(vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final)}</span>
                           </div>
 
-                          {/* ✅ NOVO: Formas de Pagamento */}
-                          {(vendaParaExibirItens.tipo_pagamento || vendaParaExibirItens.forma_pagamento_id || vendaParaExibirItens.formas_pagamento) && (
+                          {/* ✅ NOVO: Formas de Pagamento - Ocultar quando valor total for R$ 0,00 */}
+                          {(vendaParaExibirItens.tipo_pagamento || vendaParaExibirItens.forma_pagamento_id || vendaParaExibirItens.formas_pagamento) &&
+                           (vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final || 0) > 0 && (
                             <>
                               {/* Linha separadora */}
                               <div className="border-t border-gray-700 my-3"></div>

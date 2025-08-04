@@ -274,6 +274,65 @@ const DevolucoesPage: React.FC = () => {
     setShowDetalhesModal(true);
   };
 
+  // ✅ NOVO: Função para fazer saída do estoque quando cancela devolução
+  const fazerSaidaEstoqueCancelamento = async (devolucao: Devolucao) => {
+    try {
+      console.log('🔍 DEBUG CANCELAMENTO - Iniciando saída do estoque para devolução:', devolucao);
+
+      // Buscar os itens da devolução
+      const { data: itens, error: itensError } = await supabase
+        .from('devolucao_itens')
+        .select(`
+          *,
+          produto:produtos(id, nome, codigo)
+        `)
+        .eq('devolucao_id', devolucao.id);
+
+      if (itensError) {
+        console.error('Erro ao buscar itens da devolução:', itensError);
+        throw new Error('Erro ao buscar itens da devolução: ' + itensError.message);
+      }
+
+      if (!itens || itens.length === 0) {
+        console.log('⚠️ Nenhum item encontrado para saída do estoque');
+        return;
+      }
+
+      console.log('📦 Itens encontrados para saída do estoque:', itens);
+
+      // ✅ Fazer saída do estoque para cada item (quantidade NEGATIVA)
+      for (const item of itens) {
+        // Pular produtos sem controle de estoque (código 999999)
+        if (item.produto?.codigo === '999999') {
+          console.log(`⏭️ Pulando produto sem controle de estoque: ${item.produto?.nome}`);
+          continue;
+        }
+
+        // ✅ Usar função RPC com quantidade NEGATIVA (saída)
+        const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
+          p_produto_id: item.produto_id,
+          p_quantidade: -item.quantidade, // ✅ Quantidade NEGATIVA para saída
+          p_tipo_operacao: 'cancelamento_devolucao',
+          p_observacao: `Cancelamento da devolução ${devolucao.codigo_troca} - Ref. Venda: ${devolucao.venda_origem_numero || 'N/A'}`
+        });
+
+        if (estoqueError) {
+          console.error('Erro ao fazer saída do estoque via RPC:', estoqueError);
+          throw new Error(`Erro ao fazer saída do estoque do produto ${item.produto?.nome}: ${estoqueError.message}`);
+        }
+
+        console.log(`✅ Saída do estoque realizada - Produto: ${item.produto?.nome}, Quantidade saída: -${item.quantidade}`);
+      }
+
+      console.log('✅ Saída do estoque concluída para cancelamento da devolução');
+      return true;
+
+    } catch (error) {
+      console.error('Erro na saída do estoque para cancelamento:', error);
+      throw error;
+    }
+  };
+
   const handleDeletarDevolucao = (devolucao: Devolucao) => {
     // ✅ NOVO: Verificar se a devolução já foi processada ANTES de abrir o modal
     if (devolucao.status === 'processada') {
@@ -300,6 +359,10 @@ const DevolucoesPage: React.FC = () => {
 
     try {
       setIsDeletingDevolucao(true);
+
+      // ✅ NOVO: Fazer saída do estoque ANTES de deletar a devolução
+      console.log('📦 Iniciando saída do estoque para cancelamento da devolução:', devolucaoParaDeletar.codigo_troca);
+      await fazerSaidaEstoqueCancelamento(devolucaoParaDeletar);
 
       // Deletar a devolução usando o serviço
       await devolucaoService.deletarDevolucao(devolucaoParaDeletar.id);
