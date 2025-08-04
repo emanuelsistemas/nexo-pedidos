@@ -1013,12 +1013,17 @@ const EntradaManualTab: React.FC<{
 
     // Se há divergências, mostrar modal de confirmação
     if (produtosDivergentes.length > 0) {
+      // Capturar as funções no escopo atual
+      const setDivergencias = setDivergenciasPrecos;
+      const setShowModal = setShowModalDivergencias;
+      const setConfirmar = setConfirmarAtualizacaoPrecos;
+
       return new Promise((resolve) => {
-        setDivergenciasPrecos(produtosDivergentes);
-        setShowModalDivergencias(true);
-        setConfirmarAtualizacaoPrecos((confirmar: boolean) => {
-          setShowModalDivergencias(false);
-          setDivergenciasPrecos([]);
+        setDivergencias(produtosDivergentes);
+        setShowModal(true);
+        setConfirmar(() => (confirmar: boolean) => {
+          setShowModal(false);
+          setDivergencias([]);
           resolve({ produtosDivergentes, confirmarAtualizacao: confirmar });
         });
       });
