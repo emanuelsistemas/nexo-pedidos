@@ -1964,6 +1964,11 @@ const PDVPage: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [loadingCaixa]);
 
+  // ✅ NOVO: Monitor do estado do modal
+  useEffect(() => {
+    console.log('🎭 Estado do modal mudou:', { showAberturaCaixaModal });
+  }, [showAberturaCaixaModal]);
+
   // useEffect separado para event listeners - SEM dependências para evitar recarregamentos
   useEffect(() => {
     // Event listeners para sistema de eventos em tempo real
@@ -17184,7 +17189,9 @@ const PDVPage: React.FC = () => {
           <button
             onClick={() => {
               console.log('🔘 Botão "Abrir Caixa" clicado');
+              console.log('📊 Estado antes:', { showAberturaCaixaModal });
               setShowAberturaCaixaModal(true);
+              console.log('📊 setShowAberturaCaixaModal(true) executado');
             }}
             className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
           >
@@ -29859,15 +29866,45 @@ const PDVPage: React.FC = () => {
       </AnimatePresence>
 
       {/* ✅ NOVO: Modal de Abertura de Caixa */}
+      {showAberturaCaixaModal && console.log('🎭 Modal deve aparecer agora')}
+
+      {/* TESTE: Elemento simples para verificar renderização */}
+      {showAberturaCaixaModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50px',
+            right: '50px',
+            background: 'red',
+            color: 'white',
+            padding: '20px',
+            zIndex: 999999,
+            fontSize: '20px',
+            fontWeight: 'bold'
+          }}
+        >
+          MODAL ATIVO!
+        </div>
+      )}
+
       <AnimatePresence>
-        {showAberturaCaixaModal && (() => {
-          console.log('🎭 Renderizando modal de abertura de caixa');
-          return (
+        {showAberturaCaixaModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -29961,8 +29998,7 @@ const PDVPage: React.FC = () => {
               </div>
             </motion.div>
           </motion.div>
-          );
-        })()}
+        )}
       </AnimatePresence>
     </div>
   );

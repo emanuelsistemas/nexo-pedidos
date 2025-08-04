@@ -47,6 +47,11 @@ const EntradaMercadoriaPage: React.FC = () => {
   const [entradaParaExcluir, setEntradaParaExcluir] = useState<EntradaMercadoria | null>(null);
   const [tipoExclusao, setTipoExclusao] = useState<'permitida' | 'negada'>('permitida');
 
+  // ✅ NOVOS ESTADOS: Modal de divergências de preços
+  const [showModalDivergencias, setShowModalDivergencias] = useState(false);
+  const [divergenciasPrecos, setDivergenciasPrecos] = useState<any[]>([]);
+  const [confirmarAtualizacaoPrecos, setConfirmarAtualizacaoPrecos] = useState<(confirmar: boolean) => void>(() => {});
+
   // Função para carregar entradas de mercadoria
   const loadEntradas = async () => {
     try {
@@ -534,6 +539,154 @@ const EntradaMercadoriaPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ✅ NOVO MODAL: Divergências de Preços */}
+      <AnimatePresence>
+        {showModalDivergencias && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed top-0 left-0 right-0 bottom-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-4xl max-h-[80vh] overflow-hidden"
+            >
+              {/* Cabeçalho */}
+              <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Divergências de Preços Detectadas</h2>
+                  <p className="text-gray-400 text-sm mt-1">
+                    Os seguintes produtos possuem preços diferentes do cadastrado no sistema
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowModalDivergencias(false);
+                    confirmarAtualizacaoPrecos(false);
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="space-y-4">
+                  {divergenciasPrecos.map((produto, index) => (
+                    <div key={index} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="text-white font-medium">{produto.nome}</h3>
+                          <p className="text-gray-400 text-sm">Código: {produto.codigo}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-gray-300 text-sm">Quantidade: {produto.quantidade}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Preço de Custo */}
+                        {produto.divergePrecoCusto && (
+                          <div className="bg-gray-900/50 rounded-lg p-3">
+                            <h4 className="text-yellow-400 font-medium mb-2 flex items-center gap-2">
+                              <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
+                              Preço de Custo
+                            </h4>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Atual no sistema:</span>
+                                <span className="text-gray-300">R$ {produto.precoCustoAtual.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Na entrada:</span>
+                                <span className="text-green-400 font-medium">R$ {produto.precoCustoEntrada.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Preço de Venda */}
+                        {produto.divergePrecoVenda && (
+                          <div className="bg-gray-900/50 rounded-lg p-3">
+                            <h4 className="text-blue-400 font-medium mb-2 flex items-center gap-2">
+                              <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                              Preço de Venda
+                            </h4>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Atual no sistema:</span>
+                                <span className="text-gray-300">R$ {produto.precoVendaAtual.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Na entrada:</span>
+                                <span className="text-green-400 font-medium">R$ {produto.precoVendaEntrada.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Aviso */}
+                <div className="mt-6 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-black text-xs font-bold">!</span>
+                    </div>
+                    <div>
+                      <h4 className="text-yellow-400 font-medium mb-1">Atenção</h4>
+                      <p className="text-gray-300 text-sm">
+                        Se você confirmar, os preços dos produtos no sistema serão atualizados com os valores da entrada.
+                        Esta ação afetará futuras vendas e relatórios.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rodapé */}
+              <div className="px-6 py-4 border-t border-gray-700 flex items-center justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowModalDivergencias(false);
+                    confirmarAtualizacaoPrecos(false);
+                  }}
+                >
+                  Cancelar Entrada
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowModalDivergencias(false);
+                    // Continuar o processo mas sem atualizar preços (limpar divergências)
+                    setDivergenciasPrecos([]);
+                    confirmarAtualizacaoPrecos(true);
+                  }}
+                >
+                  Continuar sem Atualizar Preços
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setShowModalDivergencias(false);
+                    confirmarAtualizacaoPrecos(true);
+                  }}
+                >
+                  Confirmar e Atualizar Preços
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -819,6 +972,140 @@ const EntradaManualTab: React.FC<{
     }
   };
 
+  // ✅ NOVA FUNÇÃO: Validar divergências de preços
+  const validarDivergenciasPrecos = async (produtos: any[]): Promise<{ produtosDivergentes: any[], confirmarAtualizacao: boolean }> => {
+    const produtosDivergentes: any[] = [];
+
+    for (const produto of produtos) {
+      if (!produto.produto_id) continue;
+
+      // Buscar dados atuais do produto no banco
+      const { data: produtoAtual, error } = await supabase
+        .from('produtos')
+        .select('preco, preco_custo')
+        .eq('id', produto.produto_id)
+        .eq('empresa_id', empresaId)
+        .single();
+
+      if (error || !produtoAtual) continue;
+
+      const precoVendaAtual = parseFloat(produtoAtual.preco || '0');
+      const precoCustoAtual = parseFloat(produtoAtual.preco_custo || '0');
+      const precoVendaEntrada = parseFloat(produto.preco_venda || '0');
+      const precoCustoEntrada = parseFloat(produto.preco_custo || '0');
+
+      // Verificar divergências (tolerância de 0.01 para evitar problemas de precisão)
+      const divergePrecoVenda = Math.abs(precoVendaAtual - precoVendaEntrada) > 0.01;
+      const divergePrecoCusto = Math.abs(precoCustoAtual - precoCustoEntrada) > 0.01;
+
+      if (divergePrecoVenda || divergePrecoCusto) {
+        produtosDivergentes.push({
+          ...produto,
+          precoVendaAtual,
+          precoCustoAtual,
+          precoVendaEntrada,
+          precoCustoEntrada,
+          divergePrecoVenda,
+          divergePrecoCusto
+        });
+      }
+    }
+
+    // Se há divergências, mostrar modal de confirmação
+    if (produtosDivergentes.length > 0) {
+      return new Promise((resolve) => {
+        setDivergenciasPrecos(produtosDivergentes);
+        setShowModalDivergencias(true);
+        setConfirmarAtualizacaoPrecos((confirmar: boolean) => {
+          setShowModalDivergencias(false);
+          setDivergenciasPrecos([]);
+          resolve({ produtosDivergentes, confirmarAtualizacao: confirmar });
+        });
+      });
+    }
+
+    return { produtosDivergentes: [], confirmarAtualizacao: false };
+  };
+
+  // ✅ NOVA FUNÇÃO: Atualizar estoque dos produtos
+  const atualizarEstoqueEntrada = async (produtos: any[], numeroEntrada: string) => {
+    console.log('📦 Iniciando atualização do estoque...');
+
+    for (const produto of produtos) {
+      // Pular produtos sem controle de estoque (código 999999)
+      if (produto.codigo === '999999') {
+        console.log(`⏭️ Pulando produto sem controle de estoque: ${produto.nome}`);
+        continue;
+      }
+
+      if (!produto.produto_id) {
+        console.log(`⏭️ Pulando produto sem ID: ${produto.nome}`);
+        continue;
+      }
+
+      try {
+        // ✅ Usar função RPC igual à devolução, com quantidade POSITIVA (entrada)
+        const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
+          p_produto_id: produto.produto_id,
+          p_quantidade: produto.quantidade, // ✅ Quantidade POSITIVA para entrada
+          p_tipo_operacao: 'entrada_mercadoria',
+          p_observacao: `Entrada de Mercadoria ${numeroEntrada} - Fornecedor: ${fornecedorNome || 'N/A'}`
+        });
+
+        if (estoqueError) {
+          console.error('Erro ao atualizar estoque via RPC:', estoqueError);
+          throw new Error(`Erro ao atualizar estoque do produto ${produto.nome}: ${estoqueError.message}`);
+        }
+
+        console.log(`✅ Estoque atualizado via RPC - Produto: ${produto.nome}, Quantidade entrada: +${produto.quantidade}`);
+      } catch (error) {
+        console.error(`Erro ao atualizar estoque do produto ${produto.nome}:`, error);
+        throw error;
+      }
+    }
+
+    console.log('✅ Atualização de estoque concluída');
+  };
+
+  // ✅ NOVA FUNÇÃO: Atualizar preços dos produtos (se confirmado)
+  const atualizarPrecosProdutos = async (produtosDivergentes: any[]) => {
+    console.log('💰 Iniciando atualização de preços...');
+
+    for (const produto of produtosDivergentes) {
+      try {
+        const dadosAtualizacao: any = {};
+
+        if (produto.divergePrecoVenda) {
+          dadosAtualizacao.preco = produto.precoVendaEntrada;
+        }
+
+        if (produto.divergePrecoCusto) {
+          dadosAtualizacao.preco_custo = produto.precoCustoEntrada;
+        }
+
+        if (Object.keys(dadosAtualizacao).length > 0) {
+          const { error: updateError } = await supabase
+            .from('produtos')
+            .update(dadosAtualizacao)
+            .eq('id', produto.produto_id)
+            .eq('empresa_id', empresaId);
+
+          if (updateError) {
+            console.error('Erro ao atualizar preços:', updateError);
+            throw new Error(`Erro ao atualizar preços do produto ${produto.nome}: ${updateError.message}`);
+          }
+
+          console.log(`✅ Preços atualizados - Produto: ${produto.nome}`);
+        }
+      } catch (error) {
+        console.error(`Erro ao atualizar preços do produto ${produto.nome}:`, error);
+        throw error;
+      }
+    }
+
+    console.log('✅ Atualização de preços concluída');
+  };
+
   // Função para processar entrada
   const handleProcessarEntrada = async () => {
     if (!empresaId || !usuarioId) {
@@ -838,6 +1125,18 @@ const EntradaManualTab: React.FC<{
 
     try {
       setIsLoading(true);
+
+      // ✅ ETAPA 1: Validar divergências de preços
+      console.log('🔍 Validando divergências de preços...');
+      const { produtosDivergentes, confirmarAtualizacao } = await validarDivergenciasPrecos(produtos);
+
+      if (produtosDivergentes.length > 0 && !confirmarAtualizacao) {
+        console.log('❌ Usuário cancelou devido às divergências de preços');
+        return;
+      }
+
+      // Determinar se deve atualizar preços (só se há divergências E usuário confirmou)
+      const deveAtualizarPrecos = produtosDivergentes.length > 0 && confirmarAtualizacao && divergenciasPrecos.length > 0;
 
       // Gerar próximo número
       const proximoNumero = await gerarProximoNumero();
@@ -936,6 +1235,28 @@ const EntradaManualTab: React.FC<{
             }
           }
         }
+      }
+
+      // ✅ ETAPA 2: Atualizar preços dos produtos (se confirmado)
+      if (deveAtualizarPrecos) {
+        console.log('💰 Atualizando preços dos produtos...');
+        try {
+          await atualizarPrecosProdutos(produtosDivergentes);
+          showMessage('success', 'Preços dos produtos atualizados com sucesso!');
+        } catch (error) {
+          console.error('Erro ao atualizar preços:', error);
+          showMessage('warning', 'Entrada salva, mas houve erro ao atualizar preços dos produtos');
+        }
+      }
+
+      // ✅ ETAPA 3: Atualizar estoque dos produtos
+      console.log('📦 Atualizando estoque dos produtos...');
+      try {
+        await atualizarEstoqueEntrada(produtos, proximoNumero);
+        showMessage('success', 'Estoque atualizado com sucesso!');
+      } catch (error) {
+        console.error('Erro ao atualizar estoque:', error);
+        showMessage('warning', 'Entrada salva, mas houve erro ao atualizar estoque dos produtos');
       }
 
       showMessage('success', `Entrada processada com sucesso! Número: ${proximoNumero}`);
@@ -1268,7 +1589,7 @@ const EntradaManualTab: React.FC<{
               <Button
                 variant="primary"
                 onClick={handleProcessarEntrada}
-                disabled={isLoading || !fornecedorId || produtos.length === 0}
+                disabled={isLoading || !fornecedorId}
               >
                 {isLoading ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
