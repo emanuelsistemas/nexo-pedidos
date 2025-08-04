@@ -29866,10 +29866,27 @@ const PDVPage: React.FC = () => {
       </AnimatePresence>
 
       {/* ✅ NOVO: Modal de Abertura de Caixa */}
-      {showAberturaCaixaModal && console.log('🎭 Modal deve aparecer agora')}
+      {console.log('🔍 Renderizando componente, showAberturaCaixaModal:', showAberturaCaixaModal)}
 
-      {/* TESTE: Elemento simples para verificar renderização */}
-      {showAberturaCaixaModal && (
+      {/* TESTE: Elemento simples SEM condição para verificar se está renderizando */}
+      <div
+        style={{
+          position: 'fixed',
+          top: '10px',
+          right: '10px',
+          background: 'blue',
+          color: 'white',
+          padding: '10px',
+          zIndex: 999999,
+          fontSize: '14px',
+          fontWeight: 'bold'
+        }}
+      >
+        SEMPRE VISÍVEL
+      </div>
+
+      {/* TESTE: Elemento condicional */}
+      {showAberturaCaixaModal ? (
         <div
           style={{
             position: 'fixed',
@@ -29884,6 +29901,22 @@ const PDVPage: React.FC = () => {
           }}
         >
           MODAL ATIVO!
+        </div>
+      ) : (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50px',
+            right: '50px',
+            background: 'green',
+            color: 'white',
+            padding: '20px',
+            zIndex: 999999,
+            fontSize: '20px',
+            fontWeight: 'bold'
+          }}
+        >
+          MODAL INATIVO
         </div>
       )}
 

@@ -2075,6 +2075,24 @@ const ProdutoEntradaModal: React.FC<{
     setProdutos(prev => prev.filter((_, i) => i !== index));
   };
 
+  // ✅ NOVA FUNÇÃO: Apenas adicionar produtos ao modal anterior
+  const handleAdicionarProdutos = () => {
+    console.log('📦 Adicionando produtos ao modal anterior...');
+
+    if (produtos.length === 0) {
+      showMessage('warning', 'Nenhum produto foi adicionado');
+      return;
+    }
+
+    // Chamar onSave para passar os produtos para o modal anterior
+    onSave(produtos);
+
+    // Fechar apenas este modal (produtos)
+    onClose();
+
+    showMessage('success', `${produtos.length} produto(s) adicionado(s) à entrada`);
+  };
+
   // Salvar progresso sem fechar modal
   const handleSalvarProgresso = async () => {
     console.log('🔄 Iniciando salvamento de rascunho...');
@@ -2626,10 +2644,10 @@ const ProdutoEntradaModal: React.FC<{
               onClick={modoEdicao ? () => {
                 onSave(produtos);
                 onClose();
-              } : handleSalvarProgresso}
+              } : handleAdicionarProdutos}
             >
-              <Save size={16} className="mr-2" />
-              {modoEdicao ? 'Confirmar' : 'Salvar'}
+              <Package size={16} className="mr-2" />
+              {modoEdicao ? 'Confirmar Alterações' : 'Adicionar Produtos'}
             </Button>
           </div>
         </div>
