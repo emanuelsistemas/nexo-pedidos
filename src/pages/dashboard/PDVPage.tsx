@@ -454,9 +454,6 @@ const PDVPage: React.FC = () => {
   const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
   const [caixaAberto, setCaixaAberto] = useState(false);
   const [loadingCaixa, setLoadingCaixa] = useState(false); // Iniciar como false
-
-  // ✅ CONTADOR PARA DEBUG - para verificar re-renderização
-  const [contadorCliques, setContadorCliques] = useState(0);
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -17188,34 +17185,17 @@ const PDVPage: React.FC = () => {
               <X size={32} className="text-red-400" />
             </div>
             <h2 className="text-xl font-semibold text-white mb-2">Caixa Fechado</h2>
-            <p className="text-gray-400 mb-4">
+            <p className="text-gray-400 mb-6">
               O controle de caixa está habilitado. É necessário abrir o caixa antes de operar o PDV.
             </p>
 
-            {/* ✅ DEBUG: Informações de estado */}
-            <div className="bg-gray-700 rounded-lg p-3 mb-4 text-left text-sm">
-              <div className="text-yellow-400 font-bold mb-2">🔍 DEBUG INFO:</div>
-              <div className="text-white">Cliques: <span className="text-green-400 font-bold">{contadorCliques}</span></div>
-              <div className="text-white">Modal Abertura: <span className={showAberturaCaixaModal ? 'text-green-400' : 'text-red-400'}>{showAberturaCaixaModal ? 'TRUE' : 'FALSE'}</span></div>
-              <div className="text-white">Caixa Aberto: <span className={caixaAberto ? 'text-green-400' : 'text-red-400'}>{caixaAberto ? 'TRUE' : 'FALSE'}</span></div>
-              <div className="text-white">Loading: <span className={loadingCaixa ? 'text-yellow-400' : 'text-gray-400'}>{loadingCaixa ? 'TRUE' : 'FALSE'}</span></div>
-            </div>
-
             <button
               onClick={() => {
-                console.log('🔘 Botão "Abrir Caixa" clicado');
-                console.log('📊 Estado antes:', { showAberturaCaixaModal, contadorCliques });
-
-                // Incrementar contador para verificar re-renderização
-                setContadorCliques(prev => prev + 1);
                 setShowAberturaCaixaModal(true);
-
-                console.log('📊 setShowAberturaCaixaModal(true) executado');
-                console.log('📊 Contador incrementado para:', contadorCliques + 1);
               }}
               className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
             >
-              Abrir Caixa (#{contadorCliques})
+              Abrir Caixa
             </button>
           </div>
         </div>
@@ -30042,62 +30022,7 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* ✅ MODAL DE ABERTURA DE CAIXA - VERSÃO SIMPLES PARA TESTE */}
-      {console.log('🔍 Renderizando componente, showAberturaCaixaModal:', showAberturaCaixaModal)}
-
-      {/* TESTE: Elemento simples SEM condição para verificar se está renderizando */}
-      <div
-        style={{
-          position: 'fixed',
-          top: '10px',
-          right: '10px',
-          background: 'blue',
-          color: 'white',
-          padding: '10px',
-          zIndex: 999999,
-          fontSize: '14px',
-          fontWeight: 'bold'
-        }}
-      >
-        SEMPRE VISÍVEL
-      </div>
-
-      {/* TESTE: Elemento condicional */}
-      {showAberturaCaixaModal ? (
-        <div
-          style={{
-            position: 'fixed',
-            top: '50px',
-            right: '50px',
-            background: 'red',
-            color: 'white',
-            padding: '20px',
-            zIndex: 999999,
-            fontSize: '20px',
-            fontWeight: 'bold'
-          }}
-        >
-          MODAL ATIVO!
-        </div>
-      ) : (
-        <div
-          style={{
-            position: 'fixed',
-            top: '50px',
-            right: '50px',
-            background: 'green',
-            color: 'white',
-            padding: '20px',
-            zIndex: 999999,
-            fontSize: '20px',
-            fontWeight: 'bold'
-          }}
-        >
-          MODAL INATIVO
-        </div>
-      )}
-
-      {/* MODAL ULTRA SIMPLES - TESTE MÁXIMO */}
+      {/* ✅ MODAL DE ABERTURA DE CAIXA */}
       {showAberturaCaixaModal && (
         <div
           style={{
