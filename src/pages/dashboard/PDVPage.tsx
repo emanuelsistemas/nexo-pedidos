@@ -454,6 +454,12 @@ const PDVPage: React.FC = () => {
   const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
   const [caixaAberto, setCaixaAberto] = useState(false);
   const [loadingCaixa, setLoadingCaixa] = useState(false); // Iniciar como false
+
+  // ✅ NOVO: Estados para modal de controle de caixa
+  const [showCaixaModal, setShowCaixaModal] = useState(false);
+  const [dadosCaixa, setDadosCaixa] = useState<any>(null);
+  const [formasPagamentoCaixa, setFormasPagamentoCaixa] = useState<any[]>([]);
+  const [valoresCaixa, setValoresCaixa] = useState<{[key: string]: string}>({});
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1521,6 +1527,77 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função para carregar dados do caixa aberto
+  const carregarDadosCaixa = async () => {
+    try {
+      console.log('🔍 Carregando dados do caixa...');
+
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar caixa aberto
+      const { data: caixaData, error: caixaError } = await supabase
+        .from('caixa_controle')
+        .select(`
+          *,
+          usuarios!inner(nome)
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status', true)
+        .order('data_abertura', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (caixaError) {
+        console.error('❌ Erro ao buscar dados do caixa:', caixaError);
+        toast.error('Erro ao carregar dados do caixa.');
+        return;
+      }
+
+      console.log('✅ Dados do caixa carregados:', caixaData);
+      setDadosCaixa(caixaData);
+
+      // Buscar formas de pagamento da empresa
+      const { data: formasData, error: formasError } = await supabase
+        .from('forma_pagamento_empresa')
+        .select(`
+          *,
+          forma_pagamento_opcoes!inner(nome, tipo)
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .order('forma_pagamento_opcoes.nome');
+
+      if (formasError) {
+        console.error('❌ Erro ao buscar formas de pagamento:', formasError);
+        toast.error('Erro ao carregar formas de pagamento.');
+        return;
+      }
+
+      console.log('✅ Formas de pagamento carregadas:', formasData);
+      setFormasPagamentoCaixa(formasData || []);
+
+      // Inicializar valores do caixa (todos zerados)
+      const valoresIniciais: {[key: string]: string} = {};
+      formasData?.forEach(forma => {
+        valoresIniciais[forma.forma_pagamento_opcao_id] = '0,00';
+      });
+      setValoresCaixa(valoresIniciais);
+
+    } catch (error) {
+      console.error('❌ Erro inesperado ao carregar dados do caixa:', error);
+      toast.error('Erro inesperado ao carregar dados do caixa.');
+    }
+  };
+
   // ✅ NOVO: Função para formatar valor monetário
   const formatarValorMonetario = (valor: string): string => {
     // Remove todos os caracteres não numéricos
@@ -2385,6 +2462,32 @@ const PDVPage: React.FC = () => {
         // Carregar devoluções pendentes quando abrir o modal
         loadDevolucoesPendentes();
       }
+    },
+    // ✅ NOVO: Botão Caixa - só aparece quando caixa está aberto
+    {
+      id: 'caixa',
+      icon: DollarSign,
+      label: 'Caixa',
+      color: 'green',
+      onClick: async (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        try {
+          // Ativar fullscreen antes de abrir o modal
+          if (!isFullscreen) {
+            await enterFullscreen();
+          }
+        } catch (error) {
+          // Erro silencioso ao ativar fullscreen
+        }
+
+        // Carregar dados do caixa e formas de pagamento
+        await carregarDadosCaixa();
+        setShowCaixaModal(true);
+      }
     }
   ];
 
@@ -2451,6 +2554,10 @@ const PDVPage: React.FC = () => {
       // Se for um dos itens de controle de caixa, só mostrar se a configuração estiver habilitada
       if (['sangria', 'suprimento', 'pagamentos'].includes(item.id)) {
         return pdvConfig?.controla_caixa === true;
+      }
+      // ✅ NOVO: Mostrar "Caixa" apenas quando caixa estiver aberto e controle habilitado
+      if (item.id === 'caixa') {
+        return pdvConfig?.controla_caixa === true && caixaAberto === true;
       }
       // Para outros itens, sempre mostrar (pode adicionar outras condições aqui)
       return true;
@@ -17350,6 +17457,211 @@ const PDVPage: React.FC = () => {
                   }}
                 >
                   Abrir Caixa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ MODAL DE CONTROLE DE CAIXA */}
+        {showCaixaModal && (
+          <div
+            style={{
+              position: 'fixed',
+              top: '0px',
+              left: '0px',
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
+              zIndex: 999999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px'
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: '#1f2937',
+                borderRadius: '12px',
+                border: '2px solid #10b981',
+                padding: '24px',
+                maxWidth: '600px',
+                width: '100%',
+                color: 'white',
+                maxHeight: '90vh',
+                overflowY: 'auto'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+                <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  💰 Controle de Caixa
+                </h3>
+                <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+                  Gerencie o status e valores do caixa
+                </p>
+              </div>
+
+              {/* Informações do caixa */}
+              {dadosCaixa && (
+                <div style={{
+                  backgroundColor: '#374151',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '20px',
+                  border: '1px solid #4b5563'
+                }}>
+                  <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: '#10b981' }}>
+                    📊 Status da Abertura
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>👤 Operador: </span>
+                      <span style={{ fontWeight: 'bold' }}>
+                        {dadosCaixa.usuarios?.nome || 'N/A'}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>🕒 Abertura: </span>
+                      <span style={{ fontWeight: 'bold' }}>
+                        {formatDateTime(dadosCaixa.data_abertura)}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>💵 Valor Inicial: </span>
+                      <span style={{ fontWeight: 'bold', color: '#10b981' }}>
+                        R$ {formatarValorMonetario(dadosCaixa.valor_abertura?.toString() || '0')}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>📈 Status: </span>
+                      <span style={{ fontWeight: 'bold', color: '#10b981' }}>
+                        ABERTO
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Formas de pagamento */}
+              <div style={{ marginBottom: '24px' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#10b981' }}>
+                  💳 Formas de Pagamento
+                </h4>
+
+                {formasPagamentoCaixa.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    {formasPagamentoCaixa.map((forma) => (
+                      <div
+                        key={forma.forma_pagamento_opcao_id}
+                        style={{
+                          backgroundColor: '#374151',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          border: '1px solid #4b5563'
+                        }}
+                      >
+                        <div style={{ marginBottom: '8px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                            {forma.forma_pagamento_opcoes?.nome || 'N/A'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
+                              R$ 0,00
+                            </span>
+                          </div>
+
+                          <div style={{ marginTop: '8px' }}>
+                            <label style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px', display: 'block' }}>
+                              Informar Valor:
+                            </label>
+                            <input
+                              type="text"
+                              value={valoresCaixa[forma.forma_pagamento_opcao_id] || '0,00'}
+                              onChange={(e) => {
+                                const novoValor = formatarValorMonetario(e.target.value);
+                                setValoresCaixa(prev => ({
+                                  ...prev,
+                                  [forma.forma_pagamento_opcao_id]: novoValor
+                                }));
+                              }}
+                              placeholder="0,00"
+                              style={{
+                                width: '100%',
+                                backgroundColor: '#1f2937',
+                                border: '1px solid #4b5563',
+                                borderRadius: '4px',
+                                padding: '6px 8px',
+                                color: 'white',
+                                fontSize: '12px',
+                                outline: 'none'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '20px',
+                    color: '#9ca3af',
+                    backgroundColor: '#374151',
+                    borderRadius: '8px'
+                  }}>
+                    Nenhuma forma de pagamento configurada
+                  </div>
+                )}
+              </div>
+
+              {/* Botões */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => {
+                    setShowCaixaModal(false);
+                    setDadosCaixa(null);
+                    setFormasPagamentoCaixa([]);
+                    setValoresCaixa({});
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#4b5563',
+                    color: 'white',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    // TODO: Implementar fechamento de caixa
+                    toast.info('Funcionalidade de fechamento será implementada em breve');
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#dc2626',
+                    color: 'white',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  Fechar Caixa
                 </button>
               </div>
             </div>
