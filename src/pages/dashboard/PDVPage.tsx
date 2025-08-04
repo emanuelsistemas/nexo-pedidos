@@ -14011,7 +14011,7 @@ const PDVPage: React.FC = () => {
               // Sem documento = consumidor não identificado
               return {};
             })(),
-            produtos: carrinho.map(item => ({
+            produtos: carrinho.filter(item => !item.isDevolucao).map(item => ({
               codigo: item.produto.codigo, // Código real do produto (SEM FALLBACK)
               descricao: item.produto.nome,
               quantidade: item.quantidade,
@@ -14267,7 +14267,7 @@ const PDVPage: React.FC = () => {
               return Array.from(vendedoresUnicos.entries()).map(([id, nome]) => ({ id, nome }));
             })(),
             operador: userData || null, // Incluir dados do operador (usuário atual)
-            itens: carrinho.map(item => ({
+            itens: carrinho.filter(item => !item.isDevolucao).map(item => ({
               codigo: item.produto.codigo,
               nome: item.descricaoSabores ?
                 `${item.produto.nome}\n${item.descricaoSabores}` :
@@ -14380,7 +14380,7 @@ const PDVPage: React.FC = () => {
               return Array.from(vendedoresUnicos.entries()).map(([id, nome]) => ({ id, nome }));
             })(),
             operador: userData || null, // Incluir dados do operador (usuário atual)
-            itens: carrinho.map(item => ({
+            itens: carrinho.filter(item => !item.isDevolucao).map(item => ({
               codigo: item.produto.codigo,
               nome: item.descricaoSabores ?
                 `${item.produto.nome}\n${item.descricaoSabores}` :
@@ -17203,17 +17203,13 @@ const PDVPage: React.FC = () => {
                       </motion.div>
                     )}
 
-                    {carrinho.map((item, index) => (
+                    {carrinho.filter(item => !item.isDevolucao).map((item, index) => (
                       <motion.div
                         key={item.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className={`rounded p-2.5 ${
-                          item.isDevolucao
-                            ? 'bg-red-900/20 border border-red-600/30'
-                            : 'bg-gray-800/50'
-                        }`}
+                        className="rounded p-2.5 bg-gray-800/50"
                       >
                         {/* Layout responsivo baseado na largura da tela - Compacto */}
                         <div className="flex gap-2.5">
