@@ -8401,14 +8401,14 @@ const PDVPage: React.FC = () => {
         .select('id, numero_venda, nome_cliente')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('comanda_numero', numero)
-        .in('status_venda', ['aberta', 'salva']); // Vendas abertas ou salvas
+        .or('status_venda.eq.aberta,status_venda.eq.salva'); // ✅ CORREÇÃO: Usar .or() em vez de .in()
 
       // Se há venda em andamento atual, excluir ela da verificação
       if (vendaEmAndamento?.id) {
         query = query.neq('id', vendaEmAndamento.id);
       }
 
-      const { data: vendaExistente, error } = await query.single();
+      const { data: vendaExistente, error } = await query.maybeSingle(); // ✅ CORREÇÃO: Usar .maybeSingle() em vez de .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found (ok)
         console.error('Erro ao verificar comanda:', error);
