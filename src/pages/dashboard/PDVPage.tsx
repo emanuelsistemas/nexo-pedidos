@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import KeepAlive from '../../components/comum/KeepAlive';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate } from 'react-router-dom';
@@ -1419,9 +1420,8 @@ const PDVPage: React.FC = () => {
       console.log('🏢 Empresa ID:', usuarioData.empresa_id);
       console.log('👤 Usuário ID:', authData.user.id);
 
-      // Verificar se há caixa aberto para este usuário hoje
-      const hoje = new Date().toISOString().split('T')[0];
-      console.log('📅 Data hoje:', hoje);
+      // Verificar se há caixa aberto para este usuário (qualquer data)
+      console.log('📅 Buscando caixa aberto (qualquer data)');
 
       const { data: caixaData, error } = await supabase
         .from('caixa_controle')
@@ -1429,8 +1429,9 @@ const PDVPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('usuario_id', authData.user.id)
         .eq('status_caixa', true)
-        .gte('data_abertura', `${hoje}T00:00:00`)
-        .lte('data_abertura', `${hoje}T23:59:59`)
+        .is('data_fechamento', null)
+        .order('data_abertura', { ascending: false })
+        .limit(1)
         .single();
 
       console.log('💰 Dados do caixa encontrados:', caixaData);
@@ -2573,6 +2574,11 @@ const PDVPage: React.FC = () => {
       }
       // ✅ NOVO: Mostrar "Caixa" apenas quando caixa estiver aberto e controle habilitado
       if (item.id === 'caixa') {
+        console.log('🎯 Verificando botão Caixa:', {
+          controla_caixa: pdvConfig?.controla_caixa,
+          caixaAberto: caixaAberto,
+          resultado: pdvConfig?.controla_caixa === true && caixaAberto === true
+        });
         return pdvConfig?.controla_caixa === true && caixaAberto === true;
       }
       // Para outros itens, sempre mostrar (pode adicionar outras condições aqui)
@@ -17494,6 +17500,14 @@ const PDVPage: React.FC = () => {
 
   return (
     <div className="bg-background-dark overflow-hidden flex" style={{ height: '100vh' }}>
+      {/* ✅ NOVO: Componente para manter sessão ativa no PDV */}
+      <KeepAlive
+        intervalMinutes={3}
+        debug={false}
+        onSessionRefreshed={() => console.log('🔄 PDV: Sessão renovada automaticamente')}
+        onSessionExpired={() => console.log('❌ PDV: Sessão expirou')}
+      />
+
       {/* Sidebar do menu - aparece quando showMenuPDV é true */}
       <AnimatePresence>
         {showMenuPDV && (

@@ -827,11 +827,13 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
 
     if (!formData.nome.trim()) {
       errors.nome = 'Nome é obrigatório';
+      toast.error('Nome é obrigatório');
       valid = false;
     }
 
     if (formData.telefones.length === 0) {
       errors.telefone = 'Adicione pelo menos um telefone';
+      toast.error('Adicione pelo menos um telefone');
       valid = false;
     }
 
@@ -840,6 +842,7 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
       const emailsInvalidos = formData.emails.filter(email => !validarEmail(email));
       if (emailsInvalidos.length > 0) {
         errors.email = 'Um ou mais emails são inválidos';
+        toast.error('Um ou mais emails são inválidos');
         valid = false;
       }
     }

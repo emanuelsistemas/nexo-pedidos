@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { showMessage } from '../utils/toast';
@@ -8,6 +8,9 @@ import { showMessage } from '../utils/toast';
  */
 export const useAuthSession = () => {
   const navigate = useNavigate();
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = useRef(false);
+  const lastRefreshAttemptRef = useRef(0);
 
   /**
    * Verifica se a sessão atual é válida
@@ -26,18 +29,24 @@ export const useAuthSession = () => {
         return false;
       }
 
-      // Verificar se o token está próximo do vencimento (5 minutos antes)
+      // Verificar se o token está próximo do vencimento
       const now = Math.floor(Date.now() / 1000);
       const expiresAt = session.expires_at || 0;
       const timeUntilExpiry = expiresAt - now;
 
       if (timeUntilExpiry <= 0) {
-        console.log('Sessão expirada');
+        console.log('⏰ Sessão expirada');
         return false;
       }
 
-      if (timeUntilExpiry <= 300) { // 5 minutos
+      // Se não há renovação agendada, agendar uma
+      if (!refreshTimeoutRef.current) {
+        scheduleNextRefresh(session);
+      }
 
+      // Renovar apenas se estiver muito próximo da expiração (2 minutos)
+      if (timeUntilExpiry <= 120) {
+        console.log('⚠️ Sessão expirando em breve, renovando...');
         return await refreshSession();
       }
 
@@ -49,28 +58,89 @@ export const useAuthSession = () => {
   }, []);
 
   /**
-   * Tenta renovar a sessão atual
+   * Tenta renovar a sessão atual com controle de rate limiting
    */
   const refreshSession = useCallback(async (): Promise<boolean> => {
+    // Evitar múltiplas tentativas simultâneas
+    if (isRefreshingRef.current) {
+      console.log('🔄 Renovação já em andamento, aguardando...');
+      return false;
+    }
+
+    // Controle de rate limiting - mínimo 30 segundos entre tentativas
+    const now = Date.now();
+    const timeSinceLastAttempt = now - lastRefreshAttemptRef.current;
+    if (timeSinceLastAttempt < 30000) {
+      console.log('⏳ Rate limiting: aguardando antes de tentar renovar novamente');
+      return false;
+    }
+
     try {
+      isRefreshingRef.current = true;
+      lastRefreshAttemptRef.current = now;
+
+      console.log('🔄 Tentando renovar sessão...');
       const { data, error } = await supabase.auth.refreshSession();
 
       if (error) {
-        console.error('Erro ao renovar sessão:', error);
+        console.error('❌ Erro ao renovar sessão:', error);
+
+        // Se for erro de rate limiting, aguardar mais tempo
+        if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+          console.log('⚠️ Rate limit atingido, aguardando 2 minutos...');
+          lastRefreshAttemptRef.current = now + 120000; // Aguardar 2 minutos extras
+        }
+
         return false;
       }
 
       if (data.session) {
-
+        console.log('✅ Sessão renovada com sucesso');
+        scheduleNextRefresh(data.session);
         return true;
       }
 
       return false;
     } catch (error) {
-      console.error('Erro ao renovar sessão:', error);
+      console.error('❌ Erro ao renovar sessão:', error);
       return false;
+    } finally {
+      isRefreshingRef.current = false;
     }
   }, []);
+
+  /**
+   * Agenda a próxima renovação automática baseada no tempo de expiração
+   */
+  const scheduleNextRefresh = useCallback((session: any) => {
+    // Limpar timeout anterior
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    if (!session?.expires_at) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = session.expires_at;
+    const timeUntilExpiry = expiresAt - now;
+
+    // Renovar 10 minutos antes da expiração (ou 50% do tempo, o que for menor)
+    const refreshTime = Math.min(600, Math.floor(timeUntilExpiry * 0.5));
+    const refreshInMs = Math.max(refreshTime * 1000, 60000); // Mínimo 1 minuto
+
+    console.log(`⏰ Próxima renovação agendada em ${Math.floor(refreshInMs / 60000)} minutos`);
+
+    refreshTimeoutRef.current = setTimeout(async () => {
+      console.log('🔄 Executando renovação automática agendada...');
+      const success = await refreshSession();
+
+      if (!success) {
+        console.log('❌ Renovação automática falhou, tentando novamente em 2 minutos...');
+        // Tentar novamente em 2 minutos se falhar
+        refreshTimeoutRef.current = setTimeout(() => refreshSession(), 120000);
+      }
+    }, refreshInMs);
+  }, [refreshSession]);
 
   /**
    * Faz logout e redireciona para a página de login
@@ -130,34 +200,54 @@ export const useAuthSession = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_OUT') {
+          // Limpar renovação agendada
+          if (refreshTimeoutRef.current) {
+            clearTimeout(refreshTimeoutRef.current);
+            refreshTimeoutRef.current = null;
+          }
           navigate('/entrar', { replace: true });
+        } else if (event === 'SIGNED_IN' && session) {
+          // Agendar renovação para nova sessão
+          scheduleNextRefresh(session);
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+          // Reagendar renovação após refresh
+          scheduleNextRefresh(session);
         }
       }
     );
 
     return () => {
       subscription.unsubscribe();
+      // Limpar timeout ao desmontar
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
     };
-  }, [navigate]);
+  }, [navigate, scheduleNextRefresh]);
 
   /**
-   * Verifica a sessão periodicamente (a cada 5 minutos)
+   * Inicializa o sistema de renovação automática
    */
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const isValid = await checkSession();
-      if (!isValid) {
-        await handleSessionExpired();
+    const initializeAutoRefresh = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          scheduleNextRefresh(session);
+        }
+      } catch (error) {
+        console.error('Erro ao inicializar renovação automática:', error);
       }
-    }, 5 * 60 * 1000); // 5 minutos
+    };
 
-    return () => clearInterval(interval);
-  }, [checkSession, handleSessionExpired]);
+    initializeAutoRefresh();
+  }, [scheduleNextRefresh]);
 
   return {
     checkSession,
     refreshSession,
     withSessionCheck,
-    handleSessionExpired
+    handleSessionExpired,
+    scheduleNextRefresh
   };
 };
