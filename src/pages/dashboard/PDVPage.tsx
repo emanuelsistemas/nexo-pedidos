@@ -48,6 +48,7 @@ import {
   Save,
   Copy,
   Phone,
+  Unlock,
   Truck,
   MapPin,
   RotateCcw,
@@ -454,7 +455,12 @@ const PDVPage: React.FC = () => {
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
   const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
   const [caixaAberto, setCaixaAberto] = useState(false);
-  const [loadingCaixa, setLoadingCaixa] = useState(false); // Iniciar como false
+  const [loadingCaixa, setLoadingCaixa] = useState(false);
+
+  // ✅ NOVO: Estados para liberar comanda
+  const [showLiberarComandaModal, setShowLiberarComandaModal] = useState(false);
+  const [vendaParaLiberarComanda, setVendaParaLiberarComanda] = useState<any>(null);
+  const [loadingLiberarComanda, setLoadingLiberarComanda] = useState(false); // Iniciar como false
 
   // ✅ NOVO: Estados para modal de controle de caixa
   const [showCaixaModal, setShowCaixaModal] = useState(false);
@@ -2033,6 +2039,9 @@ const PDVPage: React.FC = () => {
       console.log('🔧 pdvConfig carregado, verificando status do caixa...');
       console.log('📋 Configuração controla_caixa:', pdvConfig?.controla_caixa);
       verificarStatusCaixa();
+
+      // ✅ NOVO: Carregar venda em andamento após verificar caixa
+      carregarVendaEmAndamento();
     } else {
       console.log('⏳ Aguardando carregamento completo...', {
         pdvConfigNull: pdvConfig === null,
@@ -8016,6 +8025,19 @@ const PDVPage: React.FC = () => {
       return; // Não continuar com adição normal
     }
 
+    // ✅ CORREÇÃO: Para produtos SEM adicionais, usar o mesmo fluxo simples dos produtos COM adicionais
+    // Apenas adicionar ao carrinho - a criação da venda será feita na finalização
+    setCarrinho(prev => [...prev, novoItem]);
+
+    // Tocar som de sucesso se habilitado
+    if (pdvConfig?.som_adicionar_produto) {
+      playSuccessSound();
+    }
+
+    toast.success(`${produto.nome} adicionado ao carrinho!`);
+    return; // ✅ NOVO: Sair aqui para evitar o código problemático abaixo
+
+    // ✅ CÓDIGO ANTIGO PROBLEMÁTICO (mantido comentado para referência)
     // ✅ NOVO: Criar venda em andamento no primeiro item (adaptado do sistema de rascunhos NFe)
     const isFirstItem = carrinho.length === 0;
 
@@ -8114,7 +8136,12 @@ const PDVPage: React.FC = () => {
 
     // ✅ CORREÇÃO: Aguardar venda ser criada antes de salvar item
     const aguardarVendaEsalvarItem = async () => {
-
+      console.log('🔍 DEBUG aguardarVendaEsalvarItem INICIADO:', {
+        produto: produto.nome,
+        isFirstItem,
+        vendaEmAndamento: !!vendaEmAndamento,
+        isEditingVenda
+      });
 
       // Se é primeiro item e não há venda, aguardar criação
       if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
@@ -8126,16 +8153,25 @@ const PDVPage: React.FC = () => {
         while (!vendaEmAndamento && tentativas < maxTentativas) {
           // Log reduzido para evitar spam no console
           if (tentativas % 10 === 0) {
-            // Aguardando venda...
+            console.log(`🔍 DEBUG: Aguardando estado vendaEmAndamento ser atualizado... Tentativa ${tentativas}/${maxTentativas}`, {
+              vendaEmAndamento: !!vendaEmAndamento,
+              criandoVenda
+            });
           }
           await new Promise(resolve => setTimeout(resolve, 100));
           tentativas++;
         }
 
         if (!vendaEmAndamento) {
-
+          console.log('❌ DEBUG: Timeout - estado vendaEmAndamento não foi atualizado após', maxTentativas, 'tentativas');
+          console.log('❌ DEBUG: Isso indica um problema de timing/race condition no React state');
           return;
         }
+
+        console.log('✅ DEBUG: Estado vendaEmAndamento finalmente atualizado!', {
+          vendaId: vendaEmAndamento.id,
+          tentativasUsadas: tentativas
+        });
 
 
       }
@@ -8145,10 +8181,15 @@ const PDVPage: React.FC = () => {
 
 
       if (vendaAtual) {
-
+        console.log('🔍 DEBUG: Venda encontrada, tentando salvar item:', {
+          produto: produto.nome,
+          vendaId: vendaAtual.id,
+          isEditingVenda
+        });
 
         // ✅ CORREÇÃO: Só salvar se não é venda recuperada (para evitar duplicação)
         if (!isEditingVenda) {
+          console.log('🔍 DEBUG: Chamando salvarItemNaVendaEmAndamento para:', produto.nome);
           const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
 
           if (!itemSalvo) {
@@ -8358,6 +8399,155 @@ const PDVPage: React.FC = () => {
       setVendaSemProdutoAguardandoNomeCliente(null);
     }
     // Se não há produto aguardando, é apenas edição - manter valor original
+  };
+
+  // ✅ NOVO: Função para carregar venda em andamento (recuperar após reload)
+  const carregarVendaEmAndamento = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar venda em andamento (aberta) do usuário
+      const { data: vendaAberta, error } = await supabase
+        .from('pdv')
+        .select(`
+          id,
+          numero_venda,
+          valor_total,
+          valor_subtotal,
+          nome_cliente,
+          mesa_numero,
+          comanda_numero,
+          observacao_venda,
+          created_at
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', userData.user.id)
+        .eq('status_venda', 'aberta')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erro ao carregar venda em andamento:', error);
+        return;
+      }
+
+      if (vendaAberta) {
+        console.log('🔄 Venda em andamento encontrada:', vendaAberta);
+
+        // Restaurar dados da venda
+        setVendaEmAndamento(vendaAberta);
+
+        // Restaurar dados do cliente/mesa/comanda
+        if (vendaAberta.nome_cliente) {
+          setNomeCliente(vendaAberta.nome_cliente);
+        }
+        if (vendaAberta.mesa_numero) {
+          setMesaNumero(vendaAberta.mesa_numero.toString());
+        }
+        if (vendaAberta.comanda_numero) {
+          setComandaNumero(vendaAberta.comanda_numero.toString());
+        }
+        if (vendaAberta.observacao_venda) {
+          setObservacaoVenda(vendaAberta.observacao_venda);
+        }
+
+        // Carregar itens da venda
+        const { data: itens, error: itensError } = await supabase
+          .from('pdv_itens')
+          .select(`
+            id,
+            produto_id,
+            codigo_produto,
+            nome_produto,
+            quantidade,
+            valor_unitario,
+            valor_total_item,
+            vendedor_id,
+            vendedores(nome)
+          `)
+          .eq('pdv_id', vendaAberta.id);
+
+        if (itensError) {
+          console.error('Erro ao carregar itens da venda:', itensError);
+          return;
+        }
+
+        if (itens && itens.length > 0) {
+          // Converter itens para formato do carrinho
+          const itensCarrinho = itens.map(item => ({
+            id: `${item.produto_id}-${Date.now()}-${Math.random()}`,
+            produto: {
+              id: item.produto_id,
+              codigo: item.codigo_produto,
+              nome: item.nome_produto,
+              preco: item.valor_unitario
+            },
+            quantidade: item.quantidade,
+            subtotal: item.valor_total_item,
+            vendedor: item.vendedores ? {
+              id: item.vendedor_id,
+              nome: item.vendedores.nome
+            } : null
+          }));
+
+          setCarrinho(itensCarrinho);
+          console.log('🛒 Carrinho restaurado com', itensCarrinho.length, 'itens');
+        }
+
+        showMessage('success', `Venda ${vendaAberta.numero_venda} recuperada com sucesso!`);
+      }
+
+    } catch (error) {
+      console.error('Erro ao carregar venda em andamento:', error);
+    }
+  };
+
+  // ✅ NOVO: Função para liberar comanda de uma venda
+  const liberarComanda = async () => {
+    if (!vendaParaLiberarComanda) return;
+
+    try {
+      setLoadingLiberarComanda(true);
+
+      const { error } = await supabase
+        .from('pdv')
+        .update({
+          comanda_numero: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', vendaParaLiberarComanda.id);
+
+      if (error) {
+        console.error('Erro ao liberar comanda:', error);
+        showMessage('error', 'Erro ao liberar comanda');
+        return;
+      }
+
+      showMessage('success', `Comanda ${vendaParaLiberarComanda.comanda_numero} liberada com sucesso!`);
+
+      // Fechar modal
+      setShowLiberarComandaModal(false);
+      setVendaParaLiberarComanda(null);
+
+      // Recarregar lista de vendas
+      carregarVendasAbertas();
+
+    } catch (error) {
+      console.error('Erro ao liberar comanda:', error);
+      showMessage('error', 'Erro ao liberar comanda');
+    } finally {
+      setLoadingLiberarComanda(false);
+    }
   };
 
   // ✅ NOVO: Funções para modais de Comanda e Mesa
@@ -11602,6 +11792,8 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para criar venda em andamento no primeiro item (adaptada do sistema de rascunhos NFe)
   const criarVendaEmAndamento = async (): Promise<boolean> => {
+    console.log('🔍 DEBUG criarVendaEmAndamento INICIADO');
+
     try {
       // Obter dados do usuário
       const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -11690,6 +11882,11 @@ const PDVPage: React.FC = () => {
       // ✅ CORREÇÃO: Venda NOVA deve ter isEditingVenda = false
       setIsEditingVenda(false);
 
+      console.log('✅ DEBUG criarVendaEmAndamento SUCESSO:', {
+        vendaId: novaVendaEmAndamento.id,
+        numero: novaVendaEmAndamento.numero_venda
+      });
+
       return true;
 
     } catch (error) {
@@ -11700,8 +11897,14 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para salvar item na venda em andamento (adaptada do sistema de rascunhos NFe)
   const salvarItemNaVendaEmAndamento = async (item: ItemCarrinho): Promise<any> => {
+    console.log('🔍 DEBUG salvarItemNaVendaEmAndamento INICIADO:', {
+      produto: item.produto.nome,
+      vendaEmAndamento: !!vendaEmAndamento
+    });
+
     try {
       if (!vendaEmAndamento) {
+        console.log('❌ DEBUG: Sem venda em andamento para salvar item:', item.produto.nome);
         return false;
       }
 
@@ -11808,6 +12011,10 @@ const PDVPage: React.FC = () => {
       return itemInserido; // Retornar o item inserido com o ID
 
     } catch (error) {
+      console.error('❌ ERRO em salvarItemNaVendaEmAndamento:', error);
+      console.error('❌ Item que falhou:', item.produto.nome);
+      console.error('❌ Detalhes do erro:', error);
+      toast.error(`Erro ao salvar item ${item.produto.nome}: ${error.message}`);
       return false;
     }
   };
@@ -12463,6 +12670,15 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para filtrar vendas abertas
   const filtrarVendasAbertas = (vendas: any[]) => {
+    console.log('🔍 DEBUG - Filtros ativos:', {
+      filtroNomeCliente,
+      filtroMesa,
+      filtroComanda,
+      filtroDataInicioVendas,
+      filtroDataFimVendas,
+      totalVendas: vendas.length
+    });
+
     return vendas.filter(venda => {
       // Filtro por nome do cliente
       if (filtroNomeCliente && !venda.nome_cliente?.toLowerCase().includes(filtroNomeCliente.toLowerCase())) {
@@ -12607,6 +12823,7 @@ const PDVPage: React.FC = () => {
           serie_documento,
           valor_total,
           valor_subtotal,
+          status_venda,
           created_at,
           updated_at,
           nome_cliente,
@@ -12647,6 +12864,32 @@ const PDVPage: React.FC = () => {
           };
         })
       );
+
+      // ✅ DEBUG: Log para verificar dados das vendas
+      console.log('🔍 DEBUG - Vendas carregadas:', vendasComItens.map(v => ({
+        numero_venda: v.numero_venda,
+        comanda_numero: v.comanda_numero,
+        mesa_numero: v.mesa_numero,
+        status_venda: v.status_venda
+      })));
+
+      // ✅ DEBUG: Log específico para a venda problemática
+      const vendaProblematica = vendasComItens.find(v => v.numero_venda === 'PDV-1754424573029');
+      if (vendaProblematica) {
+        console.log('🎯 DEBUG - Venda PDV-1754424573029 encontrada:', {
+          numero_venda: vendaProblematica.numero_venda,
+          comanda_numero: vendaProblematica.comanda_numero,
+          mesa_numero: vendaProblematica.mesa_numero,
+          status_venda: vendaProblematica.status_venda,
+          valor_total: vendaProblematica.valor_total,
+          totalItens: vendaProblematica.totalItens
+        });
+      } else {
+        console.log('❌ DEBUG - Venda PDV-1754424573029 NÃO encontrada na lista!');
+      }
+
+      // ✅ DEBUG: Log para verificar se a venda está sendo adicionada ao estado
+      console.log('🔍 DEBUG - Definindo vendasAbertas:', vendasComItens.length, vendasComItens.map(v => v.numero_venda));
 
       setVendasAbertas(vendasComItens);
       setContadorVendasAbertas(vendasComItens.length);
@@ -28114,6 +28357,12 @@ const PDVPage: React.FC = () => {
                     <div className="text-gray-400">Carregando vendas...</div>
                   </div>
                 ) : (() => {
+                  // ✅ DEBUG: Log para verificar estado das vendas abertas
+                  console.log('🔍 DEBUG - Estado vendasAbertas:', {
+                    total: vendasAbertas.length,
+                    vendas: vendasAbertas.map(v => v.numero_venda)
+                  });
+
                   const vendasFiltradas = filtrarVendasAbertas(vendasAbertas);
                   return vendasFiltradas.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-gray-400">
@@ -28127,6 +28376,8 @@ const PDVPage: React.FC = () => {
                     </div>
                   ) : (
                     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      {/* ✅ DEBUG: Log para verificar vendas filtradas */}
+                      {console.log('🔍 DEBUG - Vendas filtradas para renderização:', vendasFiltradas.length, vendasFiltradas.map(v => v.numero_venda))}
                       {vendasFiltradas.map((venda) => (
                       <div
                         key={venda.id}
@@ -28135,6 +28386,15 @@ const PDVPage: React.FC = () => {
                         {/* Header do card */}
                         <div className="mb-3">
                           {/* Mesa e Comanda no topo */}
+                          {/* ✅ DEBUG: Log para verificar dados da venda */}
+                          {console.log('🔍 DEBUG - Venda renderizada:', {
+                            numero_venda: venda.numero_venda,
+                            comanda_numero: venda.comanda_numero,
+                            mesa_numero: venda.mesa_numero,
+                            status_venda: venda.status_venda,
+                            temComanda: !!venda.comanda_numero,
+                            temMesa: !!venda.mesa_numero
+                          })}
                           {(venda.mesa_numero || venda.comanda_numero) && (
                             <div className="flex gap-2 mb-2">
                               {venda.mesa_numero && (
@@ -28210,14 +28470,38 @@ const PDVPage: React.FC = () => {
                               </div>
                             )}
 
-                        {/* Botão de recuperar */}
-                        <div className="mt-4 pt-3 border-t border-gray-700">
+                        {/* Botões de ação */}
+                        <div className="mt-4 pt-3 border-t border-gray-700 space-y-2">
+                          {/* Botão de recuperar */}
                           <button
                             onClick={() => recuperarVendaSalva(venda.id)}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors font-medium text-sm"
                           >
                             🔄 Recuperar
                           </button>
+
+                          {/* ✅ NOVO: Botão para liberar comanda (apenas se tiver comanda e status salva) */}
+                          {/* ✅ DEBUG: Log para verificar condição do botão */}
+                          {console.log('🔍 DEBUG - Botão Liberar Comanda:', {
+                            numero_venda: venda.numero_venda,
+                            comanda_numero: venda.comanda_numero,
+                            status_venda: venda.status_venda,
+                            temComanda: !!venda.comanda_numero,
+                            statusSalva: venda.status_venda === 'salva',
+                            deveExibir: venda.comanda_numero && venda.status_venda === 'salva'
+                          })}
+                          {venda.comanda_numero && venda.status_venda === 'salva' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation(); // Evitar trigger do recuperar
+                                setVendaParaLiberarComanda(venda);
+                                setShowLiberarComandaModal(true);
+                              }}
+                              className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded-lg transition-colors font-medium text-sm"
+                            >
+                              🔓 Liberar Comanda {venda.comanda_numero}
+                            </button>
+                          )}
                         </div>
                       </div>
                       ))}
@@ -30572,6 +30856,99 @@ const PDVPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ✅ NOVO: Modal de confirmação para liberar comanda */}
+      <AnimatePresence>
+        {showLiberarComandaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowLiberarComandaModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-900 rounded-xl border border-orange-500/30 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 bg-orange-500/20 rounded-lg">
+                  <Unlock className="w-8 h-8 text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Liberar Comanda</h3>
+                  <p className="text-sm text-gray-400">Esta ação irá liberar a comanda para uso</p>
+                </div>
+              </div>
+
+              {/* Informações da venda */}
+              {vendaParaLiberarComanda && (
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Venda:</span>
+                      <span className="text-white font-medium">{vendaParaLiberarComanda.numero_venda}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Comanda:</span>
+                      <span className="text-orange-400 font-medium">#{vendaParaLiberarComanda.comanda_numero}</span>
+                    </div>
+                    {vendaParaLiberarComanda.nome_cliente && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Cliente:</span>
+                        <span className="text-white">{vendaParaLiberarComanda.nome_cliente}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Total:</span>
+                      <span className="text-green-400 font-medium">{formatCurrency(vendaParaLiberarComanda.valor_total || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Aviso */}
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-orange-400 font-medium text-sm mb-1">Atenção!</p>
+                    <p className="text-gray-300 text-sm">
+                      Ao liberar a comanda, ela ficará disponível para ser usada em outras vendas.
+                      A venda atual permanecerá salva, mas sem comanda vinculada.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowLiberarComandaModal(false);
+                    setVendaParaLiberarComanda(null);
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                  disabled={loadingLiberarComanda}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={liberarComanda}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-3 px-4 rounded-lg transition-colors font-medium disabled:opacity-50"
+                  disabled={loadingLiberarComanda}
+                >
+                  {loadingLiberarComanda ? 'Liberando...' : 'Liberar Comanda'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
