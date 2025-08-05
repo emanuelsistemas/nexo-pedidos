@@ -58,6 +58,21 @@ export const useAuthSession = () => {
   }, []);
 
   /**
+   * Faz logout e redireciona para a página de login
+   */
+  const handleSessionExpired = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+      showMessage('warning', 'Sua sessão expirou. Faça login novamente.');
+      navigate('/entrar', { replace: true });
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      // Forçar redirecionamento mesmo se o logout falhar
+      window.location.href = '/entrar';
+    }
+  }, [navigate]);
+
+  /**
    * Tenta renovar a sessão atual com controle de rate limiting
    */
   const refreshSession = useCallback(async (): Promise<boolean> => {
@@ -85,6 +100,16 @@ export const useAuthSession = () => {
       if (error) {
         console.error('❌ Erro ao renovar sessão:', error);
 
+        // Se for erro 403 (Forbidden) ou refresh token inválido, fazer logout
+        if (error.message?.includes('403') ||
+            error.message?.includes('Forbidden') ||
+            error.message?.includes('refresh_token') ||
+            error.message?.includes('invalid_grant')) {
+          console.log('🚪 Refresh token expirado, fazendo logout...');
+          await handleSessionExpired();
+          return false;
+        }
+
         // Se for erro de rate limiting, aguardar mais tempo
         if (error.message?.includes('rate limit') || error.message?.includes('429')) {
           console.log('⚠️ Rate limit atingido, aguardando 2 minutos...');
@@ -107,7 +132,7 @@ export const useAuthSession = () => {
     } finally {
       isRefreshingRef.current = false;
     }
-  }, []);
+  }, [handleSessionExpired]);
 
   /**
    * Agenda a próxima renovação automática baseada no tempo de expiração
@@ -142,20 +167,7 @@ export const useAuthSession = () => {
     }, refreshInMs);
   }, [refreshSession]);
 
-  /**
-   * Faz logout e redireciona para a página de login
-   */
-  const handleSessionExpired = useCallback(async () => {
-    try {
-      await supabase.auth.signOut();
-      showMessage('warning', 'Sua sessão expirou. Faça login novamente.');
-      navigate('/entrar', { replace: true });
-    } catch (error) {
-      console.error('Erro ao fazer logout:', error);
-      // Forçar redirecionamento mesmo se o logout falhar
-      window.location.href = '/entrar';
-    }
-  }, [navigate]);
+
 
   /**
    * Executa uma função com verificação automática de sessão

@@ -2574,11 +2574,6 @@ const PDVPage: React.FC = () => {
       }
       // ✅ NOVO: Mostrar "Caixa" apenas quando caixa estiver aberto e controle habilitado
       if (item.id === 'caixa') {
-        console.log('🎯 Verificando botão Caixa:', {
-          controla_caixa: pdvConfig?.controla_caixa,
-          caixaAberto: caixaAberto,
-          resultado: pdvConfig?.controla_caixa === true && caixaAberto === true
-        });
         return pdvConfig?.controla_caixa === true && caixaAberto === true;
       }
       // Para outros itens, sempre mostrar (pode adicionar outras condições aqui)
@@ -7898,6 +7893,15 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
+    // 🔍 DEBUG: Log do produto recebido para investigar devolucao_codigo
+    console.log('🔍 PRODUTO RECEBIDO em adicionarAoCarrinho:', {
+      id: produto.id,
+      nome: produto.nome,
+      codigo: produto.codigo,
+      temDevolucaoProps: !!(produto as any).devolucao_codigo || !!(produto as any).isDevolucao,
+      produtoCompleto: produto
+    });
+
     // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
     if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
       setProdutoAguardandoNomeCliente(produto);
@@ -7996,6 +8000,14 @@ const PDVPage: React.FC = () => {
         ? tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada)?.nome
         : null
     };
+
+    // 🔍 DEBUG: Log do item criado para investigar devolucao_codigo
+    console.log('🔍 NOVO ITEM CRIADO:', {
+      id: novoItem.id,
+      produtoNome: novoItem.produto.nome,
+      temDevolucaoProps: !!(novoItem as any).devolucao_codigo || !!(novoItem as any).isDevolucao,
+      itemCompleto: novoItem
+    });
 
     // ✅ CORREÇÃO: Se o produto tem opções adicionais, abrir modal independentemente do fluxo
     if (temOpcoesAdicionais) {
@@ -13801,6 +13813,16 @@ const PDVPage: React.FC = () => {
       }
 
       const itensParaInserir = itensNaoSalvos.map(item => {
+        // 🔍 DEBUG: Log do item antes de preparar para inserção
+        console.log('🔍 ITEM ANTES DE INSERIR NO BANCO:', {
+          produtoNome: item.produto.nome,
+          produtoId: item.produto.id,
+          temDevolucaoProps: !!(item as any).devolucao_codigo || !!(item as any).isDevolucao,
+          devolucao_codigo: (item as any).devolucao_codigo,
+          isDevolucao: (item as any).isDevolucao,
+          itemCompleto: item
+        });
+
         const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
 
         // ✅ CORREÇÃO: Para venda sem produto, produto_id deve ser null
@@ -30326,7 +30348,6 @@ const PDVPage: React.FC = () => {
       )}
 
       {/* ✅ MODAL DE CONTROLE DE CAIXA - MOVIDO PARA FORA DA ESTRUTURA CONDICIONAL */}
-      {console.log('🎭 Renderizando modal de caixa, showCaixaModal:', showCaixaModal)}
 
       {/* TESTE: Elemento simples para verificar renderização */}
       {showCaixaModal && (
