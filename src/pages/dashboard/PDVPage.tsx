@@ -2123,12 +2123,17 @@ const PDVPage: React.FC = () => {
         .select(`
           id,
           valor_pagamento,
-          fornecedor_nome,
           observacoes,
+          descricao,
           data_pagamento,
-          operador_nome
+          formas_pagamento_empresa:formas_pagamento_empresa_id (
+            nome
+          ),
+          tipo_pagamentos_opcoes:tipo_pagamentos_opcoes_id (
+            nome
+          )
         `)
-        .eq('caixa_id', caixaData.id)
+        .eq('caixa_controle_id', caixaData.id)
         .eq('deletado', false)
         .order('data_pagamento', { ascending: false });
 
@@ -2149,14 +2154,15 @@ const PDVPage: React.FC = () => {
         .from('sangrias')
         .select(`
           id,
-          valor_sangria,
-          observacoes,
-          data_sangria,
-          operador_nome
+          valor,
+          observacao,
+          data,
+          usuarios:usuario_id (
+            nome
+          )
         `)
-        .eq('caixa_id', caixaData.id)
-        .eq('deletado', false)
-        .order('data_sangria', { ascending: false });
+        .eq('caixa_controle_id', caixaData.id)
+        .order('data', { ascending: false });
 
       if (sangriasError) {
         console.error('❌ Erro ao buscar sangrias do caixa:', sangriasError);
@@ -2164,7 +2170,7 @@ const PDVPage: React.FC = () => {
         console.log('✅ Sangrias do caixa carregadas:', sangriasData?.length || 0);
         setSangriasCaixaModal(sangriasData || []);
         const totalSangrias = (sangriasData || []).reduce((total, sangria) => {
-          return total + (parseFloat(sangria.valor_sangria) || 0);
+          return total + (parseFloat(sangria.valor) || 0);
         }, 0);
         setTotalSangriasCaixa(totalSangrias);
       }
@@ -2175,14 +2181,15 @@ const PDVPage: React.FC = () => {
         .from('suprimentos')
         .select(`
           id,
-          valor_suprimento,
-          observacoes,
-          data_suprimento,
-          operador_nome
+          valor,
+          observacao,
+          data,
+          usuarios:usuario_id (
+            nome
+          )
         `)
-        .eq('caixa_id', caixaData.id)
-        .eq('deletado', false)
-        .order('data_suprimento', { ascending: false });
+        .eq('caixa_controle_id', caixaData.id)
+        .order('data', { ascending: false });
 
       if (suprimentosError) {
         console.error('❌ Erro ao buscar suprimentos do caixa:', suprimentosError);
@@ -2190,7 +2197,7 @@ const PDVPage: React.FC = () => {
         console.log('✅ Suprimentos do caixa carregados:', suprimentosData?.length || 0);
         setSuprimentosCaixaModal(suprimentosData || []);
         const totalSuprimentos = (suprimentosData || []).reduce((total, suprimento) => {
-          return total + (parseFloat(suprimento.valor_suprimento) || 0);
+          return total + (parseFloat(suprimento.valor) || 0);
         }, 0);
         setTotalSuprimentosCaixa(totalSuprimentos);
       }
@@ -33333,7 +33340,7 @@ const PDVPage: React.FC = () => {
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                              {pagamento.fornecedor_nome}
+                              {pagamento.formas_pagamento_empresa?.nome || pagamento.tipo_pagamentos_opcoes?.nome || 'Pagamento'}
                             </span>
                             <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
                               R$ {parseFloat(pagamento.valor_pagamento).toLocaleString('pt-BR', {
@@ -33343,7 +33350,7 @@ const PDVPage: React.FC = () => {
                             </span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
-                            <span>{pagamento.operador_nome}</span>
+                            <span>{pagamento.descricao || 'Pagamento do caixa'}</span>
                             <span>
                               {new Date(pagamento.data_pagamento).toLocaleString('pt-BR', {
                                 day: '2-digit',
@@ -33440,10 +33447,10 @@ const PDVPage: React.FC = () => {
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                              {sangria.operador_nome}
+                              {sangria.usuarios?.nome || 'Usuário não identificado'}
                             </span>
                             <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                              R$ {parseFloat(sangria.valor_sangria).toLocaleString('pt-BR', {
+                              R$ {parseFloat(sangria.valor).toLocaleString('pt-BR', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                               })}
@@ -33452,7 +33459,7 @@ const PDVPage: React.FC = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
                             <span>Sangria</span>
                             <span>
-                              {new Date(sangria.data_sangria).toLocaleString('pt-BR', {
+                              {new Date(sangria.data).toLocaleString('pt-BR', {
                                 day: '2-digit',
                                 month: '2-digit',
                                 hour: '2-digit',
@@ -33460,9 +33467,9 @@ const PDVPage: React.FC = () => {
                               })}
                             </span>
                           </div>
-                          {sangria.observacoes && (
+                          {sangria.observacao && (
                             <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
-                              {sangria.observacoes}
+                              {sangria.observacao}
                             </div>
                           )}
                         </div>
@@ -33547,10 +33554,10 @@ const PDVPage: React.FC = () => {
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                              {suprimento.operador_nome}
+                              {suprimento.usuarios?.nome || 'Usuário não identificado'}
                             </span>
                             <span style={{ color: '#059669', fontWeight: 'bold' }}>
-                              R$ {parseFloat(suprimento.valor_suprimento).toLocaleString('pt-BR', {
+                              R$ {parseFloat(suprimento.valor).toLocaleString('pt-BR', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                               })}
@@ -33559,7 +33566,7 @@ const PDVPage: React.FC = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
                             <span>Suprimento</span>
                             <span>
-                              {new Date(suprimento.data_suprimento).toLocaleString('pt-BR', {
+                              {new Date(suprimento.data).toLocaleString('pt-BR', {
                                 day: '2-digit',
                                 month: '2-digit',
                                 hour: '2-digit',
@@ -33567,9 +33574,9 @@ const PDVPage: React.FC = () => {
                               })}
                             </span>
                           </div>
-                          {suprimento.observacoes && (
+                          {suprimento.observacao && (
                             <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
-                              {suprimento.observacoes}
+                              {suprimento.observacao}
                             </div>
                           )}
                         </div>
