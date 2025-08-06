@@ -758,6 +758,10 @@ const PDVPage: React.FC = () => {
   const [operadoresList, setOperadoresList] = useState<any[]>([]);
   const [formasPagamentoList, setFormasPagamentoList] = useState<any[]>([]);
 
+  // ✅ NOVO: Estados para modal de detalhes de pagamento
+  const [showDetalhePagamentoModal, setShowDetalhePagamentoModal] = useState(false);
+  const [vendaDetalhePagamento, setVendaDetalhePagamento] = useState<any>(null);
+
   // Estados para exibir itens da venda
   const [showItensVendaModal, setShowItensVendaModal] = useState(false);
   const [vendaParaExibirItens, setVendaParaExibirItens] = useState<any>(null);
@@ -23931,9 +23935,23 @@ const PDVPage: React.FC = () => {
 
                             {/* ✅ NOVO: Tag de Forma de Pagamento */}
                             {venda.forma_pagamento_info && (
-                              <span className="px-2 py-1 bg-indigo-500/20 text-indigo-400 text-xs font-medium rounded-full border border-indigo-500/30">
-                                💳 {venda.forma_pagamento_info.nome}
-                              </span>
+                              venda.forma_pagamento_info.tipo === 'parcial' ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setVendaDetalhePagamento(venda);
+                                    setShowDetalhePagamentoModal(true);
+                                  }}
+                                  className="px-2 py-1 bg-indigo-500/20 text-indigo-400 text-xs font-medium rounded-full border border-indigo-500/30 hover:bg-indigo-500/30 transition-colors cursor-pointer"
+                                  title="Clique para ver detalhes das formas de pagamento"
+                                >
+                                  💳 Múltiplas formas
+                                </button>
+                              ) : (
+                                <span className="px-2 py-1 bg-indigo-500/20 text-indigo-400 text-xs font-medium rounded-full border border-indigo-500/30">
+                                  💳 {venda.forma_pagamento_info.nome}
+                                </span>
+                              )
                             )}
 
                             {/* ✅ NOVO: Tag do Caixa */}
@@ -31370,6 +31388,90 @@ const PDVPage: React.FC = () => {
                   disabled={loadingLiberarComanda}
                 >
                   {loadingLiberarComanda ? 'Liberando...' : 'Liberar Comanda'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Detalhes de Pagamento */}
+      <AnimatePresence>
+        {showDetalhePagamentoModal && vendaDetalhePagamento && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDetalhePagamentoModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-md"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                  <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                  Detalhes do Pagamento
+                </h3>
+                <button
+                  onClick={() => setShowDetalhePagamentoModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Informações da Venda */}
+              <div className="mb-4 p-3 bg-gray-700/50 rounded-lg">
+                <div className="text-sm text-gray-400 mb-1">Venda</div>
+                <div className="text-white font-medium">#{vendaDetalhePagamento.numero_venda}</div>
+                <div className="text-sm text-gray-400 mt-1">
+                  Total: <span className="text-primary-400 font-medium">{formatCurrency(vendaDetalhePagamento.valor_final || 0)}</span>
+                </div>
+              </div>
+
+              {/* Lista de Formas de Pagamento */}
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-gray-400 mb-3">Formas de Pagamento:</div>
+
+                {vendaDetalhePagamento.forma_pagamento_info?.formas_detalhes?.map((forma: any, index: number) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg border border-gray-600/30">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-white font-medium text-sm">{forma.nome}</div>
+                        {forma.parcelas && forma.parcelas > 1 && (
+                          <div className="text-xs text-gray-400">
+                            {forma.parcelas}x de {formatCurrency((forma.valor || 0) / forma.parcelas)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-primary-400 font-medium">
+                      {formatCurrency(forma.valor || 0)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Botão Fechar */}
+              <div className="mt-6 pt-4 border-t border-gray-700">
+                <button
+                  onClick={() => setShowDetalhePagamentoModal(false)}
+                  className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                >
+                  Fechar
                 </button>
               </div>
             </motion.div>
