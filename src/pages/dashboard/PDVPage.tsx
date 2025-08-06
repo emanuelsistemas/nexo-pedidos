@@ -5494,7 +5494,8 @@ const PDVPage: React.FC = () => {
           devolucao_origem_numero,
           devolucao_origem_codigo,
           venda_origem_troca_id,
-          venda_origem_troca_numero
+          venda_origem_troca_numero,
+          caixa_id
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .or('modelo_documento.is.null,modelo_documento.eq.65'); // ✅ Mostrar apenas vendas PDV (null) e NFC-e (65) - excluir NFe (55)
@@ -5574,6 +5575,53 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: Buscar informações das formas de pagamento
+      const formasPagamentoIds = [
+        ...new Set(vendasData.map(v => v.forma_pagamento_id).filter(Boolean))
+      ];
+
+      let formasPagamentoMap = new Map();
+      if (formasPagamentoIds.length > 0) {
+        const { data: formasData } = await supabase
+          .from('forma_pagamento_opcoes')
+          .select('id, nome, tipo')
+          .in('id', formasPagamentoIds);
+
+        if (formasData) {
+          formasData.forEach(forma => {
+            formasPagamentoMap.set(forma.id, forma);
+          });
+        }
+      }
+
+      // ✅ NOVO: Buscar informações dos caixas
+      const caixasIds = [
+        ...new Set(vendasData.map(v => v.caixa_id).filter(Boolean))
+      ];
+
+      let caixasMap = new Map();
+      if (caixasIds.length > 0) {
+        const { data: caixasData } = await supabase
+          .from('caixa_controle')
+          .select(`
+            id,
+            usuario_id,
+            data_abertura,
+            usuarios!inner(nome)
+          `)
+          .in('id', caixasIds);
+
+        if (caixasData) {
+          caixasData.forEach(caixa => {
+            caixasMap.set(caixa.id, {
+              id: caixa.id,
+              usuario_nome: caixa.usuarios.nome,
+              data_abertura: caixa.data_abertura
+            });
+          });
+        }
+      }
+
       // Processar dados das vendas do PDV
       const vendasProcessadas = await Promise.all(vendasData.map(async (venda) => {
         // Verificar se a venda tem pedidos importados
@@ -5610,6 +5658,41 @@ const PDVPage: React.FC = () => {
           ? venda.vendedores_ids.map(vendedorId => usuariosMap.get(vendedorId)).filter(Boolean)
           : [];
 
+        // ✅ NOVO: Processar forma de pagamento
+        let formaPagamentoInfo = null;
+        if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
+          const forma = formasPagamentoMap.get(venda.forma_pagamento_id);
+          if (forma) {
+            formaPagamentoInfo = {
+              tipo: 'vista',
+              nome: forma.nome,
+              tipo_forma: forma.tipo
+            };
+          }
+        } else if (venda.tipo_pagamento === 'parcial' && venda.formas_pagamento) {
+          try {
+            const formasParciais = JSON.parse(venda.formas_pagamento);
+            const formasNomes = formasParciais.map((pagamento: any) => {
+              const forma = formasPagamentoMap.get(pagamento.forma);
+              return forma ? forma.nome : 'Forma não identificada';
+            });
+            formaPagamentoInfo = {
+              tipo: 'parcial',
+              nome: formasNomes.join(' + '),
+              formas_detalhes: formasParciais
+            };
+          } catch (error) {
+            formaPagamentoInfo = {
+              tipo: 'parcial',
+              nome: 'Múltiplas formas',
+              formas_detalhes: []
+            };
+          }
+        }
+
+        // ✅ NOVO: Processar informações do caixa
+        const caixaInfo = venda.caixa_id ? caixasMap.get(venda.caixa_id) : null;
+
         return {
           ...venda,
           numero_venda: venda.numero_venda || venda.id, // Usar numero_venda ou ID como fallback
@@ -5635,7 +5718,11 @@ const PDVPage: React.FC = () => {
           vendedores_venda: vendedoresVenda,
           // Dados do usuário que cancelou (se aplicável)
           usuario_cancelamento: venda.cancelada_por_usuario_id ? usuariosMap.get(venda.cancelada_por_usuario_id) : null,
-          status: venda.status_venda || 'finalizada'
+          status: venda.status_venda || 'finalizada',
+          // ✅ NOVO: Informações de forma de pagamento
+          forma_pagamento_info: formaPagamentoInfo,
+          // ✅ NOVO: Informações do caixa
+          caixa_info: caixaInfo
         };
       }));
 
@@ -23660,6 +23747,20 @@ const PDVPage: React.FC = () => {
                             {venda.devolucao_origem_numero && (
                               <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 text-xs font-medium rounded-full border border-cyan-500/30">
                                 Troca #{venda.devolucao_origem_numero}
+                              </span>
+                            )}
+
+                            {/* ✅ NOVO: Tag de Forma de Pagamento */}
+                            {venda.forma_pagamento_info && (
+                              <span className="px-2 py-1 bg-indigo-500/20 text-indigo-400 text-xs font-medium rounded-full border border-indigo-500/30">
+                                💳 {venda.forma_pagamento_info.nome}
+                              </span>
+                            )}
+
+                            {/* ✅ NOVO: Tag do Caixa */}
+                            {venda.caixa_info && (
+                              <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full border border-amber-500/30">
+                                🏪 {venda.caixa_info.usuario_nome}
                               </span>
                             )}
                           </div>
