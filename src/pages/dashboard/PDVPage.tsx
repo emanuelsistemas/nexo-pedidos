@@ -4428,7 +4428,7 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // ✅ NOVA: Função para carregar vendas fiado de um cliente específico
+  // ✅ NOVA: Função para carregar vendas fiado e recebimentos de um cliente específico
   const loadVendasFiadoCliente = async (clienteId: string) => {
     setLoadingVendasFiado(true);
 
@@ -4445,7 +4445,7 @@ const PDVPage: React.FC = () => {
       if (!usuarioData?.empresa_id) return;
 
       // Buscar vendas fiado do cliente
-      const { data: vendasData, error } = await supabase
+      const { data: vendasData, error: vendasError } = await supabase
         .from('pdv')
         .select(`
           id,
@@ -4460,15 +4460,62 @@ const PDVPage: React.FC = () => {
         .eq('fiado', true)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('❌ Erro ao carregar vendas fiado do cliente:', error);
+      if (vendasError) {
+        console.error('❌ Erro ao carregar vendas fiado do cliente:', vendasError);
         return;
       }
 
-      setVendasFiadoCliente(vendasData || []);
+      // Buscar recebimentos de fiado do cliente
+      const { data: recebimentosData, error: recebimentosError } = await supabase
+        .from('fiado_recebimentos')
+        .select(`
+          id,
+          valor_recebimento,
+          forma_pagamento_nome,
+          data_recebimento,
+          observacoes,
+          operador_nome
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('cliente_id', clienteId)
+        .eq('deletado', false)
+        .order('data_recebimento', { ascending: false });
+
+      if (recebimentosError) {
+        console.error('❌ Erro ao carregar recebimentos fiado:', recebimentosError);
+        return;
+      }
+
+      // Combinar vendas e recebimentos em um histórico unificado
+      const historicoUnificado = [
+        // Vendas fiado (débito)
+        ...(vendasData || []).map(venda => ({
+          id: venda.id,
+          tipo: 'venda',
+          numero_venda: venda.numero_venda,
+          valor: venda.valor_total,
+          data: venda.created_at,
+          data_venda: venda.data_venda,
+          observacao: venda.observacao_venda,
+          descricao: `Venda #${venda.numero_venda}`
+        })),
+        // Recebimentos (crédito)
+        ...(recebimentosData || []).map(recebimento => ({
+          id: recebimento.id,
+          tipo: 'recebimento',
+          valor: recebimento.valor_recebimento,
+          data: recebimento.data_recebimento,
+          forma_pagamento: recebimento.forma_pagamento_nome,
+          observacoes: recebimento.observacoes,
+          operador: recebimento.operador_nome,
+          descricao: `Recebimento via ${recebimento.forma_pagamento_nome}`
+        }))
+      ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+      setVendasFiadoCliente(historicoUnificado);
 
     } catch (error) {
-      console.error('❌ Erro inesperado ao carregar vendas fiado do cliente:', error);
+      console.error('❌ Erro inesperado ao carregar histórico fiado:', error);
     } finally {
       setLoadingVendasFiado(false);
     }
@@ -23649,7 +23696,7 @@ const PDVPage: React.FC = () => {
                 {/* Lista de Vendas Fiado */}
                 <div className="flex-1 bg-gray-800/30 rounded-lg overflow-hidden flex flex-col">
                   <div className="p-4 border-b border-gray-700">
-                    <h4 className="text-lg font-medium text-white">Histórico de Vendas Fiado</h4>
+                    <h4 className="text-lg font-medium text-white">Histórico de Vendas e Recebimentos</h4>
                   </div>
 
                   <div className="flex-1 overflow-y-auto">
@@ -23661,84 +23708,115 @@ const PDVPage: React.FC = () => {
                     ) : vendasFiadoCliente.length === 0 ? (
                       <div className="p-12 text-center">
                         <Clock size={64} className="mx-auto mb-6 text-gray-500" />
-                        <p className="text-gray-400 text-lg">Nenhuma venda fiado encontrada</p>
+                        <p className="text-gray-400 text-lg">Nenhuma movimentação encontrada</p>
                       </div>
                     ) : (
                       <div className="divide-y divide-gray-700">
-                        {vendasFiadoCliente.map((venda) => (
-                          <div key={venda.id} className="p-4">
-                            {/* Cabeçalho da Venda */}
-                            <div
-                              className="flex justify-between items-center cursor-pointer hover:bg-gray-700/30 p-3 rounded-lg transition-colors"
-                              onClick={() => toggleVendaExpandida(venda.id)}
-                            >
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3">
-                                  <div className="font-semibold text-white">Venda #{venda.numero_venda}</div>
-                                  <div className="text-sm text-gray-400">
-                                    {new Date(venda.data_venda || venda.created_at).toLocaleDateString('pt-BR')}
-                                  </div>
-                                </div>
-                                {venda.observacao_venda && (
-                                  <div className="text-sm text-gray-500 mt-1">{venda.observacao_venda}</div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-lg font-bold text-yellow-400">
-                                  R$ {venda.valor_total.toFixed(2).replace('.', ',')}
-                                </div>
-                                {vendaExpandida === venda.id ? (
-                                  <ChevronUp size={20} className="text-gray-400" />
-                                ) : (
-                                  <ChevronDown size={20} className="text-gray-400" />
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Itens da Venda - Expandido */}
-                            <AnimatePresence>
-                              {vendaExpandida === venda.id && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.3 }}
-                                  className="overflow-hidden"
+                        {vendasFiadoCliente.map((item) => (
+                          <div key={`${item.tipo}-${item.id}`} className="p-4">
+                            {item.tipo === 'venda' ? (
+                              /* Venda Fiado */
+                              <>
+                                {/* Cabeçalho da Venda */}
+                                <div
+                                  className="flex justify-between items-center cursor-pointer hover:bg-gray-700/30 p-3 rounded-lg transition-colors"
+                                  onClick={() => toggleVendaExpandida(item.id)}
                                 >
-                                  <div className="mt-3 bg-gray-900/50 rounded-lg p-4">
-                                    <h5 className="text-sm font-medium text-white mb-3">Itens da Venda</h5>
-                                    {itensVendaExpandida.length === 0 ? (
-                                      <p className="text-gray-400 text-sm">Carregando itens...</p>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        {itensVendaExpandida.map((item) => (
-                                          <div key={item.id} className="flex justify-between items-center py-2 border-b border-gray-700 last:border-b-0">
-                                            <div className="flex-1">
-                                              <div className="text-sm font-medium text-white">{item.nome_produto}</div>
-                                              <div className="text-xs text-gray-400">
-                                                {item.quantidade} {item.unidade} × R$ {item.valor_unitario.toFixed(2).replace('.', ',')}
-                                              </div>
-                                              {item.observacao_item && (
-                                                <div className="text-xs text-gray-500 mt-1">{item.observacao_item}</div>
-                                              )}
-                                            </div>
-                                            <div className="text-sm font-semibold text-yellow-400">
-                                              R$ {item.valor_subtotal.toFixed(2).replace('.', ',')}
-                                            </div>
-                                          </div>
-                                        ))}
-                                        <div className="flex justify-between items-center pt-2 border-t border-gray-600">
-                                          <div className="text-sm font-semibold text-white">Total da Venda</div>
-                                          <div className="text-lg font-bold text-yellow-400">
-                                            R$ {venda.valor_total.toFixed(2).replace('.', ',')}
-                                          </div>
-                                        </div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3">
+                                      <div className="font-semibold text-white">Venda #{item.numero_venda}</div>
+                                      <div className="text-sm text-gray-400">
+                                        {new Date(item.data_venda || item.data).toLocaleDateString('pt-BR')}
                                       </div>
+                                    </div>
+                                    {item.observacao && (
+                                      <div className="text-sm text-gray-500 mt-1">{item.observacao}</div>
                                     )}
                                   </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-lg font-bold text-yellow-400">
+                                      R$ {item.valor.toFixed(2).replace('.', ',')}
+                                    </div>
+                                    {vendaExpandida === item.id ? (
+                                      <ChevronUp size={20} className="text-gray-400" />
+                                    ) : (
+                                      <ChevronDown size={20} className="text-gray-400" />
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              /* Recebimento Fiado */
+                              <div className="flex justify-between items-center p-3 rounded-lg bg-green-900/20 border-l-4 border-green-500">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3">
+                                    <div className="font-semibold text-green-400 flex items-center gap-2">
+                                      <DollarSign size={16} />
+                                      {item.descricao}
+                                    </div>
+                                    <div className="text-sm text-gray-400">
+                                      {new Date(item.data).toLocaleDateString('pt-BR')} às {new Date(item.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                  </div>
+                                  <div className="text-sm text-gray-400 mt-1">
+                                    Operador: {item.operador}
+                                  </div>
+                                  {item.observacoes && (
+                                    <div className="text-sm text-gray-500 mt-1">{item.observacoes}</div>
+                                  )}
+                                </div>
+                                <div className="text-lg font-bold text-green-400">
+                                  + R$ {item.valor.toFixed(2).replace('.', ',')}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Itens da Venda - Expandido (apenas para vendas) */}
+                            {item.tipo === 'venda' && (
+                              <AnimatePresence>
+                                {vendaExpandida === item.id && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.3 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="mt-3 bg-gray-900/50 rounded-lg p-4">
+                                      <h5 className="text-sm font-medium text-white mb-3">Itens da Venda</h5>
+                                      {itensVendaExpandida.length === 0 ? (
+                                        <p className="text-gray-400 text-sm">Carregando itens...</p>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          {itensVendaExpandida.map((itemVenda) => (
+                                            <div key={itemVenda.id} className="flex justify-between items-center py-2 border-b border-gray-700 last:border-b-0">
+                                              <div className="flex-1">
+                                                <div className="text-sm font-medium text-white">{itemVenda.nome_produto}</div>
+                                                <div className="text-xs text-gray-400">
+                                                  {itemVenda.quantidade} {itemVenda.unidade} × R$ {itemVenda.valor_unitario.toFixed(2).replace('.', ',')}
+                                                </div>
+                                                {itemVenda.observacao_item && (
+                                                  <div className="text-xs text-gray-500 mt-1">{itemVenda.observacao_item}</div>
+                                                )}
+                                              </div>
+                                              <div className="text-sm font-semibold text-yellow-400">
+                                                R$ {itemVenda.valor_subtotal.toFixed(2).replace('.', ',')}
+                                              </div>
+                                            </div>
+                                          ))}
+                                          <div className="flex justify-between items-center pt-2 border-t border-gray-600">
+                                            <div className="text-sm font-semibold text-white">Total da Venda</div>
+                                            <div className="text-lg font-bold text-yellow-400">
+                                              R$ {item.valor.toFixed(2).replace('.', ',')}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            )}
                           </div>
                         ))}
                       </div>
