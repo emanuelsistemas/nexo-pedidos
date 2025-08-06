@@ -475,6 +475,21 @@ const PDVPage: React.FC = () => {
   const [valoresFiadoPorForma, setValoresFiadoPorForma] = useState<{[key: string]: number}>({});
   const [recebimentosFiadoExpandido, setRecebimentosFiadoExpandido] = useState(false);
 
+  // ✅ NOVO: Estados para pagamentos do caixa
+  const [pagamentosCaixa, setPagamentosCaixa] = useState<any[]>([]);
+  const [totalPagamentosCaixa, setTotalPagamentosCaixa] = useState(0);
+  const [pagamentosExpandido, setPagamentosExpandido] = useState(false);
+
+  // ✅ NOVO: Estados para sangrias do caixa
+  const [sangriasCaixaModal, setSangriasCaixaModal] = useState<any[]>([]);
+  const [totalSangriasCaixa, setTotalSangriasCaixa] = useState(0);
+  const [sangriasExpandido, setSangriasExpandido] = useState(false);
+
+  // ✅ NOVO: Estados para suprimentos do caixa
+  const [suprimentosCaixaModal, setSuprimentosCaixaModal] = useState<any[]>([]);
+  const [totalSuprimentosCaixa, setTotalSuprimentosCaixa] = useState(0);
+  const [suprimentosExpandido, setSuprimentosExpandido] = useState(false);
+
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
@@ -526,8 +541,7 @@ const PDVPage: React.FC = () => {
   const [formasPagamentoEmpresa, setFormasPagamentoEmpresa] = useState<any[]>([]);
   const [loadingRecebimento, setLoadingRecebimento] = useState(false);
 
-  // ✅ NOVO: Estados para pagamentos do caixa
-  const [pagamentosCaixa, setPagamentosCaixa] = useState<any[]>([]);
+  // ✅ NOVO: Estados para pagamentos do caixa (resumo e loading)
   const [resumoPagamentos, setResumoPagamentos] = useState<any>({});
   const [loadingPagamentos, setLoadingPagamentos] = useState(false);
   const [showAdicionarPagamentoModal, setShowAdicionarPagamentoModal] = useState(false);
@@ -2102,6 +2116,85 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: Buscar pagamentos do caixa
+      console.log('💰 Buscando pagamentos do caixa...');
+      const { data: pagamentosData, error: pagamentosError } = await supabase
+        .from('caixa_pagamentos')
+        .select(`
+          id,
+          valor_pagamento,
+          fornecedor_nome,
+          observacoes,
+          data_pagamento,
+          operador_nome
+        `)
+        .eq('caixa_id', caixaData.id)
+        .eq('deletado', false)
+        .order('data_pagamento', { ascending: false });
+
+      if (pagamentosError) {
+        console.error('❌ Erro ao buscar pagamentos do caixa:', pagamentosError);
+      } else {
+        console.log('✅ Pagamentos do caixa carregados:', pagamentosData?.length || 0);
+        setPagamentosCaixa(pagamentosData || []);
+        const totalPagamentos = (pagamentosData || []).reduce((total, pagamento) => {
+          return total + (parseFloat(pagamento.valor_pagamento) || 0);
+        }, 0);
+        setTotalPagamentosCaixa(totalPagamentos);
+      }
+
+      // ✅ NOVO: Buscar sangrias do caixa
+      console.log('💰 Buscando sangrias do caixa...');
+      const { data: sangriasData, error: sangriasError } = await supabase
+        .from('caixa_sangrias')
+        .select(`
+          id,
+          valor_sangria,
+          observacoes,
+          data_sangria,
+          operador_nome
+        `)
+        .eq('caixa_id', caixaData.id)
+        .eq('deletado', false)
+        .order('data_sangria', { ascending: false });
+
+      if (sangriasError) {
+        console.error('❌ Erro ao buscar sangrias do caixa:', sangriasError);
+      } else {
+        console.log('✅ Sangrias do caixa carregadas:', sangriasData?.length || 0);
+        setSangriasCaixaModal(sangriasData || []);
+        const totalSangrias = (sangriasData || []).reduce((total, sangria) => {
+          return total + (parseFloat(sangria.valor_sangria) || 0);
+        }, 0);
+        setTotalSangriasCaixa(totalSangrias);
+      }
+
+      // ✅ NOVO: Buscar suprimentos do caixa
+      console.log('💰 Buscando suprimentos do caixa...');
+      const { data: suprimentosData, error: suprimentosError } = await supabase
+        .from('caixa_suprimentos')
+        .select(`
+          id,
+          valor_suprimento,
+          observacoes,
+          data_suprimento,
+          operador_nome
+        `)
+        .eq('caixa_id', caixaData.id)
+        .eq('deletado', false)
+        .order('data_suprimento', { ascending: false });
+
+      if (suprimentosError) {
+        console.error('❌ Erro ao buscar suprimentos do caixa:', suprimentosError);
+      } else {
+        console.log('✅ Suprimentos do caixa carregados:', suprimentosData?.length || 0);
+        setSuprimentosCaixaModal(suprimentosData || []);
+        const totalSuprimentos = (suprimentosData || []).reduce((total, suprimento) => {
+          return total + (parseFloat(suprimento.valor_suprimento) || 0);
+        }, 0);
+        setTotalSuprimentosCaixa(totalSuprimentos);
+      }
+
       // ✅ NOVO: Calcular valores reais das formas de pagamento baseado nas vendas do caixa
       console.log('💰 Calculando valores reais das formas de pagamento...');
       const valoresReais: {[key: string]: {atual: number, formatado: string}} = {};
@@ -2930,11 +3023,13 @@ const PDVPage: React.FC = () => {
       icon: TrendingDown,
       label: 'Sangria',
       color: 'red',
-      onClick: (e?: React.MouseEvent) => {
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
+        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+        await carregarDadosCaixa();
         setShowSangriaModal(true);
       }
     },
@@ -2943,11 +3038,13 @@ const PDVPage: React.FC = () => {
       icon: TrendingUp,
       label: 'Suprimento',
       color: 'green',
-      onClick: (e?: React.MouseEvent) => {
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
+        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+        await carregarDadosCaixa();
         setShowSuprimentoModal(true);
       }
     },
@@ -3436,6 +3533,20 @@ const PDVPage: React.FC = () => {
       loadFormasPagamentoEmpresa();
     }
   }, [showAdicionarPagamentoModal]);
+
+  // ✅ NOVO: useEffect para carregar sangrias quando modal abrir e dadosCaixa estiver disponível
+  useEffect(() => {
+    if (showSangriaModal && abaSangriaAtiva === 'listagem' && dadosCaixa?.id) {
+      carregarSangriasCaixa();
+    }
+  }, [showSangriaModal, abaSangriaAtiva, dadosCaixa?.id]);
+
+  // ✅ NOVO: useEffect para carregar suprimentos quando modal abrir e dadosCaixa estiver disponível
+  useEffect(() => {
+    if (showSuprimentoModal && abaSuprimentoAtiva === 'listagem' && dadosCaixa?.id) {
+      carregarSuprimentosCaixa();
+    }
+  }, [showSuprimentoModal, abaSuprimentoAtiva, dadosCaixa?.id]);
 
   // ✅ NOVO: Sistema Realtime para monitorar mudanças na tabela PDV (delivery local)
   useEffect(() => {
@@ -33160,6 +33271,327 @@ const PDVPage: React.FC = () => {
               </div>
             )}
 
+            {/* ✅ NOVO: Seção de Pagamentos */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#ef4444' }}>
+                💳 Pagamentos
+              </h4>
+
+              {pagamentosCaixa.length > 0 ? (
+                <>
+                  {/* Total dos Pagamentos com botão de expand */}
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    border: '1px solid #4b5563',
+                    marginBottom: '12px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setPagamentosExpandido(!pagamentosExpandido)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                        Total Pago
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#ef4444' }}>
+                          R$ {totalPagamentosCaixa.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: '#9ca3af',
+                          transform: pagamentosExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
+                        }}>
+                          ▼
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Pagamentos - só aparece quando expandida */}
+                  {pagamentosExpandido && (
+                    <div style={{
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      backgroundColor: '#1f2937',
+                      borderRadius: '8px',
+                      border: '1px solid #374151'
+                    }}>
+                      {pagamentosCaixa.map((pagamento, index) => (
+                        <div
+                          key={pagamento.id}
+                          style={{
+                            padding: '8px 12px',
+                            borderBottom: index < pagamentosCaixa.length - 1 ? '1px solid #374151' : 'none',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                              {pagamento.fornecedor_nome}
+                            </span>
+                            <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+                              R$ {parseFloat(pagamento.valor_pagamento).toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                            <span>{pagamento.operador_nome}</span>
+                            <span>
+                              {new Date(pagamento.data_pagamento).toLocaleString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          {pagamento.observacoes && (
+                            <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+                              {pagamento.observacoes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{
+                  backgroundColor: '#374151',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  color: '#9ca3af',
+                  fontSize: '14px',
+                  border: '1px solid #4b5563'
+                }}>
+                  Nenhum pagamento registrado neste caixa
+                </div>
+              )}
+            </div>
+
+            {/* ✅ NOVO: Seção de Sangria */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#dc2626' }}>
+                📉 Sangria
+              </h4>
+
+              {sangriasCaixaModal.length > 0 ? (
+                <>
+                  {/* Total das Sangrias com botão de expand */}
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    border: '1px solid #4b5563',
+                    marginBottom: '12px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setSangriasExpandido(!sangriasExpandido)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                        Total Sangria
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#dc2626' }}>
+                          R$ {totalSangriasCaixa.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: '#9ca3af',
+                          transform: sangriasExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
+                        }}>
+                          ▼
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Sangrias - só aparece quando expandida */}
+                  {sangriasExpandido && (
+                    <div style={{
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      backgroundColor: '#1f2937',
+                      borderRadius: '8px',
+                      border: '1px solid #374151'
+                    }}>
+                      {sangriasCaixaModal.map((sangria, index) => (
+                        <div
+                          key={sangria.id}
+                          style={{
+                            padding: '8px 12px',
+                            borderBottom: index < sangriasCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                              {sangria.operador_nome}
+                            </span>
+                            <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                              R$ {parseFloat(sangria.valor_sangria).toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                            <span>Sangria</span>
+                            <span>
+                              {new Date(sangria.data_sangria).toLocaleString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          {sangria.observacoes && (
+                            <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+                              {sangria.observacoes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{
+                  backgroundColor: '#374151',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  color: '#9ca3af',
+                  fontSize: '14px',
+                  border: '1px solid #4b5563'
+                }}>
+                  Nenhuma sangria registrada neste caixa
+                </div>
+              )}
+            </div>
+
+            {/* ✅ NOVO: Seção de Suprimento */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#059669' }}>
+                📈 Suprimento
+              </h4>
+
+              {suprimentosCaixaModal.length > 0 ? (
+                <>
+                  {/* Total dos Suprimentos com botão de expand */}
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    border: '1px solid #4b5563',
+                    marginBottom: '12px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setSuprimentosExpandido(!suprimentosExpandido)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                        Total Suprimento
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#059669' }}>
+                          R$ {totalSuprimentosCaixa.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: '#9ca3af',
+                          transform: suprimentosExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
+                        }}>
+                          ▼
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Suprimentos - só aparece quando expandida */}
+                  {suprimentosExpandido && (
+                    <div style={{
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      backgroundColor: '#1f2937',
+                      borderRadius: '8px',
+                      border: '1px solid #374151'
+                    }}>
+                      {suprimentosCaixaModal.map((suprimento, index) => (
+                        <div
+                          key={suprimento.id}
+                          style={{
+                            padding: '8px 12px',
+                            borderBottom: index < suprimentosCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                              {suprimento.operador_nome}
+                            </span>
+                            <span style={{ color: '#059669', fontWeight: 'bold' }}>
+                              R$ {parseFloat(suprimento.valor_suprimento).toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                            <span>Suprimento</span>
+                            <span>
+                              {new Date(suprimento.data_suprimento).toLocaleString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          {suprimento.observacoes && (
+                            <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+                              {suprimento.observacoes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{
+                  backgroundColor: '#374151',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  color: '#9ca3af',
+                  fontSize: '14px',
+                  border: '1px solid #4b5563'
+                }}>
+                  Nenhum suprimento registrado neste caixa
+                </div>
+              )}
+            </div>
+
             {/* Botões */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -33172,6 +33604,12 @@ const PDVPage: React.FC = () => {
                   setRecebimentosFiadoCaixa([]);
                   setTotalRecebimentosFiado(0);
                   setValoresFiadoPorForma({});
+                  setPagamentosCaixa([]);
+                  setTotalPagamentosCaixa(0);
+                  setSangriasCaixaModal([]);
+                  setTotalSangriasCaixa(0);
+                  setSuprimentosCaixaModal([]);
+                  setTotalSuprimentosCaixa(0);
                 }}
                 style={{
                   flex: 1,
