@@ -19274,7 +19274,8 @@ const PDVPage: React.FC = () => {
            pdvConfig?.mesas ||
            pdvConfig?.exibe_foto_item ||
            pdvConfig?.solicitar_nome_cliente ||
-           pdvConfig?.delivery)
+           pdvConfig?.delivery ||
+           pdvConfig?.fiado)
         ) && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
@@ -19329,11 +19330,11 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados OU itens do cardápio digital OU delivery habilitado */}
-              {(pdvConfig?.seleciona_clientes || pdvConfig?.delivery || pedidosImportados.length > 0 || carrinho.some(item => item.cardapio_digital)) && (
+              {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados OU itens do cardápio digital OU delivery habilitado OU fiado habilitado */}
+              {(pdvConfig?.seleciona_clientes || pdvConfig?.delivery || pdvConfig?.fiado || pedidosImportados.length > 0 || carrinho.some(item => item.cardapio_digital)) && (
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
-                  {/* Cliente selecionado manualmente - para seleciona_clientes ou delivery */}
-                  {(pdvConfig?.seleciona_clientes || pdvConfig?.delivery) ? (
+                  {/* Cliente selecionado manualmente - para seleciona_clientes, delivery ou fiado */}
+                  {(pdvConfig?.seleciona_clientes || pdvConfig?.delivery || pdvConfig?.fiado) ? (
                     clienteSelecionado ? (
                       <div className="space-y-1">
                         <div className="flex items-center gap-1">
