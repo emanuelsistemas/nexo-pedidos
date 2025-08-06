@@ -486,9 +486,15 @@ const PDVPage: React.FC = () => {
   const [showDetalhesClienteModal, setShowDetalhesClienteModal] = useState(false);
   const [clienteSelecionadoDetalhes, setClienteSelecionadoDetalhes] = useState<any>(null);
   const [vendasFiadoCliente, setVendasFiadoCliente] = useState<any[]>([]);
+  const [vendasFiadoClienteOriginal, setVendasFiadoClienteOriginal] = useState<any[]>([]);
   const [loadingVendasFiado, setLoadingVendasFiado] = useState(false);
   const [vendaExpandida, setVendaExpandida] = useState<string | null>(null);
   const [itensVendaExpandida, setItensVendaExpandida] = useState<any[]>([]);
+
+  // Estados para filtro de data
+  const [showFiltroData, setShowFiltroData] = useState(false);
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
 
   // ✅ NOVO: Estados para modal de recebimento de fiado
   const [showRecebimentoFiadoModal, setShowRecebimentoFiadoModal] = useState(false);
@@ -4477,17 +4483,11 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      // Atualizar dados locais
-      setClienteSelecionadoDetalhes(prev => ({
-        ...prev,
-        saldo_devedor: saldoPosterior
-      }));
-
       // Recarregar lista de clientes devedores
       loadClientesDevedores();
 
-      // Recarregar histórico do cliente no modal
-      await loadVendasFiadoCliente(clienteSelecionadoDetalhes.id);
+      // Recarregar dados completos do cliente no modal (saldo + histórico)
+      await recarregarDadosCliente(clienteSelecionadoDetalhes.id);
 
       // Limpar formulário e fechar modal
       setValorRecebimento('');
@@ -4590,6 +4590,7 @@ const PDVPage: React.FC = () => {
         }))
       ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
 
+      setVendasFiadoClienteOriginal(historicoUnificado);
       setVendasFiadoCliente(historicoUnificado);
 
     } catch (error) {
@@ -4625,6 +4626,66 @@ const PDVPage: React.FC = () => {
     } catch (error) {
       console.error('❌ Erro inesperado ao carregar itens da venda:', error);
       return [];
+    }
+  };
+
+  // ✅ NOVA: Função para aplicar filtro de data
+  const aplicarFiltroData = () => {
+    if (!dataInicio && !dataFim) {
+      // Se não há filtros, mostrar todos os dados
+      setVendasFiadoCliente(vendasFiadoClienteOriginal);
+      return;
+    }
+
+    const dadosFiltrados = vendasFiadoClienteOriginal.filter(item => {
+      const dataItem = new Date(item.data);
+      const inicio = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
+      const fim = dataFim ? new Date(dataFim + 'T23:59:59') : null;
+
+      if (inicio && fim) {
+        return dataItem >= inicio && dataItem <= fim;
+      } else if (inicio) {
+        return dataItem >= inicio;
+      } else if (fim) {
+        return dataItem <= fim;
+      }
+      return true;
+    });
+
+    setVendasFiadoCliente(dadosFiltrados);
+  };
+
+  // ✅ NOVA: Função para limpar filtros
+  const limparFiltros = () => {
+    setDataInicio('');
+    setDataFim('');
+    setVendasFiadoCliente(vendasFiadoClienteOriginal);
+  };
+
+  // ✅ NOVA: Função para recarregar dados do cliente no modal
+  const recarregarDadosCliente = async (clienteId: string) => {
+    try {
+      // Buscar dados atualizados do cliente
+      const { data: clienteAtualizado, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('id', clienteId)
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao recarregar dados do cliente:', error);
+        return;
+      }
+
+      if (clienteAtualizado) {
+        // Atualizar dados do cliente no modal
+        setClienteSelecionadoDetalhes(clienteAtualizado);
+
+        // Recarregar histórico do cliente
+        await loadVendasFiadoCliente(clienteId);
+      }
+    } catch (error) {
+      console.error('❌ Erro inesperado ao recarregar dados do cliente:', error);
     }
   };
 
@@ -23774,7 +23835,79 @@ const PDVPage: React.FC = () => {
                 {/* Lista de Vendas Fiado */}
                 <div className="flex-1 bg-gray-800/30 rounded-lg overflow-hidden flex flex-col">
                   <div className="p-4 border-b border-gray-700">
-                    <h4 className="text-lg font-medium text-white">Histórico de Vendas e Recebimentos</h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-lg font-medium text-white">Histórico de Vendas e Recebimentos</h4>
+                      <button
+                        onClick={() => setShowFiltroData(!showFiltroData)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          showFiltroData
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                        }`}
+                        title="Filtrar por data"
+                      >
+                        <Filter size={18} />
+                      </button>
+                    </div>
+
+                    {/* Filtros de Data */}
+                    <AnimatePresence>
+                      {showFiltroData && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-4 p-4 bg-gray-900/50 rounded-lg">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Data Início */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                  Data Início
+                                </label>
+                                <input
+                                  type="date"
+                                  value={dataInicio}
+                                  onChange={(e) => setDataInicio(e.target.value)}
+                                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+
+                              {/* Data Fim */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                  Data Fim
+                                </label>
+                                <input
+                                  type="date"
+                                  value={dataFim}
+                                  onChange={(e) => setDataFim(e.target.value)}
+                                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Botões */}
+                            <div className="flex gap-3 mt-4">
+                              <button
+                                onClick={aplicarFiltroData}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors font-medium"
+                              >
+                                Aplicar Filtro
+                              </button>
+                              <button
+                                onClick={limparFiltros}
+                                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors font-medium"
+                              >
+                                Limpar
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   <div className="flex-1 overflow-y-auto">
