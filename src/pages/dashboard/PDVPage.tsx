@@ -746,11 +746,17 @@ const PDVPage: React.FC = () => {
   const [filtroDataFim, setFiltroDataFim] = useState('');
   const [filtroNumeroPedido, setFiltroNumeroPedido] = useState('');
   const [filtroNumeroVenda, setFiltroNumeroVenda] = useState('');
+  const [filtroOperador, setFiltroOperador] = useState('todos'); // ✅ NOVO: Filtro por operador/caixa
+  const [filtroFormaPagamento, setFiltroFormaPagamento] = useState('todas'); // ✅ NOVO: Filtro por forma de pagamento
 
   // Estados para cancelamento de vendas
   const [showCancelamentoModal, setShowCancelamentoModal] = useState(false);
   const [vendaParaCancelar, setVendaParaCancelar] = useState<any>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
+
+  // ✅ NOVO: Estados para listas de filtros
+  const [operadoresList, setOperadoresList] = useState<any[]>([]);
+  const [formasPagamentoList, setFormasPagamentoList] = useState<any[]>([]);
 
   // Estados para exibir itens da venda
   const [showItensVendaModal, setShowItensVendaModal] = useState(false);
@@ -2820,7 +2826,7 @@ const PDVPage: React.FC = () => {
 
       return () => clearTimeout(timeoutId);
     }
-  }, [filtroStatus, filtroNfce, filtroDataInicio, filtroDataFim, filtroNumeroVenda, filtroNumeroPedido, showMovimentosModal]); // ✅ NOVO: Incluir filtroNfce
+  }, [filtroStatus, filtroNfce, filtroDataInicio, filtroDataFim, filtroNumeroVenda, filtroNumeroPedido, filtroOperador, filtroFormaPagamento, showMovimentosModal]); // ✅ NOVO: Incluir novos filtros
 
   // ✅ CORREÇÃO: useEffect para garantir criação da venda quando há itens no carrinho
   useEffect(() => {
@@ -5425,6 +5431,112 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função para carregar listas de filtros
+  const carregarListasFiltros = async () => {
+    try {
+      console.log('🔍 Carregando listas de filtros...');
+
+      // Obter usuário autenticado
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        console.error('❌ Erro ao obter usuário:', userError);
+        return;
+      }
+
+      // Buscar dados do usuário na tabela usuarios
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError || !usuarioData?.empresa_id) {
+        console.error('❌ Erro ao obter dados do usuário:', usuarioError);
+        return;
+      }
+
+      console.log('✅ Empresa ID encontrada:', usuarioData.empresa_id);
+
+      // Carregar operadores (usuários que fizeram vendas com caixa)
+      console.log('🔍 Buscando operadores...');
+
+      // Primeiro buscar IDs únicos de usuários dos caixas
+      const { data: caixasData, error: caixasError } = await supabase
+        .from('caixa_controle')
+        .select('usuario_id')
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (caixasError) {
+        console.error('❌ Erro ao buscar caixas:', caixasError);
+      } else {
+        console.log('📊 Caixas encontrados:', caixasData?.length || 0);
+
+        if (caixasData && caixasData.length > 0) {
+          // Extrair IDs únicos de usuários
+          const usuariosIds = [...new Set(caixasData.map(c => c.usuario_id))];
+          console.log('👥 IDs únicos de usuários:', usuariosIds);
+
+          // Buscar dados dos usuários
+          const { data: usuariosData, error: usuariosError } = await supabase
+            .from('usuarios')
+            .select('id, nome')
+            .in('id', usuariosIds);
+
+          if (usuariosError) {
+            console.error('❌ Erro ao buscar usuários:', usuariosError);
+          } else {
+            console.log('✅ Operadores encontrados:', usuariosData);
+            setOperadoresList(usuariosData || []);
+          }
+        } else {
+          console.log('⚠️ Nenhum caixa encontrado');
+          setOperadoresList([]);
+        }
+      }
+
+      // Carregar formas de pagamento ativas da empresa
+      console.log('🔍 Buscando formas de pagamento...');
+
+      // Primeiro buscar IDs das formas de pagamento da empresa
+      const { data: formasEmpresaData, error: formasEmpresaError } = await supabase
+        .from('formas_pagamento_empresa')
+        .select('forma_pagamento_opcao_id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true);
+
+      if (formasEmpresaError) {
+        console.error('❌ Erro ao buscar formas da empresa:', formasEmpresaError);
+      } else {
+        console.log('📊 Formas da empresa encontradas:', formasEmpresaData?.length || 0);
+
+        if (formasEmpresaData && formasEmpresaData.length > 0) {
+          // Extrair IDs das formas de pagamento
+          const formasIds = formasEmpresaData.map(f => f.forma_pagamento_opcao_id);
+          console.log('💳 IDs das formas:', formasIds);
+
+          // Buscar dados das formas de pagamento
+          const { data: formasOpcoesData, error: formasOpcoesError } = await supabase
+            .from('forma_pagamento_opcoes')
+            .select('id, nome, tipo')
+            .in('id', formasIds);
+
+          if (formasOpcoesError) {
+            console.error('❌ Erro ao buscar opções de formas:', formasOpcoesError);
+          } else {
+            console.log('✅ Formas de pagamento encontradas:', formasOpcoesData);
+            setFormasPagamentoList(formasOpcoesData || []);
+          }
+        } else {
+          console.log('⚠️ Nenhuma forma de pagamento da empresa encontrada');
+          setFormasPagamentoList([]);
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar listas de filtros:', error);
+    }
+  };
+
   // Função para carregar vendas do PDV da empresa
   const loadVendas = async () => {
     try {
@@ -5729,10 +5841,34 @@ const PDVPage: React.FC = () => {
       // Filtro por número de pedido (aplicado após processamento)
       let vendasFiltradas = vendasProcessadas;
       if (filtroNumeroPedido) {
-        vendasFiltradas = vendasProcessadas.filter(venda => {
+        vendasFiltradas = vendasFiltradas.filter(venda => {
           if (venda.pedidos_origem && Array.isArray(venda.pedidos_origem)) {
             return venda.pedidos_origem.some((numeroPedido: string) =>
               numeroPedido && numeroPedido.toString().toLowerCase().includes(filtroNumeroPedido.toLowerCase())
+            );
+          }
+          return false;
+        });
+      }
+
+      // ✅ NOVO: Filtro por operador/caixa
+      if (filtroOperador !== 'todos') {
+        vendasFiltradas = vendasFiltradas.filter(venda => {
+          return venda.caixa_info && venda.caixa_info.usuario_nome === filtroOperador;
+        });
+      }
+
+      // ✅ NOVO: Filtro por forma de pagamento
+      if (filtroFormaPagamento !== 'todas') {
+        vendasFiltradas = vendasFiltradas.filter(venda => {
+          if (!venda.forma_pagamento_info) return false;
+
+          if (venda.tipo_pagamento === 'vista') {
+            return venda.forma_pagamento_info.nome === filtroFormaPagamento;
+          } else if (venda.tipo_pagamento === 'parcial') {
+            // Para pagamentos parciais, verificar se alguma das formas corresponde
+            return venda.forma_pagamento_info.formas_detalhes?.some((forma: any) =>
+              forma.nome === filtroFormaPagamento
             );
           }
           return false;
@@ -17688,6 +17824,13 @@ const PDVPage: React.FC = () => {
     }
   }, [showAreaProdutos]);
 
+  // ✅ NOVO: useEffect para carregar listas de filtros quando modal de movimentos abrir
+  useEffect(() => {
+    if (showMovimentosModal) {
+      carregarListasFiltros();
+    }
+  }, [showMovimentosModal]);
+
   // useEffect para focar no campo valor quando modal de venda sem produto abrir
   useEffect(() => {
     if (showVendaSemProdutoModal && valorVendaSemProdutoRef.current) {
@@ -23441,7 +23584,7 @@ const PDVPage: React.FC = () => {
                       <Filter size={14} />
                       Filtros
                       {/* Indicador de filtros ativos */}
-                      {(filtroStatus !== 'todas' || filtroNfce !== 'todas' || filtroDataInicio || filtroDataFim || filtroNumeroVenda || filtroNumeroPedido) && (
+                      {(filtroStatus !== 'todas' || filtroNfce !== 'todas' || filtroDataInicio || filtroDataFim || filtroNumeroVenda || filtroNumeroPedido || filtroOperador !== 'todos' || filtroFormaPagamento !== 'todas') && (
                         <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
                       )}
                     </button>
@@ -23552,10 +23695,10 @@ const PDVPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Filtros por Data e Hora */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* ✅ AJUSTADO: Todos os filtros em uma linha - agora com 6 campos */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-400 mb-1">Data e Hora Início</label>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Data e Hora Início</label>
                           <input
                             type="datetime-local"
                             value={filtroDataInicio}
@@ -23564,11 +23707,11 @@ const PDVPage: React.FC = () => {
                               // Aplicar filtro automaticamente após mudança
                               setTimeout(() => loadVendas(), 500);
                             }}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-primary-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-400 mb-1">Data e Hora Fim</label>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Data e Hora Fim</label>
                           <input
                             type="datetime-local"
                             value={filtroDataFim}
@@ -23577,15 +23720,11 @@ const PDVPage: React.FC = () => {
                               // Aplicar filtro automaticamente após mudança
                               setTimeout(() => loadVendas(), 500);
                             }}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-primary-500"
                           />
                         </div>
-                      </div>
-
-                      {/* Filtros por Número */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-400 mb-1">Número da Venda</label>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Número da Venda</label>
                           <input
                             type="text"
                             value={filtroNumeroVenda}
@@ -23595,11 +23734,11 @@ const PDVPage: React.FC = () => {
                               setTimeout(() => loadVendas(), 800);
                             }}
                             placeholder="Ex: PDV-000123"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-primary-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-400 mb-1">Número do Pedido</label>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Número do Pedido</label>
                           <input
                             type="text"
                             value={filtroNumeroPedido}
@@ -23609,8 +23748,46 @@ const PDVPage: React.FC = () => {
                               setTimeout(() => loadVendas(), 800);
                             }}
                             placeholder="Ex: 123"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-primary-500"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Operador</label>
+                          <select
+                            value={filtroOperador}
+                            onChange={(e) => {
+                              setFiltroOperador(e.target.value);
+                              // Aplicar filtro automaticamente após mudança
+                              setTimeout(() => loadVendas(), 300);
+                            }}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-primary-500"
+                          >
+                            <option value="todos">Todos</option>
+                            {operadoresList.map((operador) => (
+                              <option key={operador.id} value={operador.nome}>
+                                {operador.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-1">Forma de Pagamento</label>
+                          <select
+                            value={filtroFormaPagamento}
+                            onChange={(e) => {
+                              setFiltroFormaPagamento(e.target.value);
+                              // Aplicar filtro automaticamente após mudança
+                              setTimeout(() => loadVendas(), 300);
+                            }}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-primary-500"
+                          >
+                            <option value="todas">Todas</option>
+                            {formasPagamentoList.map((forma) => (
+                              <option key={forma.id} value={forma.nome}>
+                                {forma.nome}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
 
@@ -23630,6 +23807,8 @@ const PDVPage: React.FC = () => {
                             setFiltroDataFim('');
                             setFiltroNumeroPedido('');
                             setFiltroNumeroVenda('');
+                            setFiltroOperador('todos'); // ✅ NOVO: Limpar filtro de operador
+                            setFiltroFormaPagamento('todas'); // ✅ NOVO: Limpar filtro de forma de pagamento
                             setTimeout(() => loadVendas(), 100);
                           }}
                           className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
