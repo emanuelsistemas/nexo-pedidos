@@ -468,6 +468,10 @@ const PDVPage: React.FC = () => {
   const [formasPagamentoCaixa, setFormasPagamentoCaixa] = useState<any[]>([]);
   const [valoresCaixa, setValoresCaixa] = useState<{[key: string]: string}>({});
   const [valoresReaisCaixa, setValoresReaisCaixa] = useState<{[key: string]: {atual: number, formatado: string}}>({});
+
+  // ✅ NOVO: Estados para recebimentos de fiado no caixa
+  const [recebimentosFiadoCaixa, setRecebimentosFiadoCaixa] = useState<any[]>([]);
+  const [totalRecebimentosFiado, setTotalRecebimentosFiado] = useState(0);
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1624,6 +1628,37 @@ const PDVPage: React.FC = () => {
 
       console.log('✅ Formas de pagamento carregadas:', formasData);
       setFormasPagamentoCaixa(formasData || []);
+
+      // ✅ NOVO: Buscar recebimentos de fiado para este caixa (se fiado estiver habilitado)
+      if (pdvConfig?.fiado) {
+        console.log('💰 Buscando recebimentos de fiado para o caixa...');
+        const { data: recebimentosData, error: recebimentosError } = await supabase
+          .from('fiado_recebimentos')
+          .select(`
+            id,
+            valor_recebimento,
+            cliente_nome,
+            forma_pagamento_nome,
+            data_recebimento,
+            observacoes
+          `)
+          .eq('caixa_controle_id', caixaData.id)
+          .eq('deletado', false)
+          .order('data_recebimento', { ascending: false });
+
+        if (recebimentosError) {
+          console.error('❌ Erro ao buscar recebimentos de fiado:', recebimentosError);
+        } else {
+          console.log('✅ Recebimentos de fiado carregados:', recebimentosData?.length || 0);
+          setRecebimentosFiadoCaixa(recebimentosData || []);
+
+          // Calcular total dos recebimentos
+          const totalRecebimentos = (recebimentosData || []).reduce((total, recebimento) => {
+            return total + (parseFloat(recebimento.valor_recebimento) || 0);
+          }, 0);
+          setTotalRecebimentosFiado(totalRecebimentos);
+        }
+      }
 
       // ✅ NOVO: Calcular valores reais das formas de pagamento baseado nas vendas do caixa
       console.log('💰 Calculando valores reais das formas de pagamento...');
@@ -4375,7 +4410,7 @@ const PDVPage: React.FC = () => {
           valor_recebimento: valorNumerico,
           saldo_anterior: saldoAnterior,
           saldo_posterior: saldoPosterior,
-          caixa_recebimento: 'PDV-001', // Pode ser configurável no futuro
+          caixa_controle_id: caixaData.id,
           operador_usuario_id: userData.user.id,
           operador_nome: usuarioData.nome,
           observacoes: observacoesRecebimento || null
@@ -31623,6 +31658,8 @@ const PDVPage: React.FC = () => {
                   setFormasPagamentoCaixa([]);
                   setValoresCaixa({});
                   setValoresReaisCaixa({});
+                  setRecebimentosFiadoCaixa([]);
+                  setTotalRecebimentosFiado(0);
                 }}
                 style={{
                   position: 'absolute',
@@ -31785,6 +31822,100 @@ const PDVPage: React.FC = () => {
               )}
             </div>
 
+            {/* ✅ NOVO: Seção de Recebimentos de Fiado (apenas se fiado estiver habilitado) */}
+            {pdvConfig?.fiado && (
+              <div style={{ marginBottom: '24px' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#f59e0b' }}>
+                  💰 Recebimentos de Fiado
+                </h4>
+
+                {recebimentosFiadoCaixa.length > 0 ? (
+                  <>
+                    {/* Total dos Recebimentos */}
+                    <div style={{
+                      backgroundColor: '#374151',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      border: '1px solid #4b5563',
+                      marginBottom: '12px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                          Total Recebido
+                        </span>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#f59e0b' }}>
+                          R$ {totalRecebimentosFiado.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Lista de Recebimentos */}
+                    <div style={{
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      backgroundColor: '#1f2937',
+                      borderRadius: '8px',
+                      border: '1px solid #374151'
+                    }}>
+                      {recebimentosFiadoCaixa.map((recebimento, index) => (
+                        <div
+                          key={recebimento.id}
+                          style={{
+                            padding: '8px 12px',
+                            borderBottom: index < recebimentosFiadoCaixa.length - 1 ? '1px solid #374151' : 'none',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                              {recebimento.cliente_nome}
+                            </span>
+                            <span style={{ color: '#10b981', fontWeight: 'bold' }}>
+                              R$ {parseFloat(recebimento.valor_recebimento).toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                            <span>{recebimento.forma_pagamento_nome}</span>
+                            <span>
+                              {new Date(recebimento.data_recebimento).toLocaleString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          {recebimento.observacoes && (
+                            <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+                              {recebimento.observacoes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    border: '1px solid #4b5563',
+                    textAlign: 'center'
+                  }}>
+                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>
+                      Nenhum recebimento de fiado neste caixa
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Botões */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -31794,6 +31925,8 @@ const PDVPage: React.FC = () => {
                   setFormasPagamentoCaixa([]);
                   setValoresCaixa({});
                   setValoresReaisCaixa({});
+                  setRecebimentosFiadoCaixa([]);
+                  setTotalRecebimentosFiado(0);
                 }}
                 style={{
                   flex: 1,
