@@ -30684,13 +30684,57 @@ const PDVPage: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-              <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
-                💰 Controle de Caixa
-              </h3>
-              <p style={{ fontSize: '14px', color: '#9ca3af' }}>
-                Gerencie o status e valores do caixa
-              </p>
+            <div style={{ marginBottom: '24px', position: 'relative' }}>
+              {/* Botão X para fechar */}
+              <button
+                onClick={() => {
+                  setShowCaixaModal(false);
+                  setDadosCaixa(null);
+                  setFormasPagamentoCaixa([]);
+                  setValoresCaixa({});
+                }}
+                style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '-8px',
+                  width: '32px',
+                  height: '32px',
+                  backgroundColor: '#374151',
+                  border: '2px solid #4b5563',
+                  borderRadius: '50%',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  transition: 'all 0.2s ease',
+                  zIndex: 1
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#dc2626';
+                  e.target.style.color = 'white';
+                  e.target.style.borderColor = '#dc2626';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = '#374151';
+                  e.target.style.color = '#9ca3af';
+                  e.target.style.borderColor = '#4b5563';
+                }}
+              >
+                ×
+              </button>
+
+              {/* Título centralizado */}
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  💰 Controle de Caixa
+                </h3>
+                <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+                  Gerencie o status e valores do caixa
+                </p>
+              </div>
             </div>
 
             {/* Informações do caixa */}

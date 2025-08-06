@@ -15,7 +15,7 @@ import {
   validarComplemento,
   ValidationResult
 } from '../../utils/nfeValidation';
-import { Devolucao } from '../../types';
+import { Devolucao, PDVConfig } from '../../types';
 import { formatarPreco } from '../../utils/formatters';
 
 interface Telefone {
@@ -77,6 +77,10 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
 
   // ✅ NOVO: Estado para controlar loading do botão de edição
   const [loadingEditCliente, setLoadingEditCliente] = useState<string | null>(null);
+
+  // Estados para configurações do PDV
+  const [pdvConfig, setPdvConfig] = useState<PDVConfig | null>(null);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
   const [formData, setFormData] = useState({
     tipo_documento: 'CNPJ',
@@ -182,6 +186,7 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
   useEffect(() => {
     loadClientes();
     loadEmpresas();
+    loadPdvConfig();
   }, []);
 
   // Definir a empresa_id do usuário atual quando o formulário for inicializado
@@ -229,6 +234,54 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
       }
     } catch (error) {
       console.error('Erro ao carregar empresas:', error);
+    }
+  };
+
+  const loadPdvConfig = async () => {
+    try {
+      setIsLoadingConfig(true);
+      console.log('🔧 Carregando configurações do PDV...');
+
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.log('❌ Usuário não autenticado');
+        return;
+      }
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.log('❌ Empresa do usuário não encontrada');
+        return;
+      }
+
+      console.log('🏢 Empresa ID:', usuarioData.empresa_id);
+
+      // Buscar configurações do PDV
+      const { data: configData, error } = await supabase
+        .from('pdv_config')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('❌ Erro ao carregar configurações do PDV:', error);
+        return;
+      }
+
+      console.log('📋 Configurações carregadas:', configData);
+      setPdvConfig(configData || {});
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar configurações do PDV:', error);
+    } finally {
+      setIsLoadingConfig(false);
     }
   };
 
@@ -1642,39 +1695,45 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
           </button>
         </div>
 
-        {/* ✅ NOVO: Tags de Filtro por Origem */}
-        <div className="flex flex-wrap gap-2 mt-2">
-          <button
-            onClick={() => setOrigemFilter('todas')}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
-              origemFilter === 'todas'
-                ? 'bg-gray-600 text-white'
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
-            }`}
-          >
-            🌐 Todas Origens
-          </button>
-          <button
-            onClick={() => setOrigemFilter('delivery_local')}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
-              origemFilter === 'delivery_local'
-                ? 'bg-orange-500 text-white'
-                : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/30'
-            }`}
-          >
-            🏪 Delivery Local
-          </button>
-          <button
-            onClick={() => setOrigemFilter('cardapio_digital')}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
-              origemFilter === 'cardapio_digital'
-                ? 'bg-purple-500 text-white'
-                : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30'
-            }`}
-          >
-            📱 Cardápio Digital
-          </button>
-        </div>
+        {/* Tags de Filtro por Origem - Só aparecem se as funcionalidades estão habilitadas */}
+        {!isLoadingConfig && pdvConfig && (pdvConfig.delivery || pdvConfig.cardapio_digital) && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              onClick={() => setOrigemFilter('todas')}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+                origemFilter === 'todas'
+                  ? 'bg-gray-600 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+              }`}
+            >
+              🌐 Todas Origens
+            </button>
+            {pdvConfig.delivery && (
+              <button
+                onClick={() => setOrigemFilter('delivery_local')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+                  origemFilter === 'delivery_local'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/30'
+                }`}
+              >
+                🏪 Delivery Local
+              </button>
+            )}
+            {pdvConfig.cardapio_digital && (
+              <button
+                onClick={() => setOrigemFilter('cardapio_digital')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+                  origemFilter === 'cardapio_digital'
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30'
+                }`}
+                >
+                  📱 Cardápio Digital
+                </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Barra de Busca + Filtros Colapsáveis */}
@@ -1782,18 +1841,21 @@ const ClientesPage: React.FC<ClientesPageProps> = ({
               <div className="flex items-start gap-3">
                 {/* Coluna Esquerda - Nome e Contato */}
                 <div className="flex-1 min-w-0">
-                  {/* Tag de origem */}
-                  <div className="mb-1">
-                    {cliente.origem === 'cardapio_digital' ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        📱 Cardápio Digital
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                        🏪 Delivery Local
-                      </span>
-                    )}
-                  </div>
+                  {/* Tag de origem - Só aparece se a funcionalidade está habilitada */}
+                  {!isLoadingConfig && pdvConfig && (
+                    <div className="mb-1">
+                      {cliente.origem === 'cardapio_digital' && pdvConfig.cardapio_digital && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          📱 Cardápio Digital
+                        </span>
+                      )}
+                      {(!cliente.origem || cliente.origem === 'delivery_local') && pdvConfig.delivery && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                          🏪 Delivery Local
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <h3 className="text-white font-medium text-base truncate">{cliente.nome}</h3>
 
