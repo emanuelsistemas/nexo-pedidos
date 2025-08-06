@@ -5692,18 +5692,50 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Buscar informações das formas de pagamento
-      const formasPagamentoIds = [
-        ...new Set(vendasData.map(v => v.forma_pagamento_id).filter(Boolean))
-      ];
+      const formasPagamentoIds = new Set();
+
+      // Adicionar IDs de pagamentos à vista
+      vendasData.forEach(v => {
+        if (v.forma_pagamento_id) {
+          formasPagamentoIds.add(v.forma_pagamento_id);
+        }
+
+        // Adicionar IDs de pagamentos parciais
+        if (v.formas_pagamento) {
+          try {
+            // Verificar se já é um objeto ou se é uma string JSON
+            let formasParciais;
+            if (typeof v.formas_pagamento === 'string') {
+              formasParciais = JSON.parse(v.formas_pagamento);
+            } else if (Array.isArray(v.formas_pagamento)) {
+              formasParciais = v.formas_pagamento;
+            } else {
+              console.warn('Formato inesperado de formas_pagamento:', typeof v.formas_pagamento);
+              return; // Pular este item
+            }
+
+            if (formasParciais && Array.isArray(formasParciais)) {
+              formasParciais.forEach((pagamento: any) => {
+                if (pagamento.forma) {
+                  formasPagamentoIds.add(pagamento.forma);
+                }
+              });
+            }
+          } catch (error) {
+            console.error('Erro ao processar formas de pagamento:', error, v.formas_pagamento);
+          }
+        }
+      });
 
       let formasPagamentoMap = new Map();
-      if (formasPagamentoIds.length > 0) {
+      if (formasPagamentoIds.size > 0) {
         const { data: formasData } = await supabase
           .from('forma_pagamento_opcoes')
           .select('id, nome, tipo')
-          .in('id', formasPagamentoIds);
+          .in('id', Array.from(formasPagamentoIds));
 
         if (formasData) {
+          console.log('✅ Formas de pagamento carregadas:', formasData);
           formasData.forEach(forma => {
             formasPagamentoMap.set(forma.id, forma);
           });
@@ -5787,17 +5819,40 @@ const PDVPage: React.FC = () => {
           }
         } else if (venda.tipo_pagamento === 'parcial' && venda.formas_pagamento) {
           try {
-            const formasParciais = JSON.parse(venda.formas_pagamento);
-            const formasNomes = formasParciais.map((pagamento: any) => {
+            // Verificar se já é um objeto ou se é uma string JSON
+            let formasParciais;
+            if (typeof venda.formas_pagamento === 'string') {
+              formasParciais = JSON.parse(venda.formas_pagamento);
+            } else if (Array.isArray(venda.formas_pagamento)) {
+              formasParciais = venda.formas_pagamento;
+            } else {
+              console.warn('Formato inesperado de formas_pagamento:', typeof venda.formas_pagamento, venda.formas_pagamento);
+              throw new Error('Formato inválido de formas_pagamento');
+            }
+
+            console.log('📊 Processando formas parciais:', formasParciais);
+
+            // Enriquecer dados das formas com informações do mapa
+            const formasEnriquecidas = formasParciais.map((pagamento: any) => {
               const forma = formasPagamentoMap.get(pagamento.forma);
-              return forma ? forma.nome : 'Forma não identificada';
+              return {
+                ...pagamento,
+                nome: forma ? forma.nome : (pagamento.nome || 'Forma não identificada'),
+                tipo_forma: forma ? forma.tipo : null
+              };
             });
+
+            const formasNomes = formasEnriquecidas.map(f => f.nome);
+
             formaPagamentoInfo = {
               tipo: 'parcial',
               nome: formasNomes.join(' + '),
-              formas_detalhes: formasParciais
+              formas_detalhes: formasEnriquecidas
             };
+
+            console.log('✅ Forma de pagamento processada:', formaPagamentoInfo);
           } catch (error) {
+            console.error('❌ Erro ao processar formas de pagamento:', error, 'Dados:', venda.formas_pagamento);
             formaPagamentoInfo = {
               tipo: 'parcial',
               nome: 'Múltiplas formas',
@@ -31441,7 +31496,15 @@ const PDVPage: React.FC = () => {
               <div className="space-y-3">
                 <div className="text-sm font-medium text-gray-400 mb-3">Formas de Pagamento:</div>
 
-                {vendaDetalhePagamento.forma_pagamento_info?.formas_detalhes?.map((forma: any, index: number) => (
+                {/* Debug: Mostrar dados brutos */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="text-xs text-gray-500 mb-2">
+                    Debug: {JSON.stringify(vendaDetalhePagamento.forma_pagamento_info?.formas_detalhes, null, 2)}
+                  </div>
+                )}
+
+                {vendaDetalhePagamento.forma_pagamento_info?.formas_detalhes?.length > 0 ? (
+                  vendaDetalhePagamento.forma_pagamento_info.formas_detalhes.map((forma: any, index: number) => (
                   <div key={index} className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg border border-gray-600/30">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center">
@@ -31462,7 +31525,13 @@ const PDVPage: React.FC = () => {
                       {formatCurrency(forma.valor || 0)}
                     </div>
                   </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-gray-400">
+                    <p>Nenhuma forma de pagamento encontrada</p>
+                    <p className="text-xs mt-1">Tipo: {vendaDetalhePagamento.tipo_pagamento}</p>
+                  </div>
+                )}
               </div>
 
               {/* Botão Fechar */}
