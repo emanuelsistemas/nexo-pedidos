@@ -32382,6 +32382,8 @@ const PDVPage: React.FC = () => {
                   const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
                   const valorTotal = valorAtual + valorFiado;
 
+
+
                   if (valorTotal > 0) {
                     return (
                       <div key={forma.forma_pagamento_opcao_id} style={{
@@ -32390,7 +32392,9 @@ const PDVPage: React.FC = () => {
                         marginBottom: '8px',
                         fontSize: '14px'
                       }}>
-                        <span style={{ color: '#e5e7eb' }}>{forma.nome}:</span>
+                        <span style={{ color: '#e5e7eb' }}>
+                          {forma.forma_pagamento_opcoes?.nome || forma.nome || 'Forma não identificada'}:
+                        </span>
                         <span style={{ color: '#10b981', fontWeight: 'bold' }}>
                           R$ {valorTotal.toLocaleString('pt-BR', {
                             minimumFractionDigits: 2,
