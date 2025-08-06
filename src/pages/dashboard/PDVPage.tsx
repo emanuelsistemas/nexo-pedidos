@@ -2127,10 +2127,12 @@ const PDVPage: React.FC = () => {
           descricao,
           data_pagamento,
           formas_pagamento_empresa:formas_pagamento_empresa_id (
-            nome
+            forma_pagamento_opcoes:forma_pagamento_opcao_id (
+              nome
+            )
           ),
           tipo_pagamentos_opcoes:tipo_pagamentos_opcoes_id (
-            nome
+            descricao
           )
         `)
         .eq('caixa_controle_id', caixaData.id)
@@ -33340,7 +33342,7 @@ const PDVPage: React.FC = () => {
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                              {pagamento.formas_pagamento_empresa?.nome || pagamento.tipo_pagamentos_opcoes?.nome || 'Pagamento'}
+                              {pagamento.formas_pagamento_empresa?.forma_pagamento_opcoes?.nome || pagamento.tipo_pagamentos_opcoes?.descricao || 'Pagamento'}
                             </span>
                             <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
                               R$ {parseFloat(pagamento.valor_pagamento).toLocaleString('pt-BR', {
