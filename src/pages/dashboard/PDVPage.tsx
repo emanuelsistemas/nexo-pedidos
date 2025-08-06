@@ -24103,7 +24103,7 @@ const PDVPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9998]"
             onClick={() => setShowPagamentosModal(false)}
           >
             <motion.div
@@ -24219,7 +24219,7 @@ const PDVPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"
             onClick={() => setShowAdicionarPagamentoModal(false)}
           >
             <motion.div
