@@ -1845,14 +1845,31 @@ const PDVPage: React.FC = () => {
             } else if (venda.tipo_pagamento === 'parcial' && venda.formas_pagamento) {
               // Pagamento parcial - processar cada forma de pagamento
               try {
-                const formasParciais = JSON.parse(venda.formas_pagamento);
-                formasParciais.forEach((pagamento: any) => {
-                  if (pagamento.forma && pagamento.valor && valoresReais[pagamento.forma]) {
-                    valoresReais[pagamento.forma].atual += pagamento.valor;
-                  }
-                });
+                let formasParciais;
+
+                // Verificar se já é um objeto ou se é uma string JSON
+                if (typeof venda.formas_pagamento === 'string') {
+                  formasParciais = JSON.parse(venda.formas_pagamento);
+                } else if (Array.isArray(venda.formas_pagamento)) {
+                  formasParciais = venda.formas_pagamento;
+                } else if (typeof venda.formas_pagamento === 'object') {
+                  // Se for um objeto, assumir que já está no formato correto
+                  formasParciais = venda.formas_pagamento;
+                } else {
+                  console.warn('Formato inesperado de formas_pagamento:', typeof venda.formas_pagamento);
+                  return; // Pular esta venda
+                }
+
+                if (Array.isArray(formasParciais)) {
+                  formasParciais.forEach((pagamento: any) => {
+                    if (pagamento.forma && pagamento.valor && valoresReais[pagamento.forma]) {
+                      valoresReais[pagamento.forma].atual += pagamento.valor;
+                    }
+                  });
+                }
               } catch (error) {
                 console.error('❌ Erro ao processar formas de pagamento parciais:', error);
+                console.log('❌ Dados problemáticos:', venda.formas_pagamento);
               }
             }
           });
@@ -32308,11 +32325,11 @@ const PDVPage: React.FC = () => {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000
+          zIndex: 2000
         }}>
           <div style={{
             backgroundColor: '#1f2937',
