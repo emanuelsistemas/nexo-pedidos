@@ -2925,6 +2925,13 @@ const PDVPage: React.FC = () => {
     }
   }, [showFiadosModal, pesquisaClienteFiado, dataInicioFiltro, dataFimFiltro]);
 
+  // ✅ NOVO: useEffect para carregar formas de pagamento quando modal de recebimento abrir
+  useEffect(() => {
+    if (showRecebimentoFiadoModal) {
+      loadFormasPagamentoEmpresa();
+    }
+  }, [showRecebimentoFiadoModal]);
+
   // ✅ NOVO: Sistema Realtime para monitorar mudanças na tabela PDV (delivery local)
   useEffect(() => {
     let deliverySubscription: any = null;
@@ -4262,27 +4269,52 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      const { data: formasData, error } = await supabase
+      // Buscar formas de pagamento da empresa com JOIN manual
+      const { data: formasEmpresaData, error: formasEmpresaError } = await supabase
         .from('formas_pagamento_empresa')
-        .select(`
-          id,
-          ativo,
-          forma_pagamento_opcao:forma_pagamento_opcoes(
-            id,
-            nome,
-            tipo
-          )
-        `)
+        .select('id, ativo, forma_pagamento_opcao_id')
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('ativo', true)
-        .order('forma_pagamento_opcao.nome');
+        .eq('ativo', true);
 
-      if (error) {
-        console.error('❌ Erro ao carregar formas de pagamento:', error);
+      if (formasEmpresaError) {
+        console.error('❌ Erro ao carregar formas de pagamento da empresa:', formasEmpresaError);
         return;
       }
 
-      setFormasPagamentoEmpresa(formasData || []);
+      if (!formasEmpresaData || formasEmpresaData.length === 0) {
+        console.log('⚠️ Nenhuma forma de pagamento ativa encontrada para a empresa');
+        setFormasPagamentoEmpresa([]);
+        return;
+      }
+
+      // Buscar detalhes das opções de pagamento
+      const opcaoIds = formasEmpresaData.map(f => f.forma_pagamento_opcao_id);
+      const { data: opcoesData, error: opcoesError } = await supabase
+        .from('forma_pagamento_opcoes')
+        .select('id, nome, tipo')
+        .in('id', opcaoIds);
+
+      if (opcoesError) {
+        console.error('❌ Erro ao carregar opções de pagamento:', opcoesError);
+        return;
+      }
+
+      // Combinar os dados
+      const formasCombinadas = formasEmpresaData.map(formaEmpresa => {
+        const opcao = opcoesData?.find(o => o.id === formaEmpresa.forma_pagamento_opcao_id);
+        return {
+          id: formaEmpresa.id,
+          ativo: formaEmpresa.ativo,
+          forma_pagamento_opcoes: opcao || { id: '', nome: 'Não encontrado', tipo: '' }
+        };
+      });
+
+      // Ordenar por nome da forma de pagamento
+      const formasOrdenadas = formasCombinadas.sort((a, b) =>
+        a.forma_pagamento_opcoes.nome.localeCompare(b.forma_pagamento_opcoes.nome)
+      );
+
+      setFormasPagamentoEmpresa(formasOrdenadas);
     } catch (error) {
       console.error('❌ Erro inesperado ao carregar formas de pagamento:', error);
     }
@@ -4339,7 +4371,7 @@ const PDVPage: React.FC = () => {
           cliente_id: clienteSelecionadoDetalhes.id,
           cliente_nome: clienteSelecionadoDetalhes.nome,
           forma_pagamento_empresa_id: formaPagamento.id,
-          forma_pagamento_nome: formaPagamento.forma_pagamento_opcao.nome,
+          forma_pagamento_nome: formaPagamento.forma_pagamento_opcoes.nome,
           valor_recebimento: valorNumerico,
           saldo_anterior: saldoAnterior,
           saldo_posterior: saldoPosterior,
@@ -6111,24 +6143,45 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Filtro por forma de pagamento
       if (filtroFormaPagamento !== 'todas') {
+        console.log('🔍 FILTRO FIADO - Aplicando filtro:', filtroFormaPagamento);
+
         vendasFiltradas = vendasFiltradas.filter(venda => {
-          if (!venda.forma_pagamento_info) return false;
+          if (!venda.forma_pagamento_info) {
+            console.log('❌ Venda sem forma_pagamento_info:', venda.numero);
+            return false;
+          }
+
+          console.log('🔍 Venda:', venda.numero, {
+            fiado: venda.fiado,
+            forma_pagamento_info: venda.forma_pagamento_info,
+            tipo_pagamento: venda.tipo_pagamento
+          });
 
           // ✅ NOVO: Verificar se é venda fiado
           if (venda.forma_pagamento_info.tipo === 'fiado') {
-            return filtroFormaPagamento === 'Fiado';
+            const resultado = filtroFormaPagamento === 'Fiado';
+            console.log('✅ Venda FIADO encontrada:', venda.numero, 'Resultado:', resultado);
+            return resultado;
           }
 
           if (venda.tipo_pagamento === 'vista') {
-            return venda.forma_pagamento_info.nome === filtroFormaPagamento;
+            const resultado = venda.forma_pagamento_info.nome === filtroFormaPagamento;
+            console.log('💳 Venda VISTA:', venda.numero, 'Forma:', venda.forma_pagamento_info.nome, 'Resultado:', resultado);
+            return resultado;
           } else if (venda.tipo_pagamento === 'parcial') {
             // Para pagamentos parciais, verificar se alguma das formas corresponde
-            return venda.forma_pagamento_info.formas_detalhes?.some((forma: any) =>
+            const resultado = venda.forma_pagamento_info.formas_detalhes?.some((forma: any) =>
               forma.nome === filtroFormaPagamento
             );
+            console.log('💳 Venda PARCIAL:', venda.numero, 'Resultado:', resultado);
+            return resultado;
           }
+
+          console.log('❌ Venda não se encaixa em nenhum tipo:', venda.numero);
           return false;
         });
+
+        console.log('🎯 Vendas após filtro:', vendasFiltradas.length);
       }
 
       setVendas(vendasFiltradas);
@@ -23575,8 +23628,19 @@ const PDVPage: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-sm text-gray-400 mb-1">Saldo Devedor</div>
-                      <div className="text-xl font-bold text-yellow-400">
-                        R$ {clienteSelecionadoDetalhes.saldo_devedor.toFixed(2).replace('.', ',')}
+                      <div className="flex items-center gap-3">
+                        <div className="text-xl font-bold text-yellow-400">
+                          R$ {clienteSelecionadoDetalhes.saldo_devedor.toFixed(2).replace('.', ',')}
+                        </div>
+                        {clienteSelecionadoDetalhes.saldo_devedor > 0 && (
+                          <button
+                            onClick={() => setShowRecebimentoFiadoModal(true)}
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                          >
+                            <DollarSign size={16} />
+                            Receber
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -25435,6 +25499,141 @@ const PDVPage: React.FC = () => {
                     })()}
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Recebimento de Fiado */}
+      <AnimatePresence>
+        {showRecebimentoFiadoModal && clienteSelecionadoDetalhes && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white">Receber Fiado</h3>
+                <button
+                  onClick={() => setShowRecebimentoFiadoModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Informações do Cliente */}
+              <div className="mb-6 p-4 bg-gray-800/50 rounded-lg">
+                <div className="text-white font-medium mb-2">{clienteSelecionadoDetalhes.nome}</div>
+                <div className="text-sm text-gray-400 mb-1">
+                  Documento: {clienteSelecionadoDetalhes.documento || 'Não informado'}
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-400">Saldo Devedor: </span>
+                  <span className="text-yellow-400 font-bold">
+                    R$ {clienteSelecionadoDetalhes.saldo_devedor.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Formulário */}
+              <div className="space-y-4">
+                {/* Valor do Recebimento */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Valor do Recebimento *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">
+                      R$
+                    </span>
+                    <input
+                      type="text"
+                      value={valorRecebimentoFormatado}
+                      onChange={(e) => {
+                        const formatted = formatarValorMonetario(e.target.value);
+                        setValorRecebimentoFormatado(formatted);
+                        setValorRecebimento(formatted);
+                      }}
+                      placeholder="0,00"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Forma de Pagamento */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Forma de Pagamento *
+                  </label>
+                  <select
+                    value={formaPagamentoRecebimento}
+                    onChange={(e) => setFormaPagamentoRecebimento(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  >
+                    <option value="">Selecione uma forma de pagamento</option>
+                    {formasPagamentoEmpresa.map((forma) => (
+                      <option key={forma.id} value={forma.id}>
+                        {forma.forma_pagamento_opcoes.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Observações */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Observações (Opcional)
+                  </label>
+                  <textarea
+                    value={observacoesRecebimento}
+                    onChange={(e) => setObservacoesRecebimento(e.target.value)}
+                    placeholder="Observações sobre o recebimento..."
+                    rows={3}
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowRecebimentoFiadoModal(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={processarRecebimentoFiado}
+                  disabled={loadingRecebimento || !valorRecebimentoFormatado || !formaPagamentoRecebimento}
+                  className={`flex-1 py-3 px-4 rounded-lg transition-colors font-medium flex items-center justify-center gap-2 ${
+                    loadingRecebimento || !valorRecebimentoFormatado || !formaPagamentoRecebimento
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                >
+                  {loadingRecebimento ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <DollarSign size={16} />
+                      Receber
+                    </>
+                  )}
+                </button>
               </div>
             </motion.div>
           </motion.div>
