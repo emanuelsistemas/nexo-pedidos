@@ -472,6 +472,7 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Estados para recebimentos de fiado no caixa
   const [recebimentosFiadoCaixa, setRecebimentosFiadoCaixa] = useState<any[]>([]);
   const [totalRecebimentosFiado, setTotalRecebimentosFiado] = useState(0);
+  const [valoresFiadoPorForma, setValoresFiadoPorForma] = useState<{[key: string]: number}>({});
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1639,6 +1640,7 @@ const PDVPage: React.FC = () => {
             valor_recebimento,
             cliente_nome,
             forma_pagamento_nome,
+            forma_pagamento_empresa_id,
             data_recebimento,
             observacoes
           `)
@@ -1657,6 +1659,28 @@ const PDVPage: React.FC = () => {
             return total + (parseFloat(recebimento.valor_recebimento) || 0);
           }, 0);
           setTotalRecebimentosFiado(totalRecebimentos);
+
+          // ✅ NOVO: Calcular valores de fiado por forma de pagamento
+          const valoresPorForma: {[key: string]: number} = {};
+
+          // Mapear forma_pagamento_empresa_id para forma_pagamento_opcao_id
+          const formaEmpresaParaOpcaoMap: {[key: string]: string} = {};
+          formasData?.forEach(forma => {
+            formaEmpresaParaOpcaoMap[forma.id] = forma.forma_pagamento_opcao_id;
+          });
+
+          (recebimentosData || []).forEach(recebimento => {
+            const formaOpcaoId = formaEmpresaParaOpcaoMap[recebimento.forma_pagamento_empresa_id];
+            if (formaOpcaoId) {
+              if (!valoresPorForma[formaOpcaoId]) {
+                valoresPorForma[formaOpcaoId] = 0;
+              }
+              valoresPorForma[formaOpcaoId] += parseFloat(recebimento.valor_recebimento) || 0;
+            }
+          });
+
+          console.log('💰 Valores de fiado por forma de pagamento:', valoresPorForma);
+          setValoresFiadoPorForma(valoresPorForma);
         }
       }
 
@@ -4388,6 +4412,22 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
+      // Buscar caixa aberto do usuário
+      const { data: caixaData, error: caixaError } = await supabase
+        .from('caixa_controle')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', userData.user.id)
+        .eq('status', 'aberto')
+        .order('data_abertura', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (caixaError || !caixaData) {
+        toast.error('Nenhum caixa aberto encontrado. Abra um caixa antes de fazer recebimentos.');
+        return;
+      }
+
       // Buscar dados da forma de pagamento
       const formaPagamento = formasPagamentoEmpresa.find(f => f.id === formaPagamentoRecebimento);
       if (!formaPagamento) {
@@ -4445,6 +4485,9 @@ const PDVPage: React.FC = () => {
 
       // Recarregar lista de clientes devedores
       loadClientesDevedores();
+
+      // Recarregar histórico do cliente no modal
+      await loadVendasFiadoCliente(clienteSelecionadoDetalhes.id);
 
       // Limpar formulário e fechar modal
       setValorRecebimento('');
@@ -31660,6 +31703,7 @@ const PDVPage: React.FC = () => {
                   setValoresReaisCaixa({});
                   setRecebimentosFiadoCaixa([]);
                   setTotalRecebimentosFiado(0);
+                  setValoresFiadoPorForma({});
                 }}
                 style={{
                   position: 'absolute',
@@ -31777,6 +31821,41 @@ const PDVPage: React.FC = () => {
                             R$ {valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.formatado || '0,00'}
                           </span>
                         </div>
+
+                        {/* ✅ NOVO: Mostrar valor de fiado se houver */}
+                        {pdvConfig?.fiado && valoresFiadoPorForma[forma.forma_pagamento_opcao_id] > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', color: '#f59e0b' }}>Fiado:</span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#f59e0b' }}>
+                              R$ {valoresFiadoPorForma[forma.forma_pagamento_opcao_id].toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* ✅ NOVO: Mostrar valor total se houver fiado */}
+                        {pdvConfig?.fiado && valoresFiadoPorForma[forma.forma_pagamento_opcao_id] > 0 && (
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            borderTop: '1px solid #4b5563',
+                            paddingTop: '4px',
+                            marginTop: '4px'
+                          }}>
+                            <span style={{ fontSize: '12px', color: '#e5e7eb', fontWeight: 'bold' }}>Valor Total:</span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3b82f6' }}>
+                              R$ {(
+                                (valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.atual || 0) +
+                                (valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0)
+                              ).toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                        )}
 
                         <div style={{ marginTop: '8px' }}>
                           <label style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px', display: 'block' }}>
@@ -31927,6 +32006,7 @@ const PDVPage: React.FC = () => {
                   setValoresReaisCaixa({});
                   setRecebimentosFiadoCaixa([]);
                   setTotalRecebimentosFiado(0);
+                  setValoresFiadoPorForma({});
                 }}
                 style={{
                   flex: 1,
