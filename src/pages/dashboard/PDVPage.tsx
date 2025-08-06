@@ -17890,6 +17890,16 @@ const PDVPage: React.FC = () => {
           <div className="text-xs text-gray-400 flex items-center justify-end gap-1 mb-0.5">
             <User size={12} />
             {userData?.nome || 'Usuário'}
+            {/* ✅ NOVO: Indicador de status do caixa */}
+            {pdvConfig?.controla_caixa && (
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${
+                caixaAberto
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-red-500/20 text-red-400 border border-red-500/30'
+              }`}>
+                {caixaAberto ? 'Caixa Aberto' : 'Caixa Fechado'}
+              </span>
+            )}
           </div>
           <div className="text-xs text-gray-400 font-mono">
             {formatDateTime(currentDateTime)}
@@ -18848,9 +18858,10 @@ const PDVPage: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
                             <span className="text-xs whitespace-nowrap">{item.label}</span>
-                            <span className="text-xs bg-gray-700 px-1 py-0.5 rounded text-gray-300 font-mono">
+                            {/* ✅ OCULTO: Tecla de atalho temporariamente removida */}
+                            {/* <span className="text-xs bg-gray-700 px-1 py-0.5 rounded text-gray-300 font-mono">
                               {teclaAtalho}
-                            </span>
+                            </span> */}
                           </div>
                         </button>
                       );

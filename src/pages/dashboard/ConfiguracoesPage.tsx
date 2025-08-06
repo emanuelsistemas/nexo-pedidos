@@ -4047,6 +4047,60 @@ const ConfiguracoesPage: React.FC = () => {
         }
       }
 
+      // Validação específica para comandas
+      if (field === 'comandas' && value === false) {
+        // Verificar se existem comandas abertas
+        const { data: comandasAbertas, error: comandaError } = await supabase
+          .from('pdv')
+          .select('id, numero_venda, comanda_numero')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .in('status_venda', ['salva', 'aberta'])
+          .not('comanda_numero', 'is', null);
+
+        if (comandaError) {
+          console.error('Erro ao verificar comandas abertas:', comandaError);
+          throw new Error('Erro ao verificar status das comandas');
+        }
+
+        if (comandasAbertas && comandasAbertas.length > 0) {
+          const quantidadeComandas = comandasAbertas.length;
+          const numerosComandas = comandasAbertas.map(v => v.comanda_numero).join(', ');
+          const mensagem = quantidadeComandas === 1
+            ? `Existe 1 comanda aberta (nº ${numerosComandas}). É necessário finalizar a comanda antes de desabilitar esta funcionalidade.`
+            : `Existem ${quantidadeComandas} comandas abertas (nº ${numerosComandas}). É necessário finalizar todas as comandas antes de desabilitar esta funcionalidade.`;
+
+          showMessage('error', mensagem);
+          return; // Não prosseguir com a desabilitação
+        }
+      }
+
+      // Validação específica para mesas
+      if (field === 'mesas' && value === false) {
+        // Verificar se existem mesas abertas
+        const { data: mesasAbertas, error: mesaError } = await supabase
+          .from('pdv')
+          .select('id, numero_venda, mesa_numero')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .in('status_venda', ['salva', 'aberta'])
+          .not('mesa_numero', 'is', null);
+
+        if (mesaError) {
+          console.error('Erro ao verificar mesas abertas:', mesaError);
+          throw new Error('Erro ao verificar status das mesas');
+        }
+
+        if (mesasAbertas && mesasAbertas.length > 0) {
+          const quantidadeMesas = mesasAbertas.length;
+          const numerosMesas = mesasAbertas.map(v => v.mesa_numero).join(', ');
+          const mensagem = quantidadeMesas === 1
+            ? `Existe 1 mesa aberta (nº ${numerosMesas}). É necessário finalizar a mesa antes de desabilitar esta funcionalidade.`
+            : `Existem ${quantidadeMesas} mesas abertas (nº ${numerosMesas}). É necessário finalizar todas as mesas antes de desabilitar esta funcionalidade.`;
+
+          showMessage('error', mensagem);
+          return; // Não prosseguir com a desabilitação
+        }
+      }
+
       // ✅ NOVA: Verificar vendas salvas antes de desabilitar comandas ou mesas
       if (!value && (field === 'comandas' || field === 'mesas')) {
         const { temVendas, vendas } = await verificarVendasSalvas(field, usuarioData.empresa_id);
