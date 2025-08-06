@@ -473,6 +473,10 @@ const PDVPage: React.FC = () => {
   const [recebimentosFiadoCaixa, setRecebimentosFiadoCaixa] = useState<any[]>([]);
   const [totalRecebimentosFiado, setTotalRecebimentosFiado] = useState(0);
   const [valoresFiadoPorForma, setValoresFiadoPorForma] = useState<{[key: string]: number}>({});
+
+  // ✅ NOVO: Estados para fechamento de caixa
+  const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
+  const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1562,6 +1566,124 @@ const PDVPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao abrir caixa:', error);
       toast.error('Erro ao abrir caixa');
+    }
+  };
+
+  // ✅ NOVO: Função para fechar o caixa
+  const fecharCaixa = async () => {
+    try {
+      setLoadingFecharCaixa(true);
+
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Dados do usuário não encontrados');
+        return;
+      }
+
+      // Buscar caixa aberto do usuário
+      const { data: caixaAberto, error: caixaError } = await supabase
+        .from('caixa_controle')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', authData.user.id)
+        .eq('status', 'aberto')
+        .order('data_abertura', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (caixaError || !caixaAberto) {
+        toast.error('Nenhum caixa aberto encontrado para este usuário');
+        return;
+      }
+
+      console.log('💰 Fechando caixa:', caixaAberto.id);
+
+      // 1. Salvar detalhes das formas de pagamento
+      const formasPagamentoDetalhes = [];
+
+      for (const forma of formasPagamentoCaixa) {
+        const valorAtual = valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.atual || 0;
+        const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
+        const valorTotal = valorAtual + valorFiado;
+
+        // Só salvar se houver algum valor
+        if (valorTotal > 0) {
+          formasPagamentoDetalhes.push({
+            empresa_id: usuarioData.empresa_id,
+            usuario_id: authData.user.id,
+            caixa_controle_id: caixaAberto.id,
+            forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
+            forma_pagamento_nome: forma.nome,
+            valor_atual: valorAtual,
+            valor_fiado: valorFiado,
+            valor_total: valorTotal
+          });
+        }
+      }
+
+      // Inserir detalhes das formas de pagamento
+      if (formasPagamentoDetalhes.length > 0) {
+        const { error: formasError } = await supabase
+          .from('formas_pagamento_fechamento_caixa')
+          .insert(formasPagamentoDetalhes);
+
+        if (formasError) {
+          console.error('❌ Erro ao salvar formas de pagamento:', formasError);
+          toast.error('Erro ao salvar detalhes das formas de pagamento');
+          return;
+        }
+      }
+
+      // 2. Atualizar status do caixa
+      const { error: updateError } = await supabase
+        .from('caixa_controle')
+        .update({
+          status: 'fechado',
+          status_caixa: false,
+          data_fechamento: new Date().toISOString(),
+          observacao_fechamento: `Caixa fechado em ${new Date().toLocaleString('pt-BR')}`
+        })
+        .eq('id', caixaAberto.id);
+
+      if (updateError) {
+        console.error('❌ Erro ao fechar caixa:', updateError);
+        toast.error('Erro ao fechar caixa');
+        return;
+      }
+
+      console.log('✅ Caixa fechado com sucesso');
+      toast.success('Caixa fechado com sucesso!');
+
+      // Limpar estados e recarregar dados
+      setShowCaixaModal(false);
+      setShowFecharCaixaModal(false);
+      setDadosCaixa(null);
+      setFormasPagamentoCaixa([]);
+      setValoresCaixa({});
+      setValoresReaisCaixa({});
+      setRecebimentosFiadoCaixa([]);
+      setTotalRecebimentosFiado(0);
+      setValoresFiadoPorForma({});
+
+      // Recarregar dados do caixa
+      await verificarCaixaAberto();
+
+    } catch (error) {
+      console.error('❌ Erro ao fechar caixa:', error);
+      toast.error('Erro ao fechar caixa');
+    } finally {
+      setLoadingFecharCaixa(false);
     }
   };
 
@@ -32157,8 +32279,7 @@ const PDVPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  // TODO: Implementar fechamento de caixa
-                  toast.info('Funcionalidade de fechamento será implementada em breve');
+                  setShowFecharCaixaModal(true);
                 }}
                 style={{
                   flex: 1,
@@ -32173,6 +32294,135 @@ const PDVPage: React.FC = () => {
                 }}
               >
                 Fechar Caixa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NOVO: Modal de confirmação para fechamento de caixa */}
+      {showFecharCaixaModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: '#1f2937',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            border: '1px solid #374151'
+          }}>
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: 'bold',
+              marginBottom: '16px',
+              color: '#f59e0b',
+              textAlign: 'center'
+            }}>
+              ⚠️ Confirmar Fechamento de Caixa
+            </h3>
+
+            <div style={{ marginBottom: '24px', color: '#e5e7eb', lineHeight: '1.6' }}>
+              <p style={{ marginBottom: '12px' }}>
+                Tem certeza que deseja fechar o caixa?
+              </p>
+              <p style={{ marginBottom: '12px', fontSize: '14px', color: '#9ca3af' }}>
+                Esta ação irá:
+              </p>
+              <ul style={{ fontSize: '14px', color: '#9ca3af', paddingLeft: '20px' }}>
+                <li>• Salvar todos os valores das formas de pagamento</li>
+                <li>• Registrar os recebimentos de fiado</li>
+                <li>• Fechar definitivamente este caixa</li>
+                <li>• Impedir novas operações neste caixa</li>
+              </ul>
+            </div>
+
+            {/* Resumo dos valores */}
+            {formasPagamentoCaixa.length > 0 && (
+              <div style={{
+                backgroundColor: '#374151',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '24px',
+                border: '1px solid #4b5563'
+              }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: '#e5e7eb' }}>
+                  📊 Resumo do Fechamento
+                </h4>
+
+                {formasPagamentoCaixa.map(forma => {
+                  const valorAtual = valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.atual || 0;
+                  const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
+                  const valorTotal = valorAtual + valorFiado;
+
+                  if (valorTotal > 0) {
+                    return (
+                      <div key={forma.forma_pagamento_opcao_id} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginBottom: '8px',
+                        fontSize: '14px'
+                      }}>
+                        <span style={{ color: '#e5e7eb' }}>{forma.nome}:</span>
+                        <span style={{ color: '#10b981', fontWeight: 'bold' }}>
+                          R$ {valorTotal.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            )}
+
+            {/* Botões */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowFecharCaixaModal(false)}
+                disabled={loadingFecharCaixa}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
+                  opacity: loadingFecharCaixa ? 0.6 : 1
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={fecharCaixa}
+                disabled={loadingFecharCaixa}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
+                  opacity: loadingFecharCaixa ? 0.6 : 1
+                }}
+              >
+                {loadingFecharCaixa ? 'Fechando...' : 'Confirmar Fechamento'}
               </button>
             </div>
           </div>
