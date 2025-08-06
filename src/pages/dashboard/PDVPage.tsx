@@ -5528,7 +5528,22 @@ const PDVPage: React.FC = () => {
             console.error('❌ Erro ao buscar opções de formas:', formasOpcoesError);
           } else {
             console.log('✅ Formas de pagamento encontradas:', formasOpcoesData);
-            setFormasPagamentoList(formasOpcoesData || []);
+
+            // ✅ NOVO: Adicionar "Fiado" à lista se estiver habilitado na configuração PDV
+            let formasComFiado = [...(formasOpcoesData || [])];
+            if (pdvConfig?.fiado) {
+              // Verificar se "Fiado" já não está na lista
+              const jaTemFiado = formasComFiado.some(forma => forma.nome?.toLowerCase() === 'fiado');
+              if (!jaTemFiado) {
+                formasComFiado.push({
+                  id: 'fiado',
+                  nome: 'Fiado',
+                  tipo: 'fiado'
+                });
+              }
+            }
+
+            setFormasPagamentoList(formasComFiado);
           }
         } else {
           console.log('⚠️ Nenhuma forma de pagamento da empresa encontrada');
@@ -5930,6 +5945,11 @@ const PDVPage: React.FC = () => {
       if (filtroFormaPagamento !== 'todas') {
         vendasFiltradas = vendasFiltradas.filter(venda => {
           if (!venda.forma_pagamento_info) return false;
+
+          // ✅ NOVO: Verificar se é venda fiado
+          if (venda.forma_pagamento_info.tipo === 'fiado') {
+            return filtroFormaPagamento === 'Fiado';
+          }
 
           if (venda.tipo_pagamento === 'vista') {
             return venda.forma_pagamento_info.nome === filtroFormaPagamento;
@@ -24021,8 +24041,9 @@ const PDVPage: React.FC = () => {
 
                             {/* ✅ NOVO: Tag do Caixa */}
                             {venda.caixa_info && (
-                              <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full border border-amber-500/30">
-                                🏪 {venda.caixa_info.usuario_nome}
+                              <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full border border-amber-500/30 flex items-center gap-1">
+                                <User size={10} />
+                                {venda.caixa_info.usuario_nome}
                               </span>
                             )}
                           </div>
