@@ -4124,6 +4124,47 @@ const ConfiguracoesPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: Validação especial para desabilitar fiado
+      if (!value && field === 'fiado') {
+        console.log('🔍 Verificando clientes inadimplentes antes de desabilitar fiado...');
+
+        // Verificar se há clientes com saldo devedor > 0
+        const { data: clientesInadimplentes, error: clientesError } = await supabase
+          .from('clientes')
+          .select('id, nome, saldo_devedor')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .gt('saldo_devedor', 0)
+          .eq('deletado', false);
+
+        if (clientesError) {
+          console.error('❌ Erro ao verificar clientes inadimplentes:', clientesError);
+          showMessage('error', 'Erro ao verificar clientes inadimplentes. Tente novamente.');
+          return;
+        }
+
+        if (clientesInadimplentes && clientesInadimplentes.length > 0) {
+          console.log('⚠️ Clientes inadimplentes encontrados:', clientesInadimplentes);
+
+          // Calcular total em aberto
+          const totalEmAberto = clientesInadimplentes.reduce((total, cliente) =>
+            total + (parseFloat(cliente.saldo_devedor.toString()) || 0), 0
+          );
+
+          // Criar lista dos clientes inadimplentes
+          const listaClientes = clientesInadimplentes.map((cliente: any, index: number) =>
+            `${index + 1}. ${cliente.nome} - ${formatCurrency(parseFloat(cliente.saldo_devedor.toString()) || 0)}`
+          ).join('\n');
+
+          // Mostrar mensagem de erro
+          const mensagem = `❌ Não é possível desabilitar o FIADO pois existem clientes inadimplentes:\n\n${listaClientes}\n\nTotal em aberto: ${formatCurrency(totalEmAberto)}\n\nQuite todos os débitos antes de desabilitar esta funcionalidade.`;
+
+          showMessage('error', mensagem);
+          return; // Não prosseguir com a desabilitação
+        }
+
+        console.log('✅ Nenhum cliente inadimplente encontrado. Fiado pode ser desabilitado.');
+      }
+
       // Atualizar o estado local primeiro
       setPdvConfig(prev => ({ ...prev, [field]: value }));
 
