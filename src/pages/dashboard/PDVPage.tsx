@@ -485,6 +485,14 @@ const PDVPage: React.FC = () => {
   const [valorSuprimento, setValorSuprimento] = useState('');
   const [observacaoSuprimento, setObservacaoSuprimento] = useState('');
   const [loadingSuprimento, setLoadingSuprimento] = useState(false);
+
+  // ✅ NOVO: Estados para abas e listagens
+  const [abaSangriaAtiva, setAbaSangriaAtiva] = useState<'nova' | 'listagem'>('nova');
+  const [abaSuprimentoAtiva, setAbaSuprimentoAtiva] = useState<'nova' | 'listagem'>('nova');
+  const [sangriasCaixa, setSangriasCaixa] = useState<any[]>([]);
+  const [suprimentosCaixa, setSuprimentosCaixa] = useState<any[]>([]);
+  const [loadingSangriasList, setLoadingSangriasList] = useState(false);
+  const [loadingSuprimentosList, setLoadingSuprimentosList] = useState(false);
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1597,6 +1605,82 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função para carregar sangrias do caixa
+  const carregarSangriasCaixa = async () => {
+    console.log('🔍 carregarSangriasCaixa chamada, dadosCaixa:', dadosCaixa);
+
+    if (!dadosCaixa?.id) {
+      console.log('❌ dadosCaixa.id não encontrado:', dadosCaixa);
+      return;
+    }
+
+    console.log('📋 Carregando sangrias para caixa_id:', dadosCaixa.id);
+    setLoadingSangriasList(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('sangrias')
+        .select(`
+          id,
+          valor,
+          observacao,
+          data,
+          usuarios:usuario_id (
+            nome
+          )
+        `)
+        .eq('caixa_controle_id', dadosCaixa.id)
+        .order('data', { ascending: false });
+
+      console.log('📊 Resultado da query sangrias:', { data, error });
+
+      if (error) {
+        console.error('❌ Erro ao carregar sangrias:', error);
+        return;
+      }
+
+      console.log('✅ Sangrias carregadas:', data?.length || 0, 'registros');
+      setSangriasCaixa(data || []);
+    } catch (error) {
+      console.error('❌ Erro inesperado ao carregar sangrias:', error);
+    } finally {
+      setLoadingSangriasList(false);
+    }
+  };
+
+  // ✅ NOVO: Função para carregar suprimentos do caixa
+  const carregarSuprimentosCaixa = async () => {
+    if (!dadosCaixa?.id) return;
+
+    setLoadingSuprimentosList(true);
+    try {
+      const { data, error } = await supabase
+        .from('suprimentos')
+        .select(`
+          id,
+          valor,
+          observacao,
+          data,
+          usuarios:usuario_id (
+            nome
+          )
+        `)
+        .eq('caixa_controle_id', dadosCaixa.id)
+        .order('data', { ascending: false });
+
+      if (error) {
+        console.error('❌ Erro ao carregar suprimentos:', error);
+        return;
+      }
+
+      setSuprimentosCaixa(data || []);
+    } catch (error) {
+      console.error('❌ Erro inesperado ao carregar suprimentos:', error);
+    } finally {
+      setLoadingSuprimentosList(false);
+    }
+  };
+
   // ✅ NOVO: Função para registrar sangria
   const registrarSangria = async () => {
     if (!valorSangria || parseFloat(valorSangria.replace(/[^\d,]/g, '').replace(',', '.')) <= 0) {
@@ -1755,10 +1839,11 @@ const PDVPage: React.FC = () => {
       console.log('✅ Suprimento registrado com sucesso!');
       toast.success('Suprimento registrado com sucesso!');
 
-      // Limpar campos e fechar modal
+      // Limpar campos e recarregar listagem
       setValorSuprimento('');
       setObservacaoSuprimento('');
-      setShowSuprimentoModal(false);
+      setAbaSuprimentoAtiva('listagem'); // Mudar para aba de listagem
+      await carregarSuprimentosCaixa(); // Recarregar listagem
 
       // Recarregar dados do caixa se estiver aberto
       if (showCaixaModal) {
@@ -2522,22 +2607,16 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: useEffect para verificar status do caixa quando pdvConfig for carregado
   useEffect(() => {
-    console.log('🔄 useEffect pdvConfig disparado:', { pdvConfig, loadingCaixa, isLoading });
+    // Logs removidos para limpar console
 
     if (pdvConfig !== null && !isLoading) {
-      console.log('🔧 pdvConfig carregado, verificando status do caixa...');
-      console.log('📋 Configuração controla_caixa:', pdvConfig?.controla_caixa);
+      // pdvConfig carregado, verificando status do caixa
       verificarStatusCaixa();
 
       // ✅ NOVO: Carregar venda em andamento após verificar caixa
       carregarVendaEmAndamento();
-    } else {
-      console.log('⏳ Aguardando carregamento completo...', {
-        pdvConfigNull: pdvConfig === null,
-        isLoading,
-        loadingCaixa
-      });
     }
+    // Aguardando carregamento completo...
   }, [pdvConfig, isLoading]);
 
   // ✅ NOVO: Timeout de segurança para evitar travamento
@@ -2555,7 +2634,7 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Monitor do estado do modal
   useEffect(() => {
-    console.log('🎭 Estado do modal mudou:', { showAberturaCaixaModal });
+    // Log removido para limpar console
   }, [showAberturaCaixaModal]);
 
   // useEffect separado para event listeners - SEM dependências para evitar recarregamentos
@@ -14168,31 +14247,7 @@ const PDVPage: React.FC = () => {
         })
       );
 
-      // ✅ DEBUG: Log para verificar dados das vendas
-      console.log('🔍 DEBUG - Vendas carregadas:', vendasComItens.map(v => ({
-        numero_venda: v.numero_venda,
-        comanda_numero: v.comanda_numero,
-        mesa_numero: v.mesa_numero,
-        status_venda: v.status_venda
-      })));
-
-      // ✅ DEBUG: Log específico para a venda problemática
-      const vendaProblematica = vendasComItens.find(v => v.numero_venda === 'PDV-1754424573029');
-      if (vendaProblematica) {
-        console.log('🎯 DEBUG - Venda PDV-1754424573029 encontrada:', {
-          numero_venda: vendaProblematica.numero_venda,
-          comanda_numero: vendaProblematica.comanda_numero,
-          mesa_numero: vendaProblematica.mesa_numero,
-          status_venda: vendaProblematica.status_venda,
-          valor_total: vendaProblematica.valor_total,
-          totalItens: vendaProblematica.totalItens
-        });
-      } else {
-        console.log('❌ DEBUG - Venda PDV-1754424573029 NÃO encontrada na lista!');
-      }
-
-      // ✅ DEBUG: Log para verificar se a venda está sendo adicionada ao estado
-      console.log('🔍 DEBUG - Definindo vendasAbertas:', vendasComItens.length, vendasComItens.map(v => v.numero_venda));
+      // Logs de debug removidos para limpar console
 
       setVendasAbertas(vendasComItens);
       setContadorVendasAbertas(vendasComItens.length);
@@ -19117,8 +19172,8 @@ const PDVPage: React.FC = () => {
       <KeepAlive
         intervalMinutes={3}
         debug={false}
-        onSessionRefreshed={() => console.log('🔄 PDV: Sessão renovada automaticamente')}
-        onSessionExpired={() => console.log('❌ PDV: Sessão expirou')}
+        onSessionRefreshed={() => {/* Log removido para limpar console */}}
+        onSessionExpired={() => {/* Log removido para limpar console */}}
       />
 
       {/* Sidebar do menu - aparece quando showMenuPDV é true */}
@@ -23940,71 +23995,174 @@ const PDVPage: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 h-[95vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
+              {/* Header fixo */}
+              <div className="flex items-center justify-between mb-4 flex-shrink-0">
                 <h3 className="text-lg font-semibold text-white">Sangria</h3>
                 <button
-                  onClick={() => setShowSangriaModal(false)}
+                  onClick={() => {
+                    setShowSangriaModal(false);
+                    setAbaSangriaAtiva('nova');
+                    setValorSangria('');
+                    setObservacaoSangria('');
+                  }}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Valor da Sangria
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="R$ 0,00"
-                    value={valorSangria}
-                    onChange={(e) => {
-                      const valor = e.target.value.replace(/\D/g, '');
-                      const valorFormatado = (parseFloat(valor) / 100).toLocaleString('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL'
-                      });
-                      setValorSangria(valorFormatado);
-                    }}
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
-                  />
+              {/* Abas fixas */}
+              <div className="flex mb-4 bg-gray-800/50 rounded-lg p-1 flex-shrink-0">
+                <button
+                  onClick={() => setAbaSangriaAtiva('nova')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    abaSangriaAtiva === 'nova'
+                      ? 'bg-red-500 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Nova Sangria
+                </button>
+                <button
+                  onClick={() => {
+                    setAbaSangriaAtiva('listagem');
+                    carregarSangriasCaixa();
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    abaSangriaAtiva === 'listagem'
+                      ? 'bg-red-500 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Histórico
+                </button>
+              </div>
+
+              {/* Conteúdo scrollável das Abas */}
+              <div className="flex-1 overflow-y-auto">
+                {abaSangriaAtiva === 'nova' ? (
+                  <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Valor da Sangria
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="R$ 0,00"
+                      value={valorSangria}
+                      onChange={(e) => {
+                        const valor = e.target.value.replace(/\D/g, '');
+                        const valorFormatado = (parseFloat(valor) / 100).toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        });
+                        setValorSangria(valorFormatado);
+                      }}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Motivo
+                    </label>
+                    <textarea
+                      placeholder="Descreva o motivo da sangria..."
+                      rows={3}
+                      value={observacaoSangria}
+                      onChange={(e) => setObservacaoSangria(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowSangriaModal(false);
+                        setAbaSangriaAtiva('nova');
+                        setValorSangria('');
+                        setObservacaoSangria('');
+                      }}
+                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                      disabled={loadingSangria}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={registrarSangria}
+                      disabled={loadingSangria || !valorSangria}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingSangria ? 'Registrando...' : 'Registrar Sangria'}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Motivo
-                  </label>
-                  <textarea
-                    placeholder="Descreva o motivo da sangria..."
-                    rows={3}
-                    value={observacaoSangria}
-                    onChange={(e) => setObservacaoSangria(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
-                  />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-md font-medium text-white">Histórico de Sangrias</h4>
+                    <span className="text-sm text-gray-400">
+                      {sangriasCaixa.length} registro(s)
+                    </span>
+                  </div>
+
+                  {loadingSangriasList ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+                    </div>
+                  ) : sangriasCaixa.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <p>Nenhuma sangria registrada neste caixa</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-96 overflow-y-auto space-y-3">
+                      {sangriasCaixa.map((sangria) => (
+                        <div
+                          key={sangria.id}
+                          className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-red-400 font-semibold">
+                                  {(sangria.valor || 0).toLocaleString('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL'
+                                  })}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(sangria.data).toLocaleString('pt-BR')}
+                                </span>
+                              </div>
+                              {sangria.observacao && (
+                                <p className="text-sm text-gray-300 mb-1">
+                                  {sangria.observacao}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500">
+                                Por: {sangria.usuarios?.nome || 'Usuário não identificado'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => {
+                        setShowSangriaModal(false);
+                        setAbaSangriaAtiva('nova');
+                      }}
+                      className="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Fechar
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowSangriaModal(false);
-                      setValorSangria('');
-                      setObservacaoSangria('');
-                    }}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
-                    disabled={loadingSangria}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={registrarSangria}
-                    disabled={loadingSangria || !valorSangria}
-                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loadingSangria ? 'Registrando...' : 'Registrar Sangria'}
-                  </button>
-                </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -24025,71 +24183,174 @@ const PDVPage: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 h-[95vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
+              {/* Header fixo */}
+              <div className="flex items-center justify-between mb-4 flex-shrink-0">
                 <h3 className="text-lg font-semibold text-white">Suprimento</h3>
                 <button
-                  onClick={() => setShowSuprimentoModal(false)}
+                  onClick={() => {
+                    setShowSuprimentoModal(false);
+                    setAbaSuprimentoAtiva('nova');
+                    setValorSuprimento('');
+                    setObservacaoSuprimento('');
+                  }}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Valor do Suprimento
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="R$ 0,00"
-                    value={valorSuprimento}
-                    onChange={(e) => {
-                      const valor = e.target.value.replace(/\D/g, '');
-                      const valorFormatado = (parseFloat(valor) / 100).toLocaleString('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL'
-                      });
-                      setValorSuprimento(valorFormatado);
-                    }}
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
-                  />
+              {/* Abas fixas */}
+              <div className="flex mb-4 bg-gray-800/50 rounded-lg p-1 flex-shrink-0">
+                <button
+                  onClick={() => setAbaSuprimentoAtiva('nova')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    abaSuprimentoAtiva === 'nova'
+                      ? 'bg-green-500 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Novo Suprimento
+                </button>
+                <button
+                  onClick={() => {
+                    setAbaSuprimentoAtiva('listagem');
+                    carregarSuprimentosCaixa();
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    abaSuprimentoAtiva === 'listagem'
+                      ? 'bg-green-500 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Histórico
+                </button>
+              </div>
+
+              {/* Conteúdo scrollável das Abas */}
+              <div className="flex-1 overflow-y-auto">
+                {abaSuprimentoAtiva === 'nova' ? (
+                  <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Valor do Suprimento
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="R$ 0,00"
+                      value={valorSuprimento}
+                      onChange={(e) => {
+                        const valor = e.target.value.replace(/\D/g, '');
+                        const valorFormatado = (parseFloat(valor) / 100).toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        });
+                        setValorSuprimento(valorFormatado);
+                      }}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Motivo
+                    </label>
+                    <textarea
+                      placeholder="Descreva o motivo do suprimento..."
+                      rows={3}
+                      value={observacaoSuprimento}
+                      onChange={(e) => setObservacaoSuprimento(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowSuprimentoModal(false);
+                        setAbaSuprimentoAtiva('nova');
+                        setValorSuprimento('');
+                        setObservacaoSuprimento('');
+                      }}
+                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                      disabled={loadingSuprimento}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={registrarSuprimento}
+                      disabled={loadingSuprimento || !valorSuprimento}
+                      className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingSuprimento ? 'Registrando...' : 'Registrar Suprimento'}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Motivo
-                  </label>
-                  <textarea
-                    placeholder="Descreva o motivo do suprimento..."
-                    rows={3}
-                    value={observacaoSuprimento}
-                    onChange={(e) => setObservacaoSuprimento(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
-                  />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-md font-medium text-white">Histórico de Suprimentos</h4>
+                    <span className="text-sm text-gray-400">
+                      {suprimentosCaixa.length} registro(s)
+                    </span>
+                  </div>
+
+                  {loadingSuprimentosList ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                    </div>
+                  ) : suprimentosCaixa.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <p>Nenhum suprimento registrado neste caixa</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-96 overflow-y-auto space-y-3">
+                      {suprimentosCaixa.map((suprimento) => (
+                        <div
+                          key={suprimento.id}
+                          className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-green-400 font-semibold">
+                                  {(suprimento.valor || 0).toLocaleString('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL'
+                                  })}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(suprimento.data).toLocaleString('pt-BR')}
+                                </span>
+                              </div>
+                              {suprimento.observacao && (
+                                <p className="text-sm text-gray-300 mb-1">
+                                  {suprimento.observacao}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500">
+                                Por: {suprimento.usuarios?.nome || 'Usuário não identificado'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => {
+                        setShowSuprimentoModal(false);
+                        setAbaSuprimentoAtiva('nova');
+                      }}
+                      className="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Fechar
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowSuprimentoModal(false);
-                      setValorSuprimento('');
-                      setObservacaoSuprimento('');
-                    }}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
-                    disabled={loadingSuprimento}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={registrarSuprimento}
-                    disabled={loadingSuprimento || !valorSuprimento}
-                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loadingSuprimento ? 'Registrando...' : 'Registrar Suprimento'}
-                  </button>
-                </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -24110,10 +24371,11 @@ const PDVPage: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto"
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 h-[95vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
+              {/* Header fixo */}
+              <div className="flex items-center justify-between mb-4 flex-shrink-0">
                 <h3 className="text-lg font-semibold text-white">Relatório de Pagamentos</h3>
                 <button
                   onClick={() => setShowPagamentosModal(false)}
@@ -24123,7 +24385,8 @@ const PDVPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-6">
+              {/* Conteúdo scrollável */}
+              <div className="flex-1 overflow-y-auto space-y-6">
                 {/* Botão Adicionar Pagamento */}
                 <div className="flex justify-end">
                   <button
@@ -24173,7 +24436,7 @@ const PDVPage: React.FC = () => {
                       <p className="text-gray-400">Nenhum pagamento registrado</p>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                    <div className="space-y-3 flex-1 overflow-y-auto">
                       {pagamentosCaixa.map((pagamento) => (
                         <div key={pagamento.id} className="bg-gray-800/30 p-4 rounded-lg border border-gray-700">
                           <div className="flex justify-between items-start">
@@ -24226,10 +24489,11 @@ const PDVPage: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4 h-[95vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
+              {/* Header fixo */}
+              <div className="flex items-center justify-between mb-6 flex-shrink-0">
                 <h3 className="text-lg font-semibold text-white">Adicionar Pagamento</h3>
                 <button
                   onClick={() => setShowAdicionarPagamentoModal(false)}
@@ -24239,7 +24503,8 @@ const PDVPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-4">
+              {/* Conteúdo scrollável */}
+              <div className="flex-1 overflow-y-auto space-y-4">
                 {/* Tipo de Pagamento */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -24329,8 +24594,8 @@ const PDVPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Botões */}
-              <div className="flex gap-3 mt-6">
+              {/* Botões fixos na parte inferior */}
+              <div className="flex gap-3 mt-6 flex-shrink-0">
                 <button
                   onClick={() => setShowAdicionarPagamentoModal(false)}
                   className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
@@ -30270,11 +30535,7 @@ const PDVPage: React.FC = () => {
                     <div className="text-gray-400">Carregando vendas...</div>
                   </div>
                 ) : (() => {
-                  // ✅ DEBUG: Log para verificar estado das vendas abertas
-                  console.log('🔍 DEBUG - Estado vendasAbertas:', {
-                    total: vendasAbertas.length,
-                    vendas: vendasAbertas.map(v => v.numero_venda)
-                  });
+                  // Log de debug removido para limpar console
 
                   const vendasFiltradas = filtrarVendasAbertas(vendasAbertas);
                   return vendasFiltradas.length === 0 ? (
@@ -30289,8 +30550,7 @@ const PDVPage: React.FC = () => {
                     </div>
                   ) : (
                     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                      {/* ✅ DEBUG: Log para verificar vendas filtradas */}
-                      {console.log('🔍 DEBUG - Vendas filtradas para renderização:', vendasFiltradas.length, vendasFiltradas.map(v => v.numero_venda))}
+                      {/* Log de debug removido para limpar console */}
                       {vendasFiltradas.map((venda) => (
                       <div
                         key={venda.id}
@@ -30299,15 +30559,7 @@ const PDVPage: React.FC = () => {
                         {/* Header do card */}
                         <div className="mb-3">
                           {/* Mesa e Comanda no topo */}
-                          {/* ✅ DEBUG: Log para verificar dados da venda */}
-                          {console.log('🔍 DEBUG - Venda renderizada:', {
-                            numero_venda: venda.numero_venda,
-                            comanda_numero: venda.comanda_numero,
-                            mesa_numero: venda.mesa_numero,
-                            status_venda: venda.status_venda,
-                            temComanda: !!venda.comanda_numero,
-                            temMesa: !!venda.mesa_numero
-                          })}
+                          {/* Log de debug removido para limpar console */}
                           {(venda.mesa_numero || venda.comanda_numero) && (
                             <div className="flex gap-2 mb-2">
                               {venda.mesa_numero && (
@@ -30394,15 +30646,7 @@ const PDVPage: React.FC = () => {
                           </button>
 
                           {/* ✅ NOVO: Botão para liberar comanda (apenas se tiver comanda e status salva) */}
-                          {/* ✅ DEBUG: Log para verificar condição do botão */}
-                          {console.log('🔍 DEBUG - Botão Liberar Comanda:', {
-                            numero_venda: venda.numero_venda,
-                            comanda_numero: venda.comanda_numero,
-                            status_venda: venda.status_venda,
-                            temComanda: !!venda.comanda_numero,
-                            statusSalva: venda.status_venda === 'salva',
-                            deveExibir: venda.comanda_numero && venda.status_venda === 'salva'
-                          })}
+                          {/* Log de debug removido para limpar console */}
                           {venda.comanda_numero && venda.status_venda === 'salva' && (
                             <button
                               onClick={(e) => {

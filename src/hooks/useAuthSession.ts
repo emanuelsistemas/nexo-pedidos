@@ -153,7 +153,7 @@ export const useAuthSession = () => {
     const refreshTime = Math.min(600, Math.floor(timeUntilExpiry * 0.5));
     const refreshInMs = Math.max(refreshTime * 1000, 60000); // Mínimo 1 minuto
 
-    console.log(`⏰ Próxima renovação agendada em ${Math.floor(refreshInMs / 60000)} minutos`);
+    // Log removido para limpar console
 
     refreshTimeoutRef.current = setTimeout(async () => {
       console.log('🔄 Executando renovação automática agendada...');
