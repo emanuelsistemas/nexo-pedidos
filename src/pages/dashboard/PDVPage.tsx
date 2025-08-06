@@ -473,6 +473,7 @@ const PDVPage: React.FC = () => {
   const [recebimentosFiadoCaixa, setRecebimentosFiadoCaixa] = useState<any[]>([]);
   const [totalRecebimentosFiado, setTotalRecebimentosFiado] = useState(0);
   const [valoresFiadoPorForma, setValoresFiadoPorForma] = useState<{[key: string]: number}>({});
+  const [recebimentosFiadoExpandido, setRecebimentosFiadoExpandido] = useState(false);
 
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
@@ -33059,35 +33060,49 @@ const PDVPage: React.FC = () => {
 
                 {recebimentosFiadoCaixa.length > 0 ? (
                   <>
-                    {/* Total dos Recebimentos */}
+                    {/* Total dos Recebimentos com botão de expand */}
                     <div style={{
                       backgroundColor: '#374151',
                       borderRadius: '8px',
                       padding: '12px',
                       border: '1px solid #4b5563',
-                      marginBottom: '12px'
-                    }}>
+                      marginBottom: '12px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setRecebimentosFiadoExpandido(!recebimentosFiadoExpandido)}
+                    >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
                           Total Recebido
                         </span>
-                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#f59e0b' }}>
-                          R$ {totalRecebimentosFiado.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#f59e0b' }}>
+                            R$ {totalRecebimentosFiado.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </span>
+                          <span style={{
+                            fontSize: '12px',
+                            color: '#9ca3af',
+                            transform: recebimentosFiadoExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease'
+                          }}>
+                            ▼
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Lista de Recebimentos */}
-                    <div style={{
-                      maxHeight: '200px',
-                      overflowY: 'auto',
-                      backgroundColor: '#1f2937',
-                      borderRadius: '8px',
-                      border: '1px solid #374151'
-                    }}>
+                    {/* Lista de Recebimentos - só aparece quando expandida */}
+                    {recebimentosFiadoExpandido && (
+                      <div style={{
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        backgroundColor: '#1f2937',
+                        borderRadius: '8px',
+                        border: '1px solid #374151'
+                      }}>
                       {recebimentosFiadoCaixa.map((recebimento, index) => (
                         <div
                           key={recebimento.id}
@@ -33126,7 +33141,8 @@ const PDVPage: React.FC = () => {
                           )}
                         </div>
                       ))}
-                    </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div style={{
