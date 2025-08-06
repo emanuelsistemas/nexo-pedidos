@@ -2119,7 +2119,7 @@ const PDVPage: React.FC = () => {
       // ✅ NOVO: Buscar pagamentos do caixa
       console.log('💰 Buscando pagamentos do caixa...');
       const { data: pagamentosData, error: pagamentosError } = await supabase
-        .from('caixa_pagamentos')
+        .from('pagamentos_caixa')
         .select(`
           id,
           valor_pagamento,
@@ -2146,7 +2146,7 @@ const PDVPage: React.FC = () => {
       // ✅ NOVO: Buscar sangrias do caixa
       console.log('💰 Buscando sangrias do caixa...');
       const { data: sangriasData, error: sangriasError } = await supabase
-        .from('caixa_sangrias')
+        .from('sangrias')
         .select(`
           id,
           valor_sangria,
@@ -2172,7 +2172,7 @@ const PDVPage: React.FC = () => {
       // ✅ NOVO: Buscar suprimentos do caixa
       console.log('💰 Buscando suprimentos do caixa...');
       const { data: suprimentosData, error: suprimentosError } = await supabase
-        .from('caixa_suprimentos')
+        .from('suprimentos')
         .select(`
           id,
           valor_suprimento,
