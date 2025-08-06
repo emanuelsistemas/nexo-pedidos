@@ -485,6 +485,15 @@ const PDVPage: React.FC = () => {
   const [vendaExpandida, setVendaExpandida] = useState<string | null>(null);
   const [itensVendaExpandida, setItensVendaExpandida] = useState<any[]>([]);
 
+  // ✅ NOVO: Estados para modal de recebimento de fiado
+  const [showRecebimentoFiadoModal, setShowRecebimentoFiadoModal] = useState(false);
+  const [valorRecebimento, setValorRecebimento] = useState('');
+  const [valorRecebimentoFormatado, setValorRecebimentoFormatado] = useState('');
+  const [formaPagamentoRecebimento, setFormaPagamentoRecebimento] = useState('');
+  const [observacoesRecebimento, setObservacoesRecebimento] = useState('');
+  const [formasPagamentoEmpresa, setFormasPagamentoEmpresa] = useState<any[]>([]);
+  const [loadingRecebimento, setLoadingRecebimento] = useState(false);
+
   const [showVendaSemProdutoModal, setShowVendaSemProdutoModal] = useState(false);
   const [valorVendaSemProduto, setValorVendaSemProduto] = useState('');
   const [descricaoVendaSemProduto, setDescricaoVendaSemProduto] = useState('');
@@ -4239,6 +4248,154 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para carregar formas de pagamento da empresa
+  const loadFormasPagamentoEmpresa = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data: formasData, error } = await supabase
+        .from('formas_pagamento_empresa')
+        .select(`
+          id,
+          ativo,
+          forma_pagamento_opcao:forma_pagamento_opcoes(
+            id,
+            nome,
+            tipo
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .order('forma_pagamento_opcao.nome');
+
+      if (error) {
+        console.error('❌ Erro ao carregar formas de pagamento:', error);
+        return;
+      }
+
+      setFormasPagamentoEmpresa(formasData || []);
+    } catch (error) {
+      console.error('❌ Erro inesperado ao carregar formas de pagamento:', error);
+    }
+  };
+
+  // ✅ NOVA: Função para processar recebimento de fiado
+  const processarRecebimentoFiado = async () => {
+    if (!clienteSelecionadoDetalhes || !valorRecebimento || !formaPagamentoRecebimento) {
+      toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    const valorNumerico = desformatarValorMonetario(valorRecebimentoFormatado);
+
+    if (valorNumerico <= 0) {
+      toast.error('Valor deve ser maior que zero');
+      return;
+    }
+
+    if (valorNumerico > clienteSelecionadoDetalhes.saldo_devedor) {
+      toast.error('Valor não pode ser maior que o saldo devedor');
+      return;
+    }
+
+    setLoadingRecebimento(true);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id, nome')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar dados da forma de pagamento
+      const formaPagamento = formasPagamentoEmpresa.find(f => f.id === formaPagamentoRecebimento);
+      if (!formaPagamento) {
+        toast.error('Forma de pagamento não encontrada');
+        return;
+      }
+
+      const saldoAnterior = clienteSelecionadoDetalhes.saldo_devedor;
+      const saldoPosterior = saldoAnterior - valorNumerico;
+
+      // Registrar o recebimento
+      const { error: recebimentoError } = await supabase
+        .from('fiado_recebimentos')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          cliente_id: clienteSelecionadoDetalhes.id,
+          cliente_nome: clienteSelecionadoDetalhes.nome,
+          forma_pagamento_empresa_id: formaPagamento.id,
+          forma_pagamento_nome: formaPagamento.forma_pagamento_opcao.nome,
+          valor_recebimento: valorNumerico,
+          saldo_anterior: saldoAnterior,
+          saldo_posterior: saldoPosterior,
+          caixa_recebimento: 'PDV-001', // Pode ser configurável no futuro
+          operador_usuario_id: userData.user.id,
+          operador_nome: usuarioData.nome,
+          observacoes: observacoesRecebimento || null
+        });
+
+      if (recebimentoError) {
+        console.error('❌ Erro ao registrar recebimento:', recebimentoError);
+        toast.error('Erro ao registrar recebimento');
+        return;
+      }
+
+      // Atualizar saldo devedor do cliente
+      const { error: updateError } = await supabase
+        .from('clientes')
+        .update({
+          saldo_devedor: saldoPosterior,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', clienteSelecionadoDetalhes.id);
+
+      if (updateError) {
+        console.error('❌ Erro ao atualizar saldo devedor:', updateError);
+        toast.error('Erro ao atualizar saldo devedor');
+        return;
+      }
+
+      // Atualizar dados locais
+      setClienteSelecionadoDetalhes(prev => ({
+        ...prev,
+        saldo_devedor: saldoPosterior
+      }));
+
+      // Recarregar lista de clientes devedores
+      loadClientesDevedores();
+
+      // Limpar formulário e fechar modal
+      setValorRecebimento('');
+      setValorRecebimentoFormatado('');
+      setFormaPagamentoRecebimento('');
+      setObservacoesRecebimento('');
+      setShowRecebimentoFiadoModal(false);
+
+      toast.success(`Recebimento de ${formatCurrency(valorNumerico)} registrado com sucesso!`);
+
+    } catch (error) {
+      console.error('❌ Erro inesperado ao processar recebimento:', error);
+      toast.error('Erro inesperado ao processar recebimento');
+    } finally {
+      setLoadingRecebimento(false);
+    }
+  };
+
   // ✅ NOVA: Função para carregar vendas fiado de um cliente específico
   const loadVendasFiadoCliente = async (clienteId: string) => {
     setLoadingVendasFiado(true);
@@ -5531,16 +5688,27 @@ const PDVPage: React.FC = () => {
 
             // ✅ NOVO: Adicionar "Fiado" à lista se estiver habilitado na configuração PDV
             let formasComFiado = [...(formasOpcoesData || [])];
+            console.log('🔍 DEBUG FIADO:', {
+              pdvConfig: pdvConfig,
+              fiado: pdvConfig?.fiado,
+              formasOriginais: formasOpcoesData?.length
+            });
+
             if (pdvConfig?.fiado) {
               // Verificar se "Fiado" já não está na lista
               const jaTemFiado = formasComFiado.some(forma => forma.nome?.toLowerCase() === 'fiado');
               if (!jaTemFiado) {
+                console.log('✅ Adicionando Fiado à lista de filtros');
                 formasComFiado.push({
                   id: 'fiado',
                   nome: 'Fiado',
                   tipo: 'fiado'
                 });
+              } else {
+                console.log('⚠️ Fiado já existe na lista');
               }
+            } else {
+              console.log('❌ Fiado não está habilitado no pdvConfig');
             }
 
             setFormasPagamentoList(formasComFiado);
@@ -17912,12 +18080,12 @@ const PDVPage: React.FC = () => {
     }
   }, [showAreaProdutos]);
 
-  // ✅ NOVO: useEffect para carregar listas de filtros quando modal de movimentos abrir
+  // ✅ NOVO: useEffect para carregar listas de filtros quando modal de movimentos abrir OU pdvConfig mudar
   useEffect(() => {
     if (showMovimentosModal) {
       carregarListasFiltros();
     }
-  }, [showMovimentosModal]);
+  }, [showMovimentosModal, pdvConfig]);
 
   // useEffect para focar no campo valor quando modal de venda sem produto abrir
   useEffect(() => {
