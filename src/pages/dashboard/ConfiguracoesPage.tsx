@@ -4022,6 +4022,31 @@ const ConfiguracoesPage: React.FC = () => {
         throw new Error('Empresa não encontrada');
       }
 
+      // Validação específica para controle de caixa
+      if (field === 'controla_caixa' && value === false) {
+        // Verificar se existem caixas abertos
+        const { data: caixasAbertos, error: caixaError } = await supabase
+          .from('caixa_controle')
+          .select('id, usuario_id, data_abertura')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('status_caixa', true);
+
+        if (caixaError) {
+          console.error('Erro ao verificar caixas abertos:', caixaError);
+          throw new Error('Erro ao verificar status dos caixas');
+        }
+
+        if (caixasAbertos && caixasAbertos.length > 0) {
+          const quantidadeCaixas = caixasAbertos.length;
+          const mensagem = quantidadeCaixas === 1
+            ? 'Existe 1 caixa aberto. É necessário fechar o caixa antes de desabilitar o controle de caixa.'
+            : `Existem ${quantidadeCaixas} caixas abertos. É necessário fechar todos os caixas antes de desabilitar o controle de caixa.`;
+
+          showMessage('error', mensagem);
+          return; // Não prosseguir com a desabilitação
+        }
+      }
+
       // ✅ NOVA: Verificar vendas salvas antes de desabilitar comandas ou mesas
       if (!value && (field === 'comandas' || field === 'mesas')) {
         const { temVendas, vendas } = await verificarVendasSalvas(field, usuarioData.empresa_id);
