@@ -305,7 +305,7 @@ const ConfiguracoesPage: React.FC = () => {
   });
 
   // Estado para controlar as abas do PDV
-  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto' | 'cardapio-digital' | 'formas-pagamento'>('geral');
+  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto' | 'cardapio-digital' | 'formas-pagamento' | 'tipos-pagamentos'>('geral');
 
   // Estado para controlar as sub-abas do cardápio digital
   const [cardapioDigitalActiveTab, setCardapioDigitalActiveTab] = useState<'geral' | 'cupom-desconto'>('geral');
@@ -345,6 +345,14 @@ const ConfiguracoesPage: React.FC = () => {
     utilizar_chave_pix: false,
     tipo_chave_pix: '',
     chave_pix: ''
+  });
+
+  // Estados para tipos de pagamentos
+  const [tiposPagamentosOpcoes, setTiposPagamentosOpcoes] = useState<any[]>([]);
+  const [showModalTipoPagamento, setShowModalTipoPagamento] = useState(false);
+  const [editingTipoPagamento, setEditingTipoPagamento] = useState<any>(null);
+  const [novoTipoPagamento, setNovoTipoPagamento] = useState({
+    descricao: ''
   });
 
   // Estado para o QR Code do cardápio
@@ -1294,6 +1302,7 @@ const ConfiguracoesPage: React.FC = () => {
         carregarConfiguracoesPdv();
         await loadFormasPagamentoOpcoes();
         await loadFormasPagamentoEmpresa();
+        await loadTiposPagamentosOpcoes();
         await loadCuponsDesconto();
       }
 
@@ -3504,6 +3513,129 @@ const ConfiguracoesPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao deletar forma de pagamento:', error);
       showMessage('error', 'Erro ao remover forma de pagamento');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // =====================================================
+  // FUNÇÕES PARA TIPOS DE PAGAMENTOS
+  // =====================================================
+
+  // Função para carregar tipos de pagamentos da empresa
+  const loadTiposPagamentosOpcoes = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data, error } = await supabase
+        .from('tipo_pagamentos_opcoes')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false)
+        .order('descricao');
+
+      if (error) throw error;
+
+      setTiposPagamentosOpcoes(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar tipos de pagamentos:', error);
+    }
+  };
+
+  // Função para salvar tipo de pagamento
+  const handleSalvarTipoPagamento = async () => {
+    if (!novoTipoPagamento.descricao.trim()) {
+      showMessage('error', 'Descrição é obrigatória');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      if (editingTipoPagamento) {
+        // Atualizar tipo existente
+        const { error } = await supabase
+          .from('tipo_pagamentos_opcoes')
+          .update({
+            descricao: novoTipoPagamento.descricao.trim(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingTipoPagamento.id);
+
+        if (error) throw error;
+        showMessage('success', 'Tipo de pagamento atualizado com sucesso!');
+      } else {
+        // Criar novo tipo
+        const { error } = await supabase
+          .from('tipo_pagamentos_opcoes')
+          .insert({
+            empresa_id: usuarioData.empresa_id,
+            descricao: novoTipoPagamento.descricao.trim()
+          });
+
+        if (error) throw error;
+        showMessage('success', 'Tipo de pagamento adicionado com sucesso!');
+      }
+
+      setShowModalTipoPagamento(false);
+      setEditingTipoPagamento(null);
+      setNovoTipoPagamento({ descricao: '' });
+      await loadTiposPagamentosOpcoes();
+    } catch (error) {
+      console.error('Erro ao salvar tipo de pagamento:', error);
+      showMessage('error', 'Erro ao salvar tipo de pagamento');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Função para abrir modal de edição de tipo
+  const handleEditarTipoPagamento = (tipo: any) => {
+    setEditingTipoPagamento(tipo);
+    setNovoTipoPagamento({
+      descricao: tipo.descricao
+    });
+    setShowModalTipoPagamento(true);
+  };
+
+  // Função para deletar tipo de pagamento
+  const handleDeletarTipoPagamento = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('tipo_pagamentos_opcoes')
+        .update({
+          deletado: true,
+          deletado_em: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      showMessage('success', 'Tipo de pagamento removido com sucesso!');
+      await loadTiposPagamentosOpcoes();
+    } catch (error) {
+      console.error('Erro ao deletar tipo de pagamento:', error);
+      showMessage('error', 'Erro ao remover tipo de pagamento');
     } finally {
       setIsLoading(false);
     }
@@ -6003,6 +6135,16 @@ const ConfiguracoesPage: React.FC = () => {
                   >
                     Formas de Pagamentos
                   </button>
+                  <button
+                    onClick={() => setPdvActiveTab('tipos-pagamentos')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      pdvActiveTab === 'tipos-pagamentos'
+                        ? 'border-primary-500 text-primary-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Tipos de Pagamentos
+                  </button>
                   {/* Aba Cardápio Digital - só aparece quando a opção estiver ativa */}
                   {pdvConfig.cardapio_digital && (
                     <button
@@ -8080,6 +8222,95 @@ const ConfiguracoesPage: React.FC = () => {
                           </svg>
                           <p className="text-gray-400">Nenhuma forma de pagamento configurada</p>
                           <p className="text-sm text-gray-500 mt-1">Clique em "Adicionar Forma de Pagamento" para começar</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nova aba: Tipos de Pagamentos */}
+                {pdvActiveTab === 'tipos-pagamentos' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Tipos de Pagamentos
+                      </h3>
+                      <p className="text-sm text-gray-400 mb-6">
+                        Gerencie os tipos de pagamentos personalizados da sua empresa.
+                      </p>
+                    </div>
+
+                    {/* Botão Adicionar */}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          setEditingTipoPagamento(null);
+                          setNovoTipoPagamento({ descricao: '' });
+                          setShowModalTipoPagamento(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Adicionar Tipo de Pagamento
+                      </button>
+                    </div>
+
+                    {/* Lista de Tipos de Pagamentos */}
+                    <div className="space-y-4">
+                      {tiposPagamentosOpcoes.map(tipo => (
+                        <div
+                          key={tipo.id}
+                          className="bg-gray-800/50 p-4 rounded-lg border border-gray-700"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              <div>
+                                <h4 className="text-white font-medium">{tipo.descricao}</h4>
+                                <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
+                                  <span>Status: {tipo.ativo ? 'Ativo' : 'Inativo'}</span>
+                                  <span>Criado em: {new Date(tipo.created_at).toLocaleDateString('pt-BR')}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleEditarTipoPagamento(tipo)}
+                                className="p-2 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Editar tipo de pagamento"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDeletarTipoPagamento(tipo.id)}
+                                className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                                title="Remover tipo de pagamento"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {tiposPagamentosOpcoes.length === 0 && (
+                        <div className="text-center py-8 bg-gray-800/30 rounded-lg border border-gray-700">
+                          <svg className="w-12 h-12 text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <p className="text-gray-400">Nenhum tipo de pagamento configurado</p>
+                          <p className="text-sm text-gray-500 mt-1">Clique em "Adicionar Tipo de Pagamento" para começar</p>
                         </div>
                       )}
                     </div>
@@ -10641,6 +10872,82 @@ const ConfiguracoesPage: React.FC = () => {
                   className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                 >
                   {isLoading ? 'Salvando...' : (editingFormaPagamento ? 'Salvar' : 'Adicionar')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal para Adicionar/Editar Tipo de Pagamento */}
+      <AnimatePresence>
+        {showModalTipoPagamento && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowModalTipoPagamento(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg border border-gray-800 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-white">
+                  {editingTipoPagamento ? 'Editar Tipo de Pagamento' : 'Adicionar Tipo de Pagamento'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowModalTipoPagamento(false);
+                    setEditingTipoPagamento(null);
+                    setNovoTipoPagamento({ descricao: '' });
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Descrição */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Descrição *
+                  </label>
+                  <input
+                    type="text"
+                    value={novoTipoPagamento.descricao}
+                    onChange={(e) => setNovoTipoPagamento(prev => ({ ...prev, descricao: e.target.value }))}
+                    placeholder="Ex: PIX, Cartão de Crédito, Dinheiro..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowModalTipoPagamento(false);
+                    setEditingTipoPagamento(null);
+                    setNovoTipoPagamento({ descricao: '' });
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSalvarTipoPagamento}
+                  disabled={isLoading || !novoTipoPagamento.descricao.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  {isLoading ? 'Salvando...' : (editingTipoPagamento ? 'Salvar' : 'Adicionar')}
                 </button>
               </div>
             </motion.div>

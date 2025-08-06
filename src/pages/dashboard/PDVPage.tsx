@@ -477,6 +477,14 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
+
+  // ✅ NOVO: Estados para sangria e suprimento
+  const [valorSangria, setValorSangria] = useState('');
+  const [observacaoSangria, setObservacaoSangria] = useState('');
+  const [loadingSangria, setLoadingSangria] = useState(false);
+  const [valorSuprimento, setValorSuprimento] = useState('');
+  const [observacaoSuprimento, setObservacaoSuprimento] = useState('');
+  const [loadingSuprimento, setLoadingSuprimento] = useState(false);
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -508,6 +516,20 @@ const PDVPage: React.FC = () => {
   const [observacoesRecebimento, setObservacoesRecebimento] = useState('');
   const [formasPagamentoEmpresa, setFormasPagamentoEmpresa] = useState<any[]>([]);
   const [loadingRecebimento, setLoadingRecebimento] = useState(false);
+
+  // ✅ NOVO: Estados para pagamentos do caixa
+  const [pagamentosCaixa, setPagamentosCaixa] = useState<any[]>([]);
+  const [resumoPagamentos, setResumoPagamentos] = useState<any>({});
+  const [loadingPagamentos, setLoadingPagamentos] = useState(false);
+  const [showAdicionarPagamentoModal, setShowAdicionarPagamentoModal] = useState(false);
+  const [tiposPagamentosOpcoes, setTiposPagamentosOpcoes] = useState<any[]>([]);
+  const [novoPagamento, setNovoPagamento] = useState({
+    tipo_pagamentos_opcoes_id: '',
+    formas_pagamento_empresa_id: '',
+    descricao: '',
+    observacoes: '',
+    valor_pagamento: ''
+  });
 
   const [showVendaSemProdutoModal, setShowVendaSemProdutoModal] = useState(false);
   const [valorVendaSemProduto, setValorVendaSemProduto] = useState('');
@@ -1532,7 +1554,6 @@ const PDVPage: React.FC = () => {
           data_abertura: new Date().toISOString(),
           status_caixa: true,
           status: 'aberto',
-          suprimento: valorNumerico, // Valor inicial como suprimento
           observacao_abertura: `Abertura de caixa com valor inicial de ${formatarPreco(valorNumerico)}`
         })
         .select()
@@ -1544,17 +1565,24 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      // Registrar o valor inicial como tipo de pagamento (se houver valor)
+      // Registrar o valor inicial como suprimento (se houver valor)
       if (valorNumerico > 0) {
-        await supabase
-          .from('tipo_pagamentos')
+        const { error: suprimentoError } = await supabase
+          .from('suprimentos')
           .insert({
-            caixa_controle_id: caixaData.id,
             empresa_id: usuarioData.empresa_id,
-            tipo_pagamento: 'dinheiro',
+            usuario_id: authData.user.id,
+            caixa_controle_id: data.id,
             valor: valorNumerico,
-            descricao: 'Valor inicial de abertura de caixa'
+            observacao: 'Valor inicial de abertura do caixa'
           });
+
+        if (suprimentoError) {
+          console.error('❌ Erro ao registrar suprimento inicial:', suprimentoError);
+          // Não falhar a abertura do caixa por causa disso
+        } else {
+          console.log('✅ Suprimento inicial registrado');
+        }
       }
 
       // Atualizar estados
@@ -1566,6 +1594,182 @@ const PDVPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao abrir caixa:', error);
       toast.error('Erro ao abrir caixa');
+    }
+  };
+
+  // ✅ NOVO: Função para registrar sangria
+  const registrarSangria = async () => {
+    if (!valorSangria || parseFloat(valorSangria.replace(/[^\d,]/g, '').replace(',', '.')) <= 0) {
+      toast.error('Valor da sangria deve ser maior que zero');
+      return;
+    }
+
+    setLoadingSangria(true);
+
+    try {
+      // Buscar dados do usuário autenticado
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Dados do usuário não encontrados');
+        return;
+      }
+
+      // Buscar caixa aberto
+      const { data: caixaAberto, error: caixaError } = await supabase
+        .from('caixa_controle')
+        .select('id')
+        .eq('usuario_id', authData.user.id)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status', 'aberto');
+
+      if (caixaError) {
+        console.error('❌ Erro ao buscar caixa:', caixaError);
+        toast.error('Erro ao buscar caixa aberto');
+        return;
+      }
+
+      if (!caixaAberto || caixaAberto.length === 0) {
+        toast.error('Nenhum caixa aberto encontrado');
+        return;
+      }
+
+      const caixaId = caixaAberto[0].id;
+
+      const valorNumerico = parseFloat(valorSangria.replace(/[^\d,]/g, '').replace(',', '.'));
+
+      const { error } = await supabase
+        .from('sangrias')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          usuario_id: authData.user.id,
+          caixa_controle_id: caixaId,
+          valor: valorNumerico,
+          observacao: observacaoSangria || null
+        });
+
+      if (error) {
+        console.error('❌ Erro ao registrar sangria:', error);
+        toast.error('Erro ao registrar sangria');
+        return;
+      }
+
+      console.log('✅ Sangria registrada com sucesso!');
+      toast.success('Sangria registrada com sucesso!');
+
+      // Limpar campos e fechar modal
+      setValorSangria('');
+      setObservacaoSangria('');
+      setShowSangriaModal(false);
+
+      // Recarregar dados do caixa se estiver aberto
+      if (showCaixaModal) {
+        await carregarDadosCaixa();
+      }
+
+    } catch (error) {
+      console.error('❌ Erro inesperado ao registrar sangria:', error);
+      toast.error('Erro inesperado ao registrar sangria');
+    } finally {
+      setLoadingSangria(false);
+    }
+  };
+
+  // ✅ NOVO: Função para registrar suprimento
+  const registrarSuprimento = async () => {
+    if (!valorSuprimento || parseFloat(valorSuprimento.replace(/[^\d,]/g, '').replace(',', '.')) <= 0) {
+      toast.error('Valor do suprimento deve ser maior que zero');
+      return;
+    }
+
+    setLoadingSuprimento(true);
+
+    try {
+      // Buscar dados do usuário autenticado
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Dados do usuário não encontrados');
+        return;
+      }
+
+      // Buscar caixa aberto
+      const { data: caixaAberto, error: caixaError } = await supabase
+        .from('caixa_controle')
+        .select('id')
+        .eq('usuario_id', authData.user.id)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status', 'aberto');
+
+      if (caixaError) {
+        console.error('❌ Erro ao buscar caixa:', caixaError);
+        toast.error('Erro ao buscar caixa aberto');
+        return;
+      }
+
+      if (!caixaAberto || caixaAberto.length === 0) {
+        toast.error('Nenhum caixa aberto encontrado');
+        return;
+      }
+
+      const caixaId = caixaAberto[0].id;
+
+      const valorNumerico = parseFloat(valorSuprimento.replace(/[^\d,]/g, '').replace(',', '.'));
+
+      const { error } = await supabase
+        .from('suprimentos')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          usuario_id: authData.user.id,
+          caixa_controle_id: caixaId,
+          valor: valorNumerico,
+          observacao: observacaoSuprimento || null
+        });
+
+      if (error) {
+        console.error('❌ Erro ao registrar suprimento:', error);
+        toast.error('Erro ao registrar suprimento');
+        return;
+      }
+
+      console.log('✅ Suprimento registrado com sucesso!');
+      toast.success('Suprimento registrado com sucesso!');
+
+      // Limpar campos e fechar modal
+      setValorSuprimento('');
+      setObservacaoSuprimento('');
+      setShowSuprimentoModal(false);
+
+      // Recarregar dados do caixa se estiver aberto
+      if (showCaixaModal) {
+        await carregarDadosCaixa();
+      }
+
+    } catch (error) {
+      console.error('❌ Erro inesperado ao registrar suprimento:', error);
+      toast.error('Erro inesperado ao registrar suprimento');
+    } finally {
+      setLoadingSuprimento(false);
     }
   };
 
@@ -3136,6 +3340,23 @@ const PDVPage: React.FC = () => {
     }
   }, [showRecebimentoFiadoModal]);
 
+  // ✅ NOVO: useEffect para carregar dados quando modal de pagamentos abrir
+  useEffect(() => {
+    if (showPagamentosModal) {
+      loadPagamentosCaixa();
+      loadTiposPagamentosOpcoes();
+      loadFormasPagamentoEmpresa();
+    }
+  }, [showPagamentosModal]);
+
+  // ✅ NOVO: useEffect para carregar dados quando modal de adicionar pagamento abrir
+  useEffect(() => {
+    if (showAdicionarPagamentoModal) {
+      loadTiposPagamentosOpcoes();
+      loadFormasPagamentoEmpresa();
+    }
+  }, [showAdicionarPagamentoModal]);
+
   // ✅ NOVO: Sistema Realtime para monitorar mudanças na tabela PDV (delivery local)
   useEffect(() => {
     let deliverySubscription: any = null;
@@ -4642,6 +4863,179 @@ const PDVPage: React.FC = () => {
       toast.error('Erro inesperado ao processar recebimento');
     } finally {
       setLoadingRecebimento(false);
+    }
+  };
+
+  // =====================================================
+  // FUNÇÕES PARA PAGAMENTOS DO CAIXA
+  // =====================================================
+
+  // Função para carregar tipos de pagamentos
+  const loadTiposPagamentosOpcoes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tipo_pagamentos_opcoes')
+        .select('*')
+        .eq('deletado', false)
+        .order('descricao');
+
+      if (error) throw error;
+      setTiposPagamentosOpcoes(data || []);
+    } catch (error) {
+      console.error('❌ Erro ao carregar tipos de pagamentos:', error);
+    }
+  };
+
+  // Função para carregar pagamentos do caixa atual
+  const loadPagamentosCaixa = async () => {
+    setLoadingPagamentos(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar caixa aberto do usuário
+      const { data: caixaData } = await supabase
+        .from('caixa_controle')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', userData.user.id)
+        .eq('status', 'aberto')
+        .order('data_abertura', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!caixaData) {
+        setPagamentosCaixa([]);
+        setResumoPagamentos({});
+        return;
+      }
+
+      // Buscar pagamentos do caixa
+      const { data: pagamentosData, error } = await supabase
+        .from('pagamentos_caixa')
+        .select(`
+          *,
+          tipo_pagamentos_opcoes(descricao),
+          formas_pagamento_empresa(
+            forma_pagamento_opcoes(nome, tipo)
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('caixa_controle_id', caixaData.id)
+        .eq('deletado', false)
+        .order('data_pagamento', { ascending: false });
+
+      if (error) throw error;
+
+      setPagamentosCaixa(pagamentosData || []);
+
+      // Calcular resumo por forma de pagamento
+      const resumo: any = {};
+      let total = 0;
+
+      (pagamentosData || []).forEach(pagamento => {
+        const formaNome = pagamento.formas_pagamento_empresa?.forma_pagamento_opcoes?.nome ||
+                         pagamento.tipo_pagamentos_opcoes?.descricao || 'Outros';
+
+        if (!resumo[formaNome]) {
+          resumo[formaNome] = 0;
+        }
+        resumo[formaNome] += parseFloat(pagamento.valor_pagamento || 0);
+        total += parseFloat(pagamento.valor_pagamento || 0);
+      });
+
+      resumo.Total = total;
+      setResumoPagamentos(resumo);
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar pagamentos do caixa:', error);
+    } finally {
+      setLoadingPagamentos(false);
+    }
+  };
+
+  // Função para salvar novo pagamento
+  const salvarPagamentoCaixa = async () => {
+    if (!novoPagamento.valor_pagamento || (!novoPagamento.tipo_pagamentos_opcoes_id && !novoPagamento.formas_pagamento_empresa_id)) {
+      toast.error('Preencha os campos obrigatórios');
+      return;
+    }
+
+    setLoadingPagamentos(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar caixa aberto
+      const { data: caixaData } = await supabase
+        .from('caixa_controle')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', userData.user.id)
+        .eq('status', 'aberto')
+        .order('data_abertura', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!caixaData) {
+        toast.error('Nenhum caixa aberto encontrado');
+        return;
+      }
+
+      // Converter valor para número
+      const valorNumerico = parseFloat(novoPagamento.valor_pagamento.replace(/[^\d,]/g, '').replace(',', '.'));
+
+      // Salvar pagamento
+      const { error } = await supabase
+        .from('pagamentos_caixa')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          caixa_controle_id: caixaData.id,
+          tipo_pagamentos_opcoes_id: novoPagamento.tipo_pagamentos_opcoes_id || null,
+          formas_pagamento_empresa_id: novoPagamento.formas_pagamento_empresa_id || null,
+          valor_pagamento: valorNumerico,
+          descricao: novoPagamento.descricao,
+          observacoes: novoPagamento.observacoes
+        });
+
+      if (error) throw error;
+
+      // Limpar formulário e fechar modal
+      setNovoPagamento({
+        tipo_pagamentos_opcoes_id: '',
+        formas_pagamento_empresa_id: '',
+        descricao: '',
+        observacoes: '',
+        valor_pagamento: ''
+      });
+      setShowAdicionarPagamentoModal(false);
+
+      // Recarregar pagamentos
+      await loadPagamentosCaixa();
+
+      toast.success('Pagamento adicionado com sucesso!');
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar pagamento:', error);
+      toast.error('Erro ao salvar pagamento');
+    } finally {
+      setLoadingPagamentos(false);
     }
   };
 
@@ -23567,6 +23961,15 @@ const PDVPage: React.FC = () => {
                   <input
                     type="text"
                     placeholder="R$ 0,00"
+                    value={valorSangria}
+                    onChange={(e) => {
+                      const valor = e.target.value.replace(/\D/g, '');
+                      const valorFormatado = (parseFloat(valor) / 100).toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL'
+                      });
+                      setValorSangria(valorFormatado);
+                    }}
                     className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
                   />
                 </div>
@@ -23577,24 +23980,29 @@ const PDVPage: React.FC = () => {
                   <textarea
                     placeholder="Descreva o motivo da sangria..."
                     rows={3}
+                    value={observacaoSangria}
+                    onChange={(e) => setObservacaoSangria(e.target.value)}
                     className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
                   />
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowSangriaModal(false)}
+                    onClick={() => {
+                      setShowSangriaModal(false);
+                      setValorSangria('');
+                      setObservacaoSangria('');
+                    }}
                     className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                    disabled={loadingSangria}
                   >
                     Cancelar
                   </button>
                   <button
-                    onClick={() => {
-                      toast.success('Sangria registrada com sucesso!');
-                      setShowSangriaModal(false);
-                    }}
-                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors"
+                    onClick={registrarSangria}
+                    disabled={loadingSangria || !valorSangria}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Registrar Sangria
+                    {loadingSangria ? 'Registrando...' : 'Registrar Sangria'}
                   </button>
                 </div>
               </div>
@@ -23638,6 +24046,15 @@ const PDVPage: React.FC = () => {
                   <input
                     type="text"
                     placeholder="R$ 0,00"
+                    value={valorSuprimento}
+                    onChange={(e) => {
+                      const valor = e.target.value.replace(/\D/g, '');
+                      const valorFormatado = (parseFloat(valor) / 100).toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL'
+                      });
+                      setValorSuprimento(valorFormatado);
+                    }}
                     className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
                   />
                 </div>
@@ -23648,24 +24065,29 @@ const PDVPage: React.FC = () => {
                   <textarea
                     placeholder="Descreva o motivo do suprimento..."
                     rows={3}
+                    value={observacaoSuprimento}
+                    onChange={(e) => setObservacaoSuprimento(e.target.value)}
                     className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
                   />
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowSuprimentoModal(false)}
+                    onClick={() => {
+                      setShowSuprimentoModal(false);
+                      setValorSuprimento('');
+                      setObservacaoSuprimento('');
+                    }}
                     className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                    disabled={loadingSuprimento}
                   >
                     Cancelar
                   </button>
                   <button
-                    onClick={() => {
-                      toast.success('Suprimento registrado com sucesso!');
-                      setShowSuprimentoModal(false);
-                    }}
-                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg transition-colors"
+                    onClick={registrarSuprimento}
+                    disabled={loadingSuprimento || !valorSuprimento}
+                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Registrar Suprimento
+                    {loadingSuprimento ? 'Registrando...' : 'Registrar Suprimento'}
                   </button>
                 </div>
               </div>
@@ -23701,30 +24123,241 @@ const PDVPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-400">Dinheiro</div>
-                    <div className="text-xl font-bold text-green-400">R$ 0,00</div>
-                  </div>
-                  <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-400">Cartão</div>
-                    <div className="text-xl font-bold text-blue-400">R$ 0,00</div>
-                  </div>
-                  <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-400">PIX</div>
-                    <div className="text-xl font-bold text-purple-400">R$ 0,00</div>
-                  </div>
-                  <div className="bg-gray-800/50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-400">Total</div>
-                    <div className="text-xl font-bold text-primary-400">R$ 0,00</div>
-                  </div>
+              <div className="space-y-6">
+                {/* Botão Adicionar Pagamento */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowAdicionarPagamentoModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Adicionar Pagamento
+                  </button>
                 </div>
 
-                <div className="text-center py-8">
-                  <CreditCard size={48} className="mx-auto mb-4 text-gray-500" />
-                  <p className="text-gray-400">Nenhuma venda registrada hoje</p>
+                {/* Resumo por Forma de Pagamento */}
+                <div className="grid grid-cols-2 gap-4">
+                  {Object.entries(resumoPagamentos).map(([forma, valor]) => {
+                    const isTotal = forma === 'Total';
+                    const cores = {
+                      'Dinheiro': 'text-green-400',
+                      'PIX': 'text-purple-400',
+                      'Cartão de Crédito': 'text-blue-400',
+                      'Cartão de Débito': 'text-cyan-400',
+                      'Total': 'text-primary-400'
+                    };
+
+                    return (
+                      <div key={forma} className={`bg-gray-800/50 p-4 rounded-lg ${isTotal ? 'border border-primary-500/30' : ''}`}>
+                        <div className="text-sm text-gray-400">{forma}</div>
+                        <div className={`text-xl font-bold ${cores[forma as keyof typeof cores] || 'text-gray-300'}`}>
+                          R$ {(valor as number).toFixed(2).replace('.', ',')}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+
+                {/* Lista de Pagamentos */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-white">Pagamentos Registrados</h4>
+
+                  {loadingPagamentos ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                      <p className="text-gray-400">Carregando pagamentos...</p>
+                    </div>
+                  ) : pagamentosCaixa.length === 0 ? (
+                    <div className="text-center py-8">
+                      <CreditCard size={48} className="mx-auto mb-4 text-gray-500" />
+                      <p className="text-gray-400">Nenhum pagamento registrado</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                      {pagamentosCaixa.map((pagamento) => (
+                        <div key={pagamento.id} className="bg-gray-800/30 p-4 rounded-lg border border-gray-700">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-white font-medium">
+                                  {pagamento.tipo_pagamentos_opcoes?.descricao ||
+                                   pagamento.formas_pagamento_empresa?.forma_pagamento_opcoes?.nome || 'Não especificado'}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(pagamento.data_pagamento).toLocaleTimeString('pt-BR', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              {pagamento.descricao && (
+                                <div className="text-sm text-gray-400 mb-1">{pagamento.descricao}</div>
+                              )}
+                              {pagamento.observacoes && (
+                                <div className="text-xs text-gray-500">{pagamento.observacoes}</div>
+                              )}
+                            </div>
+                            <div className="text-lg font-bold text-green-400">
+                              R$ {parseFloat(pagamento.valor_pagamento).toFixed(2).replace('.', ',')}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Adicionar Pagamento */}
+      <AnimatePresence>
+        {showAdicionarPagamentoModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowAdicionarPagamentoModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-white">Adicionar Pagamento</h3>
+                <button
+                  onClick={() => setShowAdicionarPagamentoModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Tipo de Pagamento */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Tipo de Pagamento
+                  </label>
+                  <select
+                    value={novoPagamento.tipo_pagamentos_opcoes_id}
+                    onChange={(e) => setNovoPagamento(prev => ({ ...prev, tipo_pagamentos_opcoes_id: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione um tipo</option>
+                    {tiposPagamentosOpcoes.map((tipo) => (
+                      <option key={tipo.id} value={tipo.id}>
+                        {tipo.descricao}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Forma de Pagamento */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Forma de Pagamento
+                  </label>
+                  <select
+                    value={novoPagamento.formas_pagamento_empresa_id}
+                    onChange={(e) => setNovoPagamento(prev => ({ ...prev, formas_pagamento_empresa_id: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione uma forma</option>
+                    {formasPagamentoEmpresa.map((forma) => (
+                      <option key={forma.id} value={forma.id}>
+                        {forma.forma_pagamento_opcoes.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Descrição */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Descrição
+                  </label>
+                  <input
+                    type="text"
+                    value={novoPagamento.descricao}
+                    onChange={(e) => setNovoPagamento(prev => ({ ...prev, descricao: e.target.value }))}
+                    placeholder="Ex: Venda de produtos"
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Observações */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Observações
+                  </label>
+                  <textarea
+                    value={novoPagamento.observacoes}
+                    onChange={(e) => setNovoPagamento(prev => ({ ...prev, observacoes: e.target.value }))}
+                    placeholder="Observações sobre o pagamento..."
+                    rows={3}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+
+                {/* Valor */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Valor *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">
+                      R$
+                    </span>
+                    <input
+                      type="text"
+                      value={novoPagamento.valor_pagamento}
+                      onChange={(e) => {
+                        const formatted = formatarValorMonetario(e.target.value);
+                        setNovoPagamento(prev => ({ ...prev, valor_pagamento: formatted }));
+                      }}
+                      placeholder="0,00"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowAdicionarPagamentoModal(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvarPagamentoCaixa}
+                  disabled={loadingPagamentos || !novoPagamento.valor_pagamento}
+                  className={`flex-1 py-3 px-4 rounded-lg transition-colors font-medium flex items-center justify-center gap-2 ${
+                    loadingPagamentos || !novoPagamento.valor_pagamento
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  {loadingPagamentos ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <DollarSign size={16} />
+                      Salvar
+                    </>
+                  )}
+                </button>
               </div>
             </motion.div>
           </motion.div>
