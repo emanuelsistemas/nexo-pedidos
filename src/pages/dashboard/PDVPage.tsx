@@ -467,6 +467,7 @@ const PDVPage: React.FC = () => {
   const [dadosCaixa, setDadosCaixa] = useState<any>(null);
   const [formasPagamentoCaixa, setFormasPagamentoCaixa] = useState<any[]>([]);
   const [valoresCaixa, setValoresCaixa] = useState<{[key: string]: string}>({});
+  const [valoresReaisCaixa, setValoresReaisCaixa] = useState<{[key: string]: {atual: number, formatado: string}}>({});
   // ✅ NOVO: Estados para controle do modal de fiados
   const [clientesDevedores, setClientesDevedores] = useState<any[]>([]);
   const [loadingClientesDevedores, setLoadingClientesDevedores] = useState(false);
@@ -1605,12 +1606,73 @@ const PDVPage: React.FC = () => {
       console.log('✅ Formas de pagamento carregadas:', formasData);
       setFormasPagamentoCaixa(formasData || []);
 
-      // Inicializar valores do caixa (todos zerados)
-      const valoresIniciais: {[key: string]: string} = {};
+      // ✅ NOVO: Calcular valores reais das formas de pagamento baseado nas vendas do caixa
+      console.log('💰 Calculando valores reais das formas de pagamento...');
+      const valoresReais: {[key: string]: {atual: number, formatado: string}} = {};
+
+      if (formasData && formasData.length > 0) {
+        // Buscar todas as vendas finalizadas vinculadas a este caixa
+        const { data: vendasCaixa, error: vendasError } = await supabase
+          .from('pdv')
+          .select('id, valor_total, valor_pago, tipo_pagamento, forma_pagamento_id, formas_pagamento')
+          .eq('caixa_id', caixaData.id)
+          .eq('status_venda', 'finalizada');
+
+        if (vendasError) {
+          console.error('❌ Erro ao buscar vendas do caixa:', vendasError);
+        } else {
+          console.log('📊 Vendas encontradas para o caixa:', vendasCaixa?.length || 0);
+
+          // Inicializar contadores para cada forma de pagamento
+          formasData.forEach(forma => {
+            valoresReais[forma.forma_pagamento_opcao_id] = { atual: 0, formatado: '0,00' };
+          });
+
+          // Processar cada venda
+          vendasCaixa?.forEach(venda => {
+            if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
+              // Pagamento à vista - somar valor total na forma específica
+              const valorPago = venda.valor_pago || venda.valor_total || 0;
+              if (valoresReais[venda.forma_pagamento_id]) {
+                valoresReais[venda.forma_pagamento_id].atual += valorPago;
+              }
+            } else if (venda.tipo_pagamento === 'parcial' && venda.formas_pagamento) {
+              // Pagamento parcial - processar cada forma de pagamento
+              try {
+                const formasParciais = JSON.parse(venda.formas_pagamento);
+                formasParciais.forEach((pagamento: any) => {
+                  if (pagamento.forma && pagamento.valor && valoresReais[pagamento.forma]) {
+                    valoresReais[pagamento.forma].atual += pagamento.valor;
+                  }
+                });
+              } catch (error) {
+                console.error('❌ Erro ao processar formas de pagamento parciais:', error);
+              }
+            }
+          });
+
+          // Formatar valores calculados
+          Object.keys(valoresReais).forEach(formaId => {
+            const valor = valoresReais[formaId].atual;
+            valoresReais[formaId].formatado = valor.toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            });
+          });
+
+          console.log('💰 Valores calculados por forma de pagamento:', valoresReais);
+        }
+      }
+
+      // Definir valores calculados no estado (mantendo formato para inputs)
+      const valoresParaInput: {[key: string]: string} = {};
       formasData?.forEach(forma => {
-        valoresIniciais[forma.forma_pagamento_opcao_id] = '0,00';
+        valoresParaInput[forma.forma_pagamento_opcao_id] = '0,00';
       });
-      setValoresCaixa(valoresIniciais);
+      setValoresCaixa(valoresParaInput);
+
+      // ✅ NOVO: Armazenar valores reais calculados em estado separado
+      setValoresReaisCaixa(valoresReais);
 
     } catch (error) {
       console.error('❌ Erro inesperado ao carregar dados do caixa:', error);
@@ -13577,6 +13639,43 @@ const PDVPage: React.FC = () => {
 
       const regimeTributario = empresaData?.regime_tributario || 1; // Default: Simples Nacional
 
+      // ✅ VALIDAÇÃO CRÍTICA: Controle de Caixa
+      setEtapaProcessamento('Verificando controle de caixa...');
+      const { data: pdvConfigData } = await supabase
+        .from('pdv_config')
+        .select('controla_caixa')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      let caixaId = null;
+      if (pdvConfigData?.controla_caixa) {
+        console.log('🔒 Controle de caixa ATIVO - Validando caixa aberto...');
+
+        // Buscar caixa aberto do usuário
+        const { data: caixaAberto, error: caixaError } = await supabase
+          .from('caixa_controle')
+          .select('id, data_abertura')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('usuario_id', userData.user.id)
+          .eq('status_caixa', true)
+          .single();
+
+        if (caixaError || !caixaAberto) {
+          console.error('❌ ERRO: Controle de caixa ativo mas usuário não tem caixa aberto:', caixaError);
+          setEtapaProcessamento('ERRO: Caixa não está aberto!');
+          setStatusProcessamento('erro');
+          setErroProcessamento('O controle de caixa está ativo mas você não tem um caixa aberto. Abra o caixa antes de finalizar vendas.');
+          await new Promise(resolve => setTimeout(resolve, 4000));
+          setShowProcessandoVenda(false);
+          return;
+        }
+
+        caixaId = caixaAberto.id;
+        console.log('✅ Caixa encontrado:', caixaId);
+      } else {
+        console.log('📝 Controle de caixa DESABILITADO - Venda sem vinculação de caixa');
+      }
+
       // Gerar número da venda
       setEtapaProcessamento('Gerando número da venda...');
       const numeroVenda = await gerarNumeroVenda(usuarioData.empresa_id);
@@ -13870,6 +13969,7 @@ const PDVPage: React.FC = () => {
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
+        caixa_id: caixaId, // ✅ CRÍTICO: Vincular venda ao caixa específico quando controle ativo
         vendedores_ids: vendedoresIds.length > 0 ? vendedoresIds : null, // ✅ NOVO: Salvar lista de vendedores
         numero_venda: numeroVenda,
         data_venda: new Date().toISOString(),
@@ -30703,6 +30803,7 @@ const PDVPage: React.FC = () => {
                   setDadosCaixa(null);
                   setFormasPagamentoCaixa([]);
                   setValoresCaixa({});
+                  setValoresReaisCaixa({});
                 }}
                 style={{
                   position: 'absolute',
@@ -30817,7 +30918,7 @@ const PDVPage: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
                           <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
-                            R$ 0,00
+                            R$ {valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.formatado || '0,00'}
                           </span>
                         </div>
 
@@ -30873,6 +30974,7 @@ const PDVPage: React.FC = () => {
                   setDadosCaixa(null);
                   setFormasPagamentoCaixa([]);
                   setValoresCaixa({});
+                  setValoresReaisCaixa({});
                 }}
                 style={{
                   flex: 1,
