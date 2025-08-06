@@ -5611,7 +5611,8 @@ const PDVPage: React.FC = () => {
           devolucao_origem_codigo,
           venda_origem_troca_id,
           venda_origem_troca_numero,
-          caixa_id
+          caixa_id,
+          fiado
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .or('modelo_documento.is.null,modelo_documento.eq.65'); // ✅ Mostrar apenas vendas PDV (null) e NFC-e (65) - excluir NFe (55)
@@ -5808,7 +5809,15 @@ const PDVPage: React.FC = () => {
 
         // ✅ NOVO: Processar forma de pagamento
         let formaPagamentoInfo = null;
-        if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
+
+        // ✅ NOVO: Verificar se é venda fiado primeiro
+        if (venda.fiado) {
+          formaPagamentoInfo = {
+            tipo: 'fiado',
+            nome: 'Fiado',
+            tipo_forma: 'fiado'
+          };
+        } else if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
           const forma = formasPagamentoMap.get(venda.forma_pagamento_id);
           if (forma) {
             formaPagamentoInfo = {
