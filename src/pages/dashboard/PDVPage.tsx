@@ -11745,29 +11745,19 @@ const PDVPage: React.FC = () => {
   // Função para gerar número sequencial da venda
   const gerarNumeroVenda = async (empresaId: string): Promise<string> => {
     try {
-      const { data, error } = await supabase
-        .from('pdv')
-        .select('numero_venda')
-        .eq('empresa_id', empresaId)
-        .not('numero_venda', 'is', null)
-        .order('numero_venda', { ascending: false })
-        .limit(1);
+      console.log('🔢 Gerando número da venda para empresa:', empresaId);
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('❌ Erro ao buscar último número de venda:', error);
-        return `PDV-${Date.now()}`;
-      }
+      // ✅ REVERTIDO: Usar timestamp como antes - garante unicidade e simplicidade
+      const numeroVenda = `PDV-${Date.now()}`;
 
-      let proximoNumero = 1;
-      if (data && data.length > 0 && data[0].numero_venda) {
-        const ultimoNumero = data[0].numero_venda.replace('PDV-', '');
-        proximoNumero = parseInt(ultimoNumero) + 1;
-      }
+      console.log('✅ Número da venda gerado:', numeroVenda);
+      return numeroVenda;
 
-      return `PDV-${proximoNumero.toString().padStart(6, '0')}`;
     } catch (error) {
       console.error('❌ Erro ao gerar número de venda:', error);
-      return `PDV-${Date.now()}`;
+      const fallbackNumero = `PDV-${Date.now()}`;
+      console.log('🔄 Usando número de fallback:', fallbackNumero);
+      return fallbackNumero;
     }
   };
 
