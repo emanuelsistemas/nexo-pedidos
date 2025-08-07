@@ -1534,15 +1534,13 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função para verificar status do caixa
   const verificarStatusCaixa = async () => {
     try {
-      console.log('🔍 Verificando status do caixa...');
-      console.log('📋 pdvConfig:', pdvConfig);
-      console.log('🔧 controla_caixa:', pdvConfig?.controla_caixa);
+
 
       setLoadingCaixa(true);
 
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
-        console.log('❌ Usuário não autenticado');
+
         return;
       }
 
@@ -1553,15 +1551,11 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) {
-        console.log('❌ Empresa não encontrada');
+
         return;
       }
 
-      console.log('🏢 Empresa ID:', usuarioData.empresa_id);
-      console.log('👤 Usuário ID:', authData.user.id);
-
       // Verificar se há caixa aberto para este usuário (qualquer data)
-      console.log('📅 Buscando caixa aberto (qualquer data)');
 
       const { data: caixaData, error } = await supabase
         .from('caixa_controle')
@@ -1574,8 +1568,7 @@ const PDVPage: React.FC = () => {
         .limit(1)
         .single();
 
-      console.log('💰 Dados do caixa encontrados:', caixaData);
-      console.log('❌ Erro na consulta:', error);
+
 
       if (error && error.code !== 'PGRST116') {
         console.error('Erro ao verificar status do caixa:', error);
@@ -1584,17 +1577,14 @@ const PDVPage: React.FC = () => {
 
       // Se encontrou caixa aberto, definir como aberto
       if (caixaData) {
-        console.log('✅ Caixa encontrado - definindo como aberto');
+
         setCaixaAberto(true);
       } else {
-        console.log('❌ Nenhum caixa aberto encontrado');
         // Se não encontrou caixa aberto e controle de caixa está habilitado, mostrar modal
         if (pdvConfig?.controla_caixa === true) {
-          console.log('🔒 Controle de caixa habilitado - bloqueando PDV');
           setCaixaAberto(false);
           setShowAberturaCaixaModal(true);
         } else {
-          console.log('🔓 Controle de caixa desabilitado - permitindo operação');
           setCaixaAberto(true); // Se não controla caixa, permitir operação
         }
       }
@@ -3982,21 +3972,18 @@ const PDVPage: React.FC = () => {
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
-  // ✅ NOVO: Monitor do buffer para debug
-  useEffect(() => {
-    console.log('🔄 Buffer de código de barras mudou:', codigoBarrasBuffer);
-  }, [codigoBarrasBuffer]);
+
 
   // Listener global para captura de código de barras, F1-F9 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      console.log('🎹 Tecla pressionada:', event.key, 'Código:', event.code);
+
 
       // ✅ CORRIGIDO: Capturar apenas teclas F reais (F1, F2, etc.) para atalhos do menu PDV
       if (event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3) {
         const fNumber = parseInt(event.key.substring(1));
         if (!isNaN(fNumber) && fNumber >= 0 && fNumber <= 9) {
-          console.log('🔧 Atalho F detectado:', fNumber);
+
           event.preventDefault();
           let menuIndex;
           if (fNumber === 0) {
@@ -4022,10 +4009,8 @@ const PDVPage: React.FC = () => {
 
       // Só funciona se a configuração estiver habilitada
       if (!pdvConfig?.venda_codigo_barras) {
-        console.log('⚠️ Captura de código de barras desabilitada na configuração');
         return;
       }
-      console.log('✅ Captura de código de barras habilitada');
 
       // Ignorar se estiver digitando em um input, textarea ou elemento editável
       const target = event.target as HTMLElement;
@@ -4039,11 +4024,9 @@ const PDVPage: React.FC = () => {
       }
 
       // Só capturar números
-      console.log('🔍 Testando se é número:', event.key, '| Teste regex:', /^\d$/.test(event.key));
       if (!/^\d$/.test(event.key)) {
         // Se pressionar Enter e tiver código no buffer, processar
         if (event.key === 'Enter' && codigoBarrasBuffer.length > 0) {
-          console.log('🚀 Enter pressionado com buffer:', codigoBarrasBuffer);
           processarCodigoBarras(codigoBarrasBuffer);
           setCodigoBarrasBuffer('');
           if (timeoutId) {
@@ -4051,24 +4034,17 @@ const PDVPage: React.FC = () => {
             setTimeoutId(null);
           }
         } else if (event.key === 'Enter') {
-          console.log('⚠️ Enter pressionado mas buffer vazio. Buffer atual:', codigoBarrasBuffer);
           // ✅ NOVO: Teste direto da função para debug
-          console.log('🧪 Testando função diretamente com código "49"');
           processarCodigoBarras('49');
         } else if (event.key === 'F12') {
           // ✅ NOVO: Teste com F12 para debug
-          console.log('🧪 F12 pressionado - testando busca de produto oculto');
           processarCodigoBarras('49');
         }
-        console.log('🔍 Tecla não numérica ignorada:', event.key);
         return;
       }
 
       // Adicionar número ao buffer
       const novoBuffer = codigoBarrasBuffer + event.key;
-      console.log('📝 Adicionando dígito:', event.key, '→ Buffer anterior:', codigoBarrasBuffer, '→ Novo buffer:', novoBuffer);
-      console.log('🔍 Estado React do buffer antes:', codigoBarrasBuffer);
-      console.log('🔍 Novo valor calculado:', novoBuffer);
       setCodigoBarrasBuffer(novoBuffer);
 
       // Limpar timeout anterior
@@ -4101,11 +4077,8 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Função para buscar produto incluindo ocultos (para validação)
   const buscarProdutoComOcultos = async (codigo: string): Promise<Produto | null> => {
-    console.log('🔍 Buscando produto com código:', codigo);
-
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
-      console.log('❌ Usuário não autenticado');
       return null;
     }
 
@@ -4116,11 +4089,8 @@ const PDVPage: React.FC = () => {
       .single();
 
     if (!usuarioData?.empresa_id) {
-      console.log('❌ Empresa não encontrada para o usuário');
       return null;
     }
-
-    console.log('🏢 Empresa ID:', usuarioData.empresa_id);
 
     const { data, error } = await supabase
       .from('produtos')
@@ -4178,59 +4148,39 @@ const PDVPage: React.FC = () => {
       .limit(1);
 
     if (error) {
-      console.log('❌ Erro na consulta:', error);
       return null;
     }
 
     if (!data || data.length === 0) {
-      console.log('❌ Nenhum produto encontrado com código:', codigo);
       return null;
     }
 
     const produto = data[0] as Produto;
-    console.log('✅ Produto encontrado:', {
-      id: produto.id,
-      nome: produto.nome,
-      codigo: produto.codigo,
-      materia_prima: produto.materia_prima,
-      ocultar_visualizacao_pdv: produto.ocultar_visualizacao_pdv
-    });
-
     return produto;
   };
 
   // Função para processar código de barras capturado
   const processarCodigoBarras = async (codigo: string) => {
-    console.log('🚀 Processando código de barras:', codigo);
-
     // Primeiro, buscar produto incluindo ocultos para validação
     const produtoCompleto = await buscarProdutoComOcultos(codigo);
 
     if (produtoCompleto) {
-      console.log('📦 Produto encontrado na busca completa');
-
       // ✅ NOVO: Verificar se produto está oculto no PDV
       if (produtoCompleto.ocultar_visualizacao_pdv) {
-        console.log('🚫 Produto está oculto no PDV - mostrando modal específico');
         setProdutoOcultoPDV(produtoCompleto);
         setShowProdutoOcultoPDV(true);
         return;
       }
 
-      console.log('✅ Produto não está oculto - buscando na lista normal');
       // Se não está oculto, buscar na lista normal (que já exclui ocultos) - BUSCA EXATA
       const produto = produtos.find(p =>
         (p.codigo_barras && p.codigo_barras === codigo) ||
         (p.codigo && p.codigo === codigo)
       );
       if (produto) {
-        console.log('✅ Produto encontrado na lista normal - adicionando ao carrinho');
         adicionarAoCarrinho(produto);
-      } else {
-        console.log('❌ Produto não encontrado na lista normal (pode estar oculto)');
       }
     } else {
-      console.log('❌ Produto não encontrado - mostrando modal não encontrado');
       // Produto realmente não encontrado
       mostrarProdutoNaoEncontrado(codigo);
     }
@@ -19458,7 +19408,6 @@ const PDVPage: React.FC = () => {
         }
 
         // ✅ NOVO: Verificar se é produto oculto antes de mostrar "não encontrado"
-        console.log('🔍 Produto não encontrado no campo de busca, verificando se está oculto:', termoBusca);
         processarCodigoBarras(termoBusca);
 
         // Manter o foco

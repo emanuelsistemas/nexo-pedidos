@@ -5061,9 +5061,8 @@ const ConfiguracoesPage: React.FC = () => {
     setVendaSemProdutoCfopDropdownOpen(false);
     setVendaSemProdutoCfopSearchTerm('');
 
-    // ✅ REMOVIDO: Não atualizar automaticamente situação tributária
-    // Deixar o usuário configurar manualmente os campos CST/CSOSN
-    // atualizarSituacaoTributariaVendaSemProduto(cfop.codigo);
+    // ✅ REATIVADO: Atualizar situação tributária automaticamente baseada no CFOP
+    atualizarSituacaoTributariaVendaSemProduto(cfop.codigo);
   };
 
   // Função para detectar se a empresa é Simples Nacional
@@ -5073,22 +5072,12 @@ const ConfiguracoesPage: React.FC = () => {
 
   // Função para atualizar situação tributária baseada no CFOP
   const atualizarSituacaoTributariaVendaSemProduto = (cfop: string) => {
-    const isSimples = isEmpresaSimplesNacional();
-
     if (cfop === '5405' || cfop === '5401') {
       // CFOPs de Substituição Tributária
-      if (isSimples) {
-        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'st'); // CSOSN 500
-      } else {
-        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'st'); // CST 60
-      }
+      handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'st'); // ST (CSOSN 500 ou CST 60)
     } else if (cfop === '5102' || cfop === '5101') {
       // CFOPs normais
-      if (isSimples) {
-        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'tributado_integral'); // CSOSN 102
-      } else {
-        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'tributado_integral'); // CST 00
-      }
+      handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'tributado_integral'); // Tributado integral (CSOSN 102 ou CST 00)
     } else {
       // Outros CFOPs - manter tributado integral como padrão
       handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'tributado_integral');
@@ -5168,10 +5157,45 @@ const ConfiguracoesPage: React.FC = () => {
 
     // Se for um campo fiscal, atualizar apenas o estado local
     if (camposFiscais.includes(field)) {
-      setConfigFiscalLocal(prev => ({
-        ...prev,
-        [field]: value
-      }));
+      // ✅ NOVO: Se for mudança na situação tributária, preencher automaticamente CST/CSOSN
+      if (field === 'venda_sem_produto_situacao_tributaria') {
+        const isSimples = isEmpresaSimplesNacional();
+        const opcoes = getOpcoesSituacaoTributariaVendaSemProduto();
+        const opcaoSelecionada = opcoes.find(opcao => opcao.value === value);
+
+        if (opcaoSelecionada) {
+          if (isSimples) {
+            // Para Simples Nacional - preencher CSOSN automaticamente
+            setConfigFiscalLocal(prev => ({
+              ...prev,
+              [field]: value,
+              venda_sem_produto_csosn: opcaoSelecionada.codigo,
+              venda_sem_produto_cst: '' // Limpar CST
+            }));
+          } else {
+            // Para Regime Normal - preencher CST automaticamente
+            setConfigFiscalLocal(prev => ({
+              ...prev,
+              [field]: value,
+              venda_sem_produto_cst: opcaoSelecionada.codigo,
+              venda_sem_produto_csosn: '' // Limpar CSOSN
+            }));
+          }
+        } else {
+          // Fallback se não encontrar a opção
+          setConfigFiscalLocal(prev => ({
+            ...prev,
+            [field]: value
+          }));
+        }
+      } else {
+        // Para outros campos, comportamento normal
+        setConfigFiscalLocal(prev => ({
+          ...prev,
+          [field]: value
+        }));
+      }
+
       setConfigFiscalAlterada(true);
 
       // Validar campos ST em tempo real se for alteração relevante
@@ -7201,48 +7225,11 @@ const ConfiguracoesPage: React.FC = () => {
                             </p>
                           </div>
 
-                          {/* CST/CSOSN Diretos */}
-                          {isEmpresaSimplesNacional() ? (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                CSOSN (Código de Situação da Operação - Simples Nacional) <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                value={configFiscalLocal.venda_sem_produto_csosn || ''}
-                                onChange={(e) => {
-                                  const valor = e.target.value.replace(/\D/g, '').slice(0, 3);
-                                  handlePdvConfigChangeFiscal('venda_sem_produto_csosn', valor);
-                                }}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                placeholder="Ex: 102, 500"
-                                maxLength={3}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">
-                                Código CSOSN específico para venda sem produto. Ex: 102 (Tributada sem permissão), 500 (ICMS cobrado por ST).
-                              </p>
-                            </div>
-                          ) : (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                CST (Código de Situação Tributária - Regime Normal) <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                value={configFiscalLocal.venda_sem_produto_cst || ''}
-                                onChange={(e) => {
-                                  const valor = e.target.value.replace(/\D/g, '').slice(0, 2);
-                                  handlePdvConfigChangeFiscal('venda_sem_produto_cst', valor);
-                                }}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                placeholder="Ex: 00, 60"
-                                maxLength={2}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">
-                                Código CST específico para venda sem produto. Ex: 00 (Tributada integralmente), 60 (ICMS cobrado por ST).
-                              </p>
-                            </div>
-                          )}
+                          {/* ✅ CAMPOS CST/CSOSN OCULTOS - Preenchidos automaticamente pela Situação Tributária */}
+                          {/*
+                          Campos CST/CSOSN agora são preenchidos automaticamente baseados na Situação Tributária selecionada.
+                          Não há necessidade de exibir estes campos para o usuário.
+                          */}
 
                           {/* CEST - Só aparece para ST */}
                           {deveMostrarCamposST() && (
