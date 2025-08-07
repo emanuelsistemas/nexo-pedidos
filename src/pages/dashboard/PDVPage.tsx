@@ -20149,6 +20149,34 @@ const PDVPage: React.FC = () => {
                               </div>
                             )}
 
+                            {/* Seção de Insumos - Similar aos Adicionais */}
+                            {item.produto.insumos && Array.isArray(item.produto.insumos) && item.produto.insumos.length > 0 && (
+                              <div className={`${item.adicionais && item.adicionais.length > 0 ? 'mt-3' : 'mt-3 pt-3 border-t border-gray-700/50'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-500/10 border border-orange-500/30 rounded-full text-sm text-orange-300 font-medium">
+                                    <span>Insumos</span>
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  {item.produto.insumos.map((insumo, index) => (
+                                    <div key={index} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-2">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <span className="text-gray-300 text-sm font-medium">
+                                          {insumo.nome}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        {/* Quantidade do insumo (somente leitura) */}
+                                        <span className="text-orange-300 text-sm font-medium min-w-[4rem] text-right">
+                                          {(insumo.quantidade * item.quantidade).toFixed(2)} {insumo.unidade_medida || 'UN'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Seção de Observação - Aparece por último */}
                             {item.observacao && (
                               <div className={`${item.adicionais && item.adicionais.length > 0 ? 'mt-3' : 'mt-3 pt-3 border-t border-gray-700/50'}`}>
