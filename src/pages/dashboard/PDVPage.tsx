@@ -10200,7 +10200,6 @@ const PDVPage: React.FC = () => {
 
         // ✅ CORREÇÃO: Só salvar se não é venda recuperada (para evitar duplicação)
         if (!isEditingVenda) {
-          console.log('🔍 DEBUG: Chamando salvarItemNaVendaEmAndamento para:', produto.nome);
           const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
 
           if (!itemSalvo) {
@@ -13895,7 +13894,7 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para criar venda em andamento no primeiro item (adaptada do sistema de rascunhos NFe)
   const criarVendaEmAndamento = async (): Promise<boolean> => {
-    console.log('🔍 DEBUG criarVendaEmAndamento INICIADO');
+
 
     try {
       // Obter dados do usuário
