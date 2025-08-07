@@ -14,10 +14,20 @@ interface InsumoSelecionado {
   quantidade: number;
 }
 
+interface Insumo {
+  produto_id: string;
+  nome: string;
+  quantidade: number;
+  unidade_medida: string;
+  quantidade_minima?: number;
+  quantidade_maxima?: number;
+}
+
 interface EdicaoInsumosModalProps {
   isOpen: boolean;
   onClose: () => void;
   insumosSelecionados: InsumoSelecionado[];
+  insumosDisponiveis: Insumo[]; // ✅ NOVO: Todos os insumos disponíveis do produto
   controlarQuantidades: boolean;
   onConfirm: (insumos: InsumoSelecionado[]) => void;
 }
@@ -26,6 +36,7 @@ const EdicaoInsumosModal: React.FC<EdicaoInsumosModalProps> = ({
   isOpen,
   onClose,
   insumosSelecionados,
+  insumosDisponiveis,
   controlarQuantidades,
   onConfirm
 }) => {
@@ -157,6 +168,22 @@ const EdicaoInsumosModal: React.FC<EdicaoInsumosModalProps> = ({
     setQuantidadeTemp('');
   };
 
+  // ✅ Verificar se insumo está selecionado
+  const getInsumoSelecionado = (insumoId: string): InsumoSelecionado | null => {
+    return insumosEditados.find(i => i.insumo.produto_id === insumoId) || null;
+  };
+
+  // ✅ Adicionar novo insumo
+  const adicionarNovoInsumo = (insumo: Insumo) => {
+    const incremento = getIncremento(insumo.unidade_medida);
+    const novoInsumoSelecionado: InsumoSelecionado = {
+      insumo,
+      quantidade: insumo.quantidade + incremento
+    };
+
+    setInsumosEditados(prev => [...prev, novoInsumoSelecionado]);
+  };
+
   // ✅ Remover insumo
   const handleRemoverInsumo = (insumoId: string) => {
     setInsumosEditados(prev => prev.filter(i => i.insumo.produto_id !== insumoId));
@@ -186,89 +213,114 @@ const EdicaoInsumosModal: React.FC<EdicaoInsumosModalProps> = ({
 
         {/* Content */}
         <div className="p-4 max-h-[60vh] overflow-y-auto">
-          {insumosEditados.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">Nenhum insumo selecionado</p>
+          {insumosDisponiveis.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">Nenhum insumo disponível</p>
           ) : (
             <div className="space-y-3">
-              {insumosEditados.map((insumoSelecionado) => (
-                <div key={insumoSelecionado.insumo.produto_id} className="bg-gray-700/50 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-white font-medium">{insumoSelecionado.insumo.nome}</p>
-                      <p className="text-sm text-gray-400">
-                        Padrão: {formatarQuantidadeDisplay(insumoSelecionado.insumo.quantidade, insumoSelecionado.insumo.unidade_medida)}
-                      </p>
-                    </div>
+              {insumosDisponiveis.map((insumo) => {
+                const insumoSelecionado = getInsumoSelecionado(insumo.produto_id);
+                const estaSelecionado = !!insumoSelecionado;
 
-                    <div className="flex items-center gap-2">
-                      {/* Botão de remover */}
-                      <button
-                        onClick={() => handleRemoverInsumo(insumoSelecionado.insumo.produto_id)}
-                        className="w-6 h-6 rounded-full bg-red-600 text-white hover:bg-red-700 flex items-center justify-center transition-colors"
-                        title="Remover insumo"
-                      >
-                        <X size={12} />
-                      </button>
+                return (
+                  <div key={insumo.produto_id} className={`rounded-lg p-3 ${estaSelecionado ? 'bg-gray-700/50 border border-orange-500/30' : 'bg-gray-800/30'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-white font-medium">{insumo.nome}</p>
+                        <p className="text-sm text-gray-400">
+                          Padrão: {formatarQuantidadeDisplay(insumo.quantidade, insumo.unidade_medida)}
+                          {controlarQuantidades && (insumo.quantidade_minima || insumo.quantidade_maxima) && (
+                            <span className="ml-2">
+                              ({insumo.quantidade_minima && `mín: ${formatarQuantidadeDisplay(insumo.quantidade_minima, insumo.unidade_medida)}`}
+                              {insumo.quantidade_minima && insumo.quantidade_maxima && ', '}
+                              {insumo.quantidade_maxima && `máx: ${formatarQuantidadeDisplay(insumo.quantidade_maxima, insumo.unidade_medida)}`})
+                            </span>
+                          )}
+                        </p>
+                      </div>
 
-                      {/* Controles de quantidade */}
-                      <button
-                        onClick={() => decrementarQuantidade(insumoSelecionado.insumo.produto_id)}
-                        disabled={!podeDecrementar(insumoSelecionado)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                          !podeDecrementar(insumoSelecionado)
-                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                            : 'bg-red-600 text-white hover:bg-red-700'
-                        }`}
-                      >
-                        <Minus size={16} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {estaSelecionado ? (
+                          <>
+                            {/* Botão de remover */}
+                            <button
+                              onClick={() => handleRemoverInsumo(insumo.produto_id)}
+                              className="w-6 h-6 rounded-full bg-red-600 text-white hover:bg-red-700 flex items-center justify-center transition-colors"
+                              title="Remover insumo"
+                            >
+                              <X size={12} />
+                            </button>
 
-                      {/* Campo de quantidade editável */}
-                      {editandoQuantidade === insumoSelecionado.insumo.produto_id ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            value={quantidadeTemp}
-                            onChange={(e) => setQuantidadeTemp(e.target.value)}
-                            onBlur={() => confirmarEdicaoQuantidade(insumoSelecionado.insumo.produto_id)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                confirmarEdicaoQuantidade(insumoSelecionado.insumo.produto_id);
-                              } else if (e.key === 'Escape') {
-                                cancelarEdicaoQuantidade();
-                              }
-                            }}
-                            className="w-16 px-2 py-1 text-center text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary-500"
-                            step={getIncremento(insumoSelecionado.insumo.unidade_medida)}
-                            min="0"
-                            autoFocus
-                          />
-                          <span className="text-xs text-gray-400">{insumoSelecionado.insumo.unidade_medida}</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => iniciarEdicaoQuantidade(insumoSelecionado.insumo.produto_id)}
-                          className="text-white font-medium w-20 text-center text-sm hover:bg-gray-700 rounded px-2 py-1 transition-colors"
-                        >
-                          {formatarQuantidadeDisplay(insumoSelecionado.quantidade, insumoSelecionado.insumo.unidade_medida)}
-                        </button>
-                      )}
+                            {/* Controles de quantidade */}
+                            <button
+                              onClick={() => decrementarQuantidade(insumo.produto_id)}
+                              disabled={!podeDecrementar(insumoSelecionado!)}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                !podeDecrementar(insumoSelecionado!)
+                                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : 'bg-red-600 text-white hover:bg-red-700'
+                              }`}
+                            >
+                              <Minus size={16} />
+                            </button>
 
-                      <button
-                        onClick={() => incrementarQuantidade(insumoSelecionado.insumo.produto_id)}
-                        disabled={!podeIncrementar(insumoSelecionado)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                          !podeIncrementar(insumoSelecionado)
-                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                            : 'bg-primary-600 text-white hover:bg-primary-700'
-                        }`}
-                      >
-                        <Plus size={16} />
-                      </button>
+                            {/* Campo de quantidade editável */}
+                            {editandoQuantidade === insumo.produto_id ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={quantidadeTemp}
+                                  onChange={(e) => setQuantidadeTemp(e.target.value)}
+                                  onBlur={() => confirmarEdicaoQuantidade(insumo.produto_id)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      confirmarEdicaoQuantidade(insumo.produto_id);
+                                    } else if (e.key === 'Escape') {
+                                      cancelarEdicaoQuantidade();
+                                    }
+                                  }}
+                                  className="w-16 px-2 py-1 text-center text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary-500"
+                                  step={getIncremento(insumo.unidade_medida)}
+                                  min="0"
+                                  autoFocus
+                                />
+                                <span className="text-xs text-gray-400">{insumo.unidade_medida}</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => iniciarEdicaoQuantidade(insumo.produto_id)}
+                                className="text-white font-medium w-20 text-center text-sm hover:bg-gray-700 rounded px-2 py-1 transition-colors"
+                              >
+                                {formatarQuantidadeDisplay(insumoSelecionado!.quantidade, insumo.unidade_medida)}
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => incrementarQuantidade(insumo.produto_id)}
+                              disabled={!podeIncrementar(insumoSelecionado!)}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                !podeIncrementar(insumoSelecionado!)
+                                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : 'bg-primary-600 text-white hover:bg-primary-700'
+                              }`}
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          /* Botão para adicionar insumo não selecionado */
+                          <button
+                            onClick={() => adicionarNovoInsumo(insumo)}
+                            className="w-8 h-8 rounded-full bg-primary-600 text-white hover:bg-primary-700 flex items-center justify-center transition-colors"
+                            title="Adicionar insumo"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

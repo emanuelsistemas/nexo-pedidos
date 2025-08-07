@@ -20370,6 +20370,17 @@ const PDVPage: React.FC = () => {
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-2">
+                                        {/* ✅ NOVO: Botão de lápis para editar insumo individual */}
+                                        <button
+                                          onClick={() => abrirEdicaoInsumos(item)}
+                                          className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors"
+                                          title="Editar quantidade"
+                                        >
+                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                            <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                          </svg>
+                                        </button>
                                         {/* ✅ NOVO: Botão X para excluir insumo individual */}
                                         <button
                                           onClick={() => removerInsumoIndividual(item.id, insumoSelecionado.insumo.produto_id)}
@@ -28732,6 +28743,7 @@ const PDVPage: React.FC = () => {
             setItemParaEdicaoInsumos(null);
           }}
           insumosSelecionados={itemParaEdicaoInsumos.insumosSelecionados || []}
+          insumosDisponiveis={itemParaEdicaoInsumos.produto.insumos || []}
           controlarQuantidades={itemParaEdicaoInsumos.produto.controlar_quantidades_insumo || false}
           onConfirm={confirmarEdicaoInsumos}
         />
