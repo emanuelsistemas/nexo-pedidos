@@ -515,8 +515,18 @@ const PDVPage: React.FC = () => {
   const [textoConfirmacao, setTextoConfirmacao] = useState('');
   const [diferencaTotalCaixa, setDiferencaTotalCaixa] = useState(0);
 
-  // ✅ NOVO: Estado para loading do botão caixa
+  // ✅ NOVO: Estados para loading dos botões do menu PDV
   const [loadingBotaoCaixa, setLoadingBotaoCaixa] = useState(false);
+  const [loadingBotaoVendasAbertas, setLoadingBotaoVendasAbertas] = useState(false);
+  const [loadingBotaoProdutos, setLoadingBotaoProdutos] = useState(false);
+  const [loadingBotaoPedidos, setLoadingBotaoPedidos] = useState(false);
+  const [loadingBotaoMesas, setLoadingBotaoMesas] = useState(false);
+  const [loadingBotaoComandas, setLoadingBotaoComandas] = useState(false);
+  const [loadingBotaoDelivery, setLoadingBotaoDelivery] = useState(false);
+  const [loadingBotaoSangria, setLoadingBotaoSangria] = useState(false);
+  const [loadingBotaoSuprimento, setLoadingBotaoSuprimento] = useState(false);
+  const [loadingBotaoMovimentos, setLoadingBotaoMovimentos] = useState(false);
+  const [loadingBotaoDevolucoes, setLoadingBotaoDevolucoes] = useState(false);
 
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
@@ -3017,8 +3027,22 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-        await carregarVendasAbertas();
-        setShowVendasAbertasModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoVendasAbertas) {
+          return;
+        }
+
+        try {
+          setLoadingBotaoVendasAbertas(true);
+          await carregarVendasAbertas();
+          setShowVendasAbertasModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar vendas abertas:', error);
+          toast.error('Erro ao carregar vendas abertas');
+        } finally {
+          setLoadingBotaoVendasAbertas(false);
+        }
       }
     },
     {
@@ -3061,12 +3085,25 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoProdutos) {
+          return;
+        }
+
         if (showAreaProdutos) {
           // Se já está aberto, apenas fechar
           setShowAreaProdutos(false);
         } else {
           // Se está fechado, ativar fullscreen e abrir
-          await abrirModalProdutos();
+          try {
+            setLoadingBotaoProdutos(true);
+            await abrirModalProdutos();
+          } catch (error) {
+            console.error('❌ Erro ao abrir modal de produtos:', error);
+            toast.error('Erro ao abrir produtos');
+          } finally {
+            setLoadingBotaoProdutos(false);
+          }
         }
       }
     },
@@ -3082,23 +3119,33 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoPedidos) {
+          return;
+        }
+
         try {
+          setLoadingBotaoPedidos(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
+
+          // Abrir modal IMEDIATAMENTE sem loading
+          setShowPedidosModal(true);
+          setSearchPedidos('');
+
+          // ✅ SEMPRE CARREGAR PEDIDOS QUANDO MODAL ABRIR (para garantir dados atualizados)
+          setTimeout(() => {
+            loadPedidos();
+          }, 100);
         } catch (error) {
-          // Erro silencioso ao ativar fullscreen
+          console.error('❌ Erro ao abrir modal de pedidos:', error);
+          toast.error('Erro ao abrir pedidos');
+        } finally {
+          setLoadingBotaoPedidos(false);
         }
-
-        // Abrir modal IMEDIATAMENTE sem loading
-        setShowPedidosModal(true);
-        setSearchPedidos('');
-
-        // ✅ SEMPRE CARREGAR PEDIDOS QUANDO MODAL ABRIR (para garantir dados atualizados)
-        setTimeout(() => {
-          loadPedidos();
-        }, 100);
       }
     },
     {
@@ -3139,8 +3186,22 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-        await carregarVendasMesas();
-        setShowMesasModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoMesas) {
+          return;
+        }
+
+        try {
+          setLoadingBotaoMesas(true);
+          await carregarVendasMesas();
+          setShowMesasModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar vendas de mesas:', error);
+          toast.error('Erro ao carregar mesas');
+        } finally {
+          setLoadingBotaoMesas(false);
+        }
       }
     },
     {
@@ -3154,8 +3215,22 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-        await carregarVendasComandas();
-        setShowComandasModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoComandas) {
+          return;
+        }
+
+        try {
+          setLoadingBotaoComandas(true);
+          await carregarVendasComandas();
+          setShowComandasModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar vendas de comandas:', error);
+          toast.error('Erro ao carregar comandas');
+        } finally {
+          setLoadingBotaoComandas(false);
+        }
       }
     },
     {
@@ -3169,7 +3244,14 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoDelivery) {
+          return;
+        }
+
         try {
+          setLoadingBotaoDelivery(true);
           console.log('🚚 [BOTÃO] Clicado no botão Delivery Local');
           await carregarVendasDelivery();
           console.log('✅ [BOTÃO] Vendas carregadas, abrindo modal...');
@@ -3178,6 +3260,8 @@ const PDVPage: React.FC = () => {
         } catch (error) {
           console.error('❌ [BOTÃO] Erro ao abrir modal de delivery:', error);
           toast.error('Erro ao carregar deliveries. Tente novamente.');
+        } finally {
+          setLoadingBotaoDelivery(false);
         }
       }
     },
@@ -3191,9 +3275,23 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
-        await carregarDadosCaixa();
-        setShowSangriaModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoSangria) {
+          return;
+        }
+
+        try {
+          setLoadingBotaoSangria(true);
+          // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+          await carregarDadosCaixa();
+          setShowSangriaModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar dados para sangria:', error);
+          toast.error('Erro ao carregar dados do caixa');
+        } finally {
+          setLoadingBotaoSangria(false);
+        }
       }
     },
     {
@@ -3206,9 +3304,23 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
-        await carregarDadosCaixa();
-        setShowSuprimentoModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoSuprimento) {
+          return;
+        }
+
+        try {
+          setLoadingBotaoSuprimento(true);
+          // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+          await carregarDadosCaixa();
+          setShowSuprimentoModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar dados para suprimento:', error);
+          toast.error('Erro ao carregar dados do caixa');
+        } finally {
+          setLoadingBotaoSuprimento(false);
+        }
       }
     },
     {
@@ -3274,20 +3386,30 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoMovimentos) {
+          return;
+        }
+
         try {
+          setLoadingBotaoMovimentos(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
-        } catch (error) {
-          // Erro silencioso ao ativar fullscreen
-        }
 
-        setShowMovimentosModal(true);
-        // Carregar vendas apenas uma vez quando abrir o modal
-        loadVendas();
-        // Atualizar contador de NFC-e pendentes
-        loadContadorNfcePendentes();
+          setShowMovimentosModal(true);
+          // Carregar vendas apenas uma vez quando abrir o modal
+          loadVendas();
+          // Atualizar contador de NFC-e pendentes
+          loadContadorNfcePendentes();
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de movimentos:', error);
+          toast.error('Erro ao abrir movimentos');
+        } finally {
+          setLoadingBotaoMovimentos(false);
+        }
       }
     },
     {
@@ -3301,18 +3423,28 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoDevolucoes) {
+          return;
+        }
+
         try {
+          setLoadingBotaoDevolucoes(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
-        } catch (error) {
-          // Erro silencioso ao ativar fullscreen
-        }
 
-        setShowDevolucoesModal(true);
-        // Carregar devoluções pendentes quando abrir o modal
-        loadDevolucoesPendentes();
+          setShowDevolucoesModal(true);
+          // Carregar devoluções pendentes quando abrir o modal
+          loadDevolucoesPendentes();
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de devoluções:', error);
+          toast.error('Erro ao abrir devoluções');
+        } finally {
+          setLoadingBotaoDevolucoes(false);
+        }
       }
     },
     // ✅ NOVO: Botão Caixa - só aparece quando caixa está aberto
@@ -3361,6 +3493,24 @@ const PDVPage: React.FC = () => {
       }
     }
   ];
+
+  // ✅ NOVO: Função para obter estado de loading de cada botão
+  const getBotaoLoadingState = (itemId: string) => {
+    switch (itemId) {
+      case 'caixa': return loadingBotaoCaixa;
+      case 'vendas-abertas': return loadingBotaoVendasAbertas;
+      case 'produtos': return loadingBotaoProdutos;
+      case 'pedidos': return loadingBotaoPedidos;
+      case 'mesas': return loadingBotaoMesas;
+      case 'comandas': return loadingBotaoComandas;
+      case 'delivery-local': return loadingBotaoDelivery;
+      case 'sangria': return loadingBotaoSangria;
+      case 'suprimento': return loadingBotaoSuprimento;
+      case 'movimentos': return loadingBotaoMovimentos;
+      case 'devolucoes': return loadingBotaoDevolucoes;
+      default: return false;
+    }
+  };
 
   // Função para filtrar itens do menu baseado nas configurações do PDV
   const getFilteredMenuItems = () => {
@@ -20902,13 +21052,13 @@ const PDVPage: React.FC = () => {
                         <button
                           key={item.id}
                           onClick={(e) => item.onClick(e)}
-                          disabled={item.id === 'caixa' && loadingBotaoCaixa}
+                          disabled={getBotaoLoadingState(item.id)}
                           className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative ${
                             item.id === 'cardapio-digital' && contadorCardapio > 0
                               ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
                               : ''
                           } ${
-                            item.id === 'caixa' && loadingBotaoCaixa
+                            getBotaoLoadingState(item.id)
                               ? 'opacity-75 cursor-not-allowed bg-gray-500/10'
                               : ''
                           }`}
@@ -20916,8 +21066,8 @@ const PDVPage: React.FC = () => {
                         >
                           {/* Wrapper do ícone com contador - Compacto */}
                           <div className="relative">
-                            {/* ✅ NOVO: Mostrar loading no botão caixa */}
-                            {item.id === 'caixa' && loadingBotaoCaixa ? (
+                            {/* ✅ NOVO: Mostrar loading em todos os botões que fazem operações assíncronas */}
+                            {getBotaoLoadingState(item.id) ? (
                               <div className="animate-spin">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="31.416" strokeDashoffset="31.416">
