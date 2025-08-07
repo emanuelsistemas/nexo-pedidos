@@ -352,6 +352,8 @@ const ProdutosPage: React.FC = () => {
     producao: false,
     // Campo para insumos
     insumos: [],
+    // Campo para selecionar insumos na venda
+    selecionar_insumos_venda: false,
   });
 
   // Estado para controlar o valor formatado do preço

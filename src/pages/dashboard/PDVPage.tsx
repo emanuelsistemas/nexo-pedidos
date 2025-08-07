@@ -32877,8 +32877,8 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* ✅ MODAL DE ABERTURA DE CAIXA */}
-      {showAberturaCaixaModal && (
+      {/* ✅ MODAL DE ABERTURA DE CAIXA DUPLICADO - DESABILITADO */}
+      {false && showAberturaCaixaModal && (
         <div
           style={{
             position: 'fixed',
