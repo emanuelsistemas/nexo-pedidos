@@ -34281,60 +34281,141 @@ const PDVPage: React.FC = () => {
                 marginBottom: '24px',
                 border: '1px solid #4b5563'
               }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: '#e5e7eb' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#e5e7eb' }}>
                   📊 Resumo do Fechamento
                 </h4>
 
-                {formasPagamentoCaixa.map(forma => {
-                  // ✅ CORREÇÃO: Usar forma.id consistentemente
-                  const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
-                  const valorFiado = valoresFiadoPorForma[forma.id] || 0;
-                  const valorTotal = valorAtual + valorFiado;
+                {/* Cabeçalho da tabela */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: '#4b5563',
+                  borderRadius: '4px',
+                  marginBottom: '8px',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#d1d5db'
+                }}>
+                  <div>Forma de Pagamento</div>
+                  <div style={{ textAlign: 'center' }}>Contabilizado</div>
+                  <div style={{ textAlign: 'center' }}>Informado</div>
+                  <div style={{ textAlign: 'center' }}>Diferença</div>
+                </div>
 
-                  // ✅ NOVO: Obter valor informado pelo usuário
-                  const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
-                  const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
-                  const diferenca = valorInformadoUsuario - valorTotal;
+                {/* Linhas das formas de pagamento */}
+                {(() => {
+                  let totalContabilizado = 0;
+                  let totalInformado = 0;
 
-                  // ✅ CORREÇÃO: Mostrar TODAS as formas de pagamento (não apenas com valor > 0)
-                  return (
-                    <div key={forma.id} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '8px',
-                      fontSize: '14px',
-                      padding: '8px',
-                      backgroundColor: valorTotal > 0 ? '#065f46' : '#374151',
-                      borderRadius: '4px',
-                      border: diferenca !== 0 ? '1px solid #f59e0b' : '1px solid transparent'
-                    }}>
-                      <div>
-                        <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                  const linhasFormas = formasPagamentoCaixa.map(forma => {
+                    // ✅ CORREÇÃO: Usar forma.id consistentemente
+                    const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
+                    const valorFiado = valoresFiadoPorForma[forma.id] || 0;
+                    const valorContabilizado = valorAtual + valorFiado;
+
+                    // ✅ NOVO: Obter valor informado pelo usuário
+                    const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
+                    const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
+                    const diferenca = valorInformadoUsuario - valorContabilizado;
+
+                    // Somar aos totais
+                    totalContabilizado += valorContabilizado;
+                    totalInformado += valorInformadoUsuario;
+
+                    return (
+                      <div key={forma.id} style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        backgroundColor: diferenca !== 0 ? '#451a03' : '#1f2937',
+                        borderRadius: '4px',
+                        marginBottom: '4px',
+                        fontSize: '13px',
+                        border: diferenca !== 0 ? '1px solid #f59e0b' : '1px solid transparent'
+                      }}>
+                        <div style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
                           {forma.forma_pagamento_opcoes?.nome || forma.nome || 'Forma não identificada'}
-                        </span>
-                        {diferenca !== 0 && (
-                          <div style={{ fontSize: '12px', color: '#f59e0b' }}>
-                            Diferença: R$ {diferenca.toFixed(2)}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ color: valorTotal > 0 ? '#10b981' : '#9ca3af', fontWeight: 'bold' }}>
-                          R$ {valorTotal.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
                         </div>
-                        {valorInformadoUsuario !== valorTotal && (
-                          <div style={{ fontSize: '12px', color: '#3b82f6' }}>
-                            Informado: R$ {valorInformadoUsuario.toFixed(2)}
-                          </div>
-                        )}
+                        <div style={{
+                          textAlign: 'center',
+                          color: valorContabilizado > 0 ? '#10b981' : '#9ca3af',
+                          fontWeight: 'bold'
+                        }}>
+                          R$ {valorContabilizado.toFixed(2)}
+                        </div>
+                        <div style={{
+                          textAlign: 'center',
+                          color: valorInformadoUsuario > 0 ? '#3b82f6' : '#9ca3af',
+                          fontWeight: 'bold'
+                        }}>
+                          R$ {valorInformadoUsuario.toFixed(2)}
+                        </div>
+                        <div style={{
+                          textAlign: 'center',
+                          color: diferenca === 0 ? '#10b981' : diferenca > 0 ? '#f59e0b' : '#ef4444',
+                          fontWeight: 'bold'
+                        }}>
+                          {diferenca === 0 ? '✓' : `R$ ${diferenca.toFixed(2)}`}
+                        </div>
                       </div>
-                    </div>
+                    );
+                  });
+
+                  // Calcular diferença total
+                  const diferencaTotal = totalInformado - totalContabilizado;
+
+                  return (
+                    <>
+                      {linhasFormas}
+
+                      {/* Linha de separação */}
+                      <div style={{
+                        height: '1px',
+                        backgroundColor: '#4b5563',
+                        margin: '12px 0'
+                      }}></div>
+
+                      {/* Linha do total */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                        gap: '8px',
+                        padding: '12px',
+                        backgroundColor: diferencaTotal === 0 ? '#065f46' : '#7f1d1d',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        border: `2px solid ${diferencaTotal === 0 ? '#10b981' : '#ef4444'}`
+                      }}>
+                        <div style={{ color: '#ffffff' }}>
+                          TOTAL GERAL
+                        </div>
+                        <div style={{ textAlign: 'center', color: '#ffffff' }}>
+                          R$ {totalContabilizado.toFixed(2)}
+                        </div>
+                        <div style={{ textAlign: 'center', color: '#ffffff' }}>
+                          R$ {totalInformado.toFixed(2)}
+                        </div>
+                        <div style={{
+                          textAlign: 'center',
+                          color: '#ffffff',
+                          fontSize: '16px'
+                        }}>
+                          {diferencaTotal === 0 ? (
+                            <span style={{ color: '#10b981' }}>✅ CAIXA BATEU</span>
+                          ) : diferencaTotal > 0 ? (
+                            <span style={{ color: '#f59e0b' }}>📈 Sobrou R$ {diferencaTotal.toFixed(2)}</span>
+                          ) : (
+                            <span style={{ color: '#ef4444' }}>📉 Faltou R$ {Math.abs(diferencaTotal).toFixed(2)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </>
                   );
-                })}
+                })()}
               </div>
             )}
 
