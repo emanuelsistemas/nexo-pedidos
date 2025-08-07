@@ -16752,6 +16752,7 @@ const PDVPage: React.FC = () => {
               vendedor_id: item.vendedor_id || null,
               vendedor_nome: item.vendedor_nome || null,
               adicionais: item.adicionais || [], // ✅ NOVO: Incluir adicionais
+              insumos_selecionados: item.insumosSelecionados || [], // ✅ NOVO: Incluir insumos selecionados
               sabores: item.sabores || null // ✅ NOVO: Incluir sabores para referência
             })),
             pagamento: pagamentoData,
@@ -16865,6 +16866,7 @@ const PDVPage: React.FC = () => {
               vendedor_id: item.vendedor_id || null,
               vendedor_nome: item.vendedor_nome || null,
               adicionais: item.adicionais || [], // ✅ NOVO: Incluir adicionais
+              insumos_selecionados: item.insumosSelecionados || [], // ✅ NOVO: Incluir insumos selecionados
               sabores: item.sabores || null // ✅ NOVO: Incluir sabores para referência
             })),
             pagamento: pagamentoData,
@@ -17354,6 +17356,41 @@ const PDVPage: React.FC = () => {
 
       console.log('📦 FRONTEND: Itens carregados:', itensData.length);
 
+      // ✅ NOVO: Buscar adicionais dos itens para reimpressão
+      const { data: adicionaisData } = await supabase
+        .from('pdv_itens_adicionais')
+        .select(`
+          id,
+          pdv_item_id,
+          nome_adicional,
+          quantidade,
+          valor_unitario,
+          valor_total
+        `)
+        .in('pdv_item_id', itensData.map(item => item.id))
+        .eq('deletado', false);
+
+      // ✅ NOVO: Buscar insumos dos itens para reimpressão (se existir tabela)
+      let insumosData = [];
+      try {
+        const { data: insumosResult } = await supabase
+          .from('pdv_itens_insumos')
+          .select(`
+            id,
+            pdv_item_id,
+            nome_insumo,
+            quantidade
+          `)
+          .in('pdv_item_id', itensData.map(item => item.id))
+          .eq('deletado', false);
+
+        if (insumosResult) {
+          insumosData = insumosResult;
+        }
+      } catch (error) {
+        console.log('ℹ️ FRONTEND: Tabela de insumos não encontrada ou sem dados');
+      }
+
       // Buscar dados do vendedor principal se existir
       let vendedorData = null;
       if (venda.usuario_id) {
@@ -17474,19 +17511,36 @@ const PDVPage: React.FC = () => {
         },
         vendedor: vendedorData, // Incluir dados do vendedor principal
         vendedores: vendedoresDataCupom, // ✅ NOVO: Incluir todos os vendedores da venda
-        itens: itensData.map(item => ({
-          codigo: item.codigo_produto || 'N/A',
-          nome: item.descricao_sabores ?
-            `${item.nome_produto}\n${item.descricao_sabores}` :
-            item.nome_produto, // ✅ NOVO: Incluir sabores salvos no banco para reimpressão
-          quantidade: item.quantidade,
-          valor_unitario: item.valor_unitario,
-          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
-          unidade: item.unidade || 'UN', // ✅ NOVO: Incluir unidade de medida para impressão
-          vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
-          vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null, // ✅ NOVO: Nome do vendedor do item
-          sabores: item.sabores_json ? JSON.parse(item.sabores_json) : null // ✅ NOVO: Incluir sabores para referência
-        })),
+        itens: itensData.map(item => {
+          // Buscar adicionais deste item
+          const adicionaisDoItem = adicionaisData?.filter(adicional => adicional.pdv_item_id === item.id) || [];
+
+          // Buscar insumos deste item
+          const insumosDoItem = insumosData?.filter(insumo => insumo.pdv_item_id === item.id) || [];
+
+          return {
+            codigo: item.codigo_produto || 'N/A',
+            nome: item.descricao_sabores ?
+              `${item.nome_produto}\n${item.descricao_sabores}` :
+              item.nome_produto, // ✅ NOVO: Incluir sabores salvos no banco para reimpressão
+            quantidade: item.quantidade,
+            valor_unitario: item.valor_unitario,
+            valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
+            unidade: item.unidade || 'UN', // ✅ NOVO: Incluir unidade de medida para impressão
+            vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
+            vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null, // ✅ NOVO: Nome do vendedor do item
+            adicionais: adicionaisDoItem.map(adicional => ({
+              nome: adicional.nome_adicional,
+              quantidade: adicional.quantidade,
+              preco: adicional.valor_unitario
+            })), // ✅ NOVO: Incluir adicionais para reimpressão
+            insumos_selecionados: insumosDoItem.map(insumo => ({
+              insumo: { nome: insumo.nome_insumo },
+              quantidade: insumo.quantidade
+            })), // ✅ NOVO: Incluir insumos para reimpressão
+            sabores: item.sabores_json ? JSON.parse(item.sabores_json) : null // ✅ NOVO: Incluir sabores para referência
+          };
+        }),
         pagamento: dadosPagamentoCupom, // ✅ NOVO: Incluir dados de pagamento
         timestamp: new Date().toISOString()
       };
@@ -17815,13 +17869,23 @@ const PDVPage: React.FC = () => {
                   `).join('');
                 }
 
+                // ✅ NOVO: Mostrar insumos identados abaixo do produto principal (mesma lógica dos adicionais)
+                let insumosHtml = '';
+                if (item.insumos_selecionados && Array.isArray(item.insumos_selecionados) && item.insumos_selecionados.length > 0) {
+                  insumosHtml = item.insumos_selecionados.map(insumoSelecionado => `
+                    <div style="margin-left: 15px; font-size: 10px; color: #666; margin-top: 1px; font-weight: bold;">
+                      • ${(insumoSelecionado.quantidade * (item.quantidade || 1)).toFixed(3).replace(/\.?0+$/, '')}x ${insumoSelecionado.insumo.nome}
+                    </div>
+                  `).join('');
+                }
+
                 // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
                 let vendedorHtml = '';
                 if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
                   vendedorHtml = `<div style="font-size: 10px; color: #000; margin-top: 2px; font-weight: 900;"><strong>Vendedor: ${item.vendedor_nome}</strong></div>`;
                 }
 
-                return adicionaisHtml + vendedorHtml;
+                return adicionaisHtml + insumosHtml + vendedorHtml;
               })()}
             </div>`;
           }).join('')}
@@ -18333,13 +18397,23 @@ const PDVPage: React.FC = () => {
                   `).join('');
                 }
 
+                // ✅ NOVO: Mostrar insumos identados abaixo do produto principal (mesma lógica dos adicionais)
+                let insumosHtml = '';
+                if (item.insumos_selecionados && Array.isArray(item.insumos_selecionados) && item.insumos_selecionados.length > 0) {
+                  insumosHtml = item.insumos_selecionados.map(insumoSelecionado => `
+                    <div style="margin-left: 15px; font-size: 10px; color: #666; margin-top: 1px; font-weight: bold;">
+                      • ${(insumoSelecionado.quantidade * (item.quantidade || 1)).toFixed(3).replace(/\.?0+$/, '')}x ${insumoSelecionado.insumo.nome}
+                    </div>
+                  `).join('');
+                }
+
                 // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
                 let vendedorHtml = '';
                 if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
                   vendedorHtml = `<div style="font-size: 10px; color: #000; margin-top: 2px; font-weight: 900;"><strong>Vendedor: ${item.vendedor_nome}</strong></div>`;
                 }
 
-                return adicionaisHtml + vendedorHtml;
+                return adicionaisHtml + insumosHtml + vendedorHtml;
               })()}
             </div>`;
           }).join('')}
