@@ -19207,90 +19207,93 @@ const PDVPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* ✅ NOVO: Campo de turno */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  color: '#9ca3af',
-                  marginBottom: '8px',
-                  fontWeight: 'bold'
-                }}>
-                  Turno <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <select
-                  value={turnoAberturaCaixa}
-                  onChange={(e) => setTurnoAberturaCaixa(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    backgroundColor: '#374151',
-                    border: '1px solid #4b5563',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    color: 'white',
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="Manhã">Manhã</option>
-                  <option value="Tarde">Tarde</option>
-                  <option value="Noite">Noite</option>
-                </select>
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                  Selecione o turno de trabalho (obrigatório)
-                </p>
-              </div>
-
-              {/* Campo de valor */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  color: '#9ca3af',
-                  marginBottom: '8px',
-                  fontWeight: 'bold'
-                }}>
-                  Valor de Abertura
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
+              {/* ✅ NOVO: Turno e Valor na mesma linha */}
+              <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                {/* Campo de turno */}
+                <div style={{ flex: '1' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
                     color: '#9ca3af',
+                    marginBottom: '8px',
                     fontWeight: 'bold'
                   }}>
-                    R$
-                  </span>
-                  <input
-                    type="text"
-                    value={valorAberturaCaixa}
-                    onChange={(e) => setValorAberturaCaixa(formatarValorMonetario(e.target.value))}
-                    placeholder="0,00"
+                    Turno <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <select
+                    value={turnoAberturaCaixa}
+                    onChange={(e) => setTurnoAberturaCaixa(e.target.value)}
+                    required
                     style={{
                       width: '100%',
                       backgroundColor: '#374151',
                       border: '1px solid #4b5563',
                       borderRadius: '8px',
-                      paddingLeft: '40px',
-                      paddingRight: '16px',
-                      paddingTop: '12px',
-                      paddingBottom: '12px',
+                      padding: '12px',
                       color: 'white',
-                      fontSize: '18px',
+                      fontSize: '16px',
                       fontWeight: 'bold',
-                      outline: 'none'
+                      outline: 'none',
+                      cursor: 'pointer'
                     }}
-                    autoFocus
-                  />
+                  >
+                    <option value="Manhã">Manhã</option>
+                    <option value="Tarde">Tarde</option>
+                    <option value="Noite">Noite</option>
+                  </select>
+                  <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    Selecione o turno (obrigatório)
+                  </p>
                 </div>
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                  Informe o valor inicial em dinheiro no caixa (opcional)
-                </p>
+
+                {/* Campo de valor */}
+                <div style={{ flex: '1' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    color: '#9ca3af',
+                    marginBottom: '8px',
+                    fontWeight: 'bold'
+                  }}>
+                    Valor de Abertura
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#9ca3af',
+                      fontWeight: 'bold'
+                    }}>
+                      R$
+                    </span>
+                    <input
+                      type="text"
+                      value={valorAberturaCaixa}
+                      onChange={(e) => setValorAberturaCaixa(formatarValorMonetario(e.target.value))}
+                      placeholder="0,00"
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#374151',
+                        border: '1px solid #4b5563',
+                        borderRadius: '8px',
+                        paddingLeft: '40px',
+                        paddingRight: '16px',
+                        paddingTop: '12px',
+                        paddingBottom: '12px',
+                        color: 'white',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        outline: 'none'
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    Valor inicial (opcional)
+                  </p>
+                </div>
               </div>
 
               {/* ✅ NOVO: Campo de observação */}
