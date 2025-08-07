@@ -349,6 +349,8 @@ const ProdutosPage: React.FC = () => {
     promocao_data_cardapio: false,
     // Campo para matéria-prima
     materia_prima: false,
+    // Campo para ocultar visualização no PDV (só disponível se materia_prima = true)
+    ocultar_visualizacao_pdv: false,
     // Campo para produção
     producao: false,
     // Campo para insumos
@@ -2799,6 +2801,8 @@ const ProdutosPage: React.FC = () => {
       promocao_data_cardapio: (produto as any).promocao_data_cardapio || false,
       // Campo para matéria-prima
       materia_prima: produto.materia_prima || false,
+      // Campo para ocultar visualização no PDV
+      ocultar_visualizacao_pdv: produto.ocultar_visualizacao_pdv || false,
       // Campo para produção
       producao: produto.producao || false,
       // Campo para insumos
@@ -3902,6 +3906,8 @@ const ProdutosPage: React.FC = () => {
           promocao_data_cardapio: novoProduto.promocao_data_cardapio || false,
           // ✅ NOVO CAMPO: Matéria prima
           materia_prima: novoProduto.materia_prima || false,
+          // ✅ NOVO CAMPO: Ocultar visualização no PDV (só se materia_prima = true)
+          ocultar_visualizacao_pdv: (novoProduto.materia_prima && novoProduto.ocultar_visualizacao_pdv) || false,
           // ✅ NOVO CAMPO: Produção
           producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
@@ -3971,6 +3977,8 @@ const ProdutosPage: React.FC = () => {
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
           // ✅ NOVO CAMPO: Matéria prima
           materia_prima: novoProduto.materia_prima || false,
+          // ✅ NOVO CAMPO: Ocultar visualização no PDV (só se materia_prima = true)
+          ocultar_visualizacao_pdv: (novoProduto.materia_prima && novoProduto.ocultar_visualizacao_pdv) || false,
           // ✅ NOVO CAMPO: Produção
           producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
@@ -4246,6 +4254,7 @@ const ProdutosPage: React.FC = () => {
         controla_estoque_cardapio: produtoOriginal.controla_estoque_cardapio || false,
         // ✅ NOVOS CAMPOS: Matéria prima, produção e insumos
         materia_prima: produtoOriginal.materia_prima || false,
+        ocultar_visualizacao_pdv: produtoOriginal.ocultar_visualizacao_pdv || false,
         producao: produtoOriginal.producao || false,
         insumos: produtoOriginal.insumos || [],
         selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda || false,
@@ -7678,7 +7687,9 @@ const ProdutosPage: React.FC = () => {
                               onChange={(e) => {
                                 setNovoProduto(prev => ({
                                   ...prev,
-                                  materia_prima: e.target.checked
+                                  materia_prima: e.target.checked,
+                                  // Se desmarcar matéria prima, também desmarcar ocultar visualização
+                                  ocultar_visualizacao_pdv: e.target.checked ? prev.ocultar_visualizacao_pdv : false
                                 }));
                               }}
                               className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
@@ -7690,6 +7701,32 @@ const ProdutosPage: React.FC = () => {
                           <p className="text-sm text-gray-400 mt-2 ml-6">
                             📦 Marque esta opção se este produto pode ser usado como insumo/matéria-prima para outros produtos
                           </p>
+
+                          {/* Subopção: Ocultar visualização no PDV - só aparece se materia_prima estiver ativada */}
+                          {novoProduto.materia_prima && (
+                            <div className="mt-4 ml-6 border-l-2 border-primary-500/30 pl-4">
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id="ocultar-visualizacao-pdv"
+                                  checked={novoProduto.ocultar_visualizacao_pdv}
+                                  onChange={(e) => {
+                                    setNovoProduto(prev => ({
+                                      ...prev,
+                                      ocultar_visualizacao_pdv: e.target.checked
+                                    }));
+                                  }}
+                                  className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                />
+                                <label htmlFor="ocultar-visualizacao-pdv" className="text-sm font-medium text-white cursor-pointer">
+                                  Ocultar visualização no PDV
+                                </label>
+                              </div>
+                              <p className="text-sm text-gray-400 mt-2">
+                                🙈 Marque para ocultar este produto na visualização do PDV (produto ficará disponível apenas no banco de dados)
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Campo Produção */}
