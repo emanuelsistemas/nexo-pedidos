@@ -8,6 +8,7 @@ import { useAuthSession } from '../../hooks/useAuthSession';
 import Button from '../../components/comum/Button';
 import FotoGaleria from '../../components/comum/FotoGaleria';
 import NFeValidationModal from '../../components/comum/NFeValidationModal';
+import EdicaoQuantidadeInsumoModal from '../../components/produtos/EdicaoQuantidadeInsumoModal';
 import { validarNomeProduto, validarDescricaoProduto, ValidationResult } from '../../utils/nfeValidation';
 
 // Função debounce para otimizar chamadas de API
@@ -437,6 +438,10 @@ const ProdutosPage: React.FC = () => {
   const [materiasPrimas, setMateriasPrimas] = useState<any[]>([]);
   const [loadingMateriasPrimas, setLoadingMateriasPrimas] = useState(false);
   const [insumosSelecionados, setInsumosSelecionados] = useState<{[key: string]: {selecionado: boolean, quantidade: string}}>({});
+
+  // ✅ NOVO: Estados para edição simples de quantidade de insumo
+  const [showEdicaoQuantidadeInsumo, setShowEdicaoQuantidadeInsumo] = useState(false);
+  const [insumoParaEdicaoQuantidade, setInsumoParaEdicaoQuantidade] = useState<any>(null);
   const [produtosParaInsumos, setProdutosParaInsumos] = useState<any[]>([]);
   const [gruposParaInsumos, setGruposParaInsumos] = useState<any[]>([]);
   const [searchTermInsumos, setSearchTermInsumos] = useState('');
@@ -2661,6 +2666,26 @@ const ProdutosPage: React.FC = () => {
     } finally {
       setLoadingMateriasPrimas(false);
     }
+  };
+
+  // ✅ NOVO: Função para confirmar edição de quantidade de insumo
+  const confirmarEdicaoQuantidadeInsumo = (novaQuantidade: number) => {
+    if (!insumoParaEdicaoQuantidade) return;
+
+    // Atualizar a quantidade do insumo na lista
+    setProdutoInsumos(prev =>
+      prev.map(insumo =>
+        insumo.produto_id === insumoParaEdicaoQuantidade.produto_id
+          ? { ...insumo, quantidade: novaQuantidade }
+          : insumo
+      )
+    );
+
+    // Fechar modal
+    setShowEdicaoQuantidadeInsumo(false);
+    setInsumoParaEdicaoQuantidade(null);
+
+    showMessage('success', 'Quantidade atualizada com sucesso!');
   };
 
   const handleEditProduto = async (grupo: Grupo, produto: Produto) => {
@@ -9124,11 +9149,11 @@ const ProdutosPage: React.FC = () => {
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          setEditingInsumo(insumo);
-                                          setShowModalInsumos(true);
+                                          setInsumoParaEdicaoQuantidade(insumo);
+                                          setShowEdicaoQuantidadeInsumo(true);
                                         }}
                                         className="p-1.5 text-gray-400 hover:text-primary-400 transition-colors"
-                                        title="Editar insumo"
+                                        title="Editar quantidade"
                                       >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -9269,6 +9294,17 @@ const ProdutosPage: React.FC = () => {
           }
           setNfeValidationModal(prev => ({ ...prev, isOpen: false }));
         }}
+      />
+
+      {/* ✅ NOVO: Modal de Edição de Quantidade de Insumo */}
+      <EdicaoQuantidadeInsumoModal
+        isOpen={showEdicaoQuantidadeInsumo}
+        onClose={() => {
+          setShowEdicaoQuantidadeInsumo(false);
+          setInsumoParaEdicaoQuantidade(null);
+        }}
+        insumo={insumoParaEdicaoQuantidade}
+        onConfirm={confirmarEdicaoQuantidadeInsumo}
       />
 
       {/* Modal de Confirmação de Clonagem */}
