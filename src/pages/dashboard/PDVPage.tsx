@@ -515,6 +515,9 @@ const PDVPage: React.FC = () => {
   const [textoConfirmacao, setTextoConfirmacao] = useState('');
   const [diferencaTotalCaixa, setDiferencaTotalCaixa] = useState(0);
 
+  // ✅ NOVO: Estado para loading do botão caixa
+  const [loadingBotaoCaixa, setLoadingBotaoCaixa] = useState(false);
+
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
   const [observacaoSangria, setObservacaoSangria] = useState('');
@@ -3324,7 +3327,15 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoCaixa) {
+          return;
+        }
+
         try {
+          // ✅ NOVO: Ativar loading
+          setLoadingBotaoCaixa(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
@@ -3333,12 +3344,20 @@ const PDVPage: React.FC = () => {
           // Erro silencioso ao ativar fullscreen
         }
 
-        // Carregar dados do caixa e formas de pagamento
-        await carregarDadosCaixa();
+        try {
+          // Carregar dados do caixa e formas de pagamento
+          await carregarDadosCaixa();
 
-        console.log('🎭 Definindo showCaixaModal = true');
-        setShowCaixaModal(true);
-        console.log('🎭 showCaixaModal definido como true');
+          console.log('🎭 Definindo showCaixaModal = true');
+          setShowCaixaModal(true);
+          console.log('🎭 showCaixaModal definido como true');
+        } catch (error) {
+          console.error('❌ Erro ao carregar dados do caixa:', error);
+          toast.error('Erro ao carregar dados do caixa');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingBotaoCaixa(false);
+        }
       }
     }
   ];
@@ -20883,16 +20902,33 @@ const PDVPage: React.FC = () => {
                         <button
                           key={item.id}
                           onClick={(e) => item.onClick(e)}
+                          disabled={item.id === 'caixa' && loadingBotaoCaixa}
                           className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative ${
                             item.id === 'cardapio-digital' && contadorCardapio > 0
                               ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
+                              : ''
+                          } ${
+                            item.id === 'caixa' && loadingBotaoCaixa
+                              ? 'opacity-75 cursor-not-allowed bg-gray-500/10'
                               : ''
                           }`}
                           style={{ flex: '1 1 100px', minWidth: '100px' }}
                         >
                           {/* Wrapper do ícone com contador - Compacto */}
                           <div className="relative">
-                            <IconComponent size={18} />
+                            {/* ✅ NOVO: Mostrar loading no botão caixa */}
+                            {item.id === 'caixa' && loadingBotaoCaixa ? (
+                              <div className="animate-spin">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="31.416" strokeDashoffset="31.416">
+                                    <animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
+                                    <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/>
+                                  </circle>
+                                </svg>
+                              </div>
+                            ) : (
+                              <IconComponent size={18} />
+                            )}
                             {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
                             {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
                               <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
