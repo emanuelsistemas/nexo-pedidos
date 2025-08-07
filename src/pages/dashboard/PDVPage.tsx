@@ -453,8 +453,9 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Estados para controle de caixa
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
-  const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
+  const [valorAberturaCaixa, setValorAberturaCaixa] = useState('0,00'); // ✅ NOVO: Valor padrão
   const [observacaoAberturaCaixa, setObservacaoAberturaCaixa] = useState(''); // ✅ NOVO: Campo observação
+  const [turnoAberturaCaixa, setTurnoAberturaCaixa] = useState('Manhã'); // ✅ NOVO: Campo turno
   const [caixaAberto, setCaixaAberto] = useState(false);
   const [loadingCaixa, setLoadingCaixa] = useState(false);
 
@@ -1582,7 +1583,8 @@ const PDVPage: React.FC = () => {
           data_abertura: new Date().toISOString(),
           status_caixa: true,
           status: 'aberto',
-          observacao_abertura: observacaoFinal // ✅ NOVO: Usar observação personalizada
+          observacao_abertura: observacaoFinal, // ✅ NOVO: Usar observação personalizada
+          turno: turnoAberturaCaixa // ✅ NOVO: Salvar turno selecionado
         })
         .select()
         .single();
@@ -1616,8 +1618,9 @@ const PDVPage: React.FC = () => {
       // Atualizar estados
       setCaixaAberto(true);
       setShowAberturaCaixaModal(false);
-      setValorAberturaCaixa('');
+      setValorAberturaCaixa('0,00'); // ✅ NOVO: Resetar para valor padrão
       setObservacaoAberturaCaixa(''); // ✅ NOVO: Limpar observação
+      setTurnoAberturaCaixa('Manhã'); // ✅ NOVO: Resetar turno para padrão
 
       toast.success('Caixa aberto com sucesso!');
     } catch (error) {
@@ -19163,15 +19166,17 @@ const PDVPage: React.FC = () => {
                 backgroundColor: '#1f2937',
                 borderRadius: '12px',
                 border: '2px solid #10b981',
-                padding: '24px',
-                maxWidth: '400px',
+                padding: '32px',
+                maxWidth: '550px', // ✅ NOVO: Largura aumentada
                 width: '100%',
-                color: 'white'
+                color: 'white',
+                maxHeight: '90vh', // ✅ NOVO: Altura máxima
+                overflowY: 'auto' // ✅ NOVO: Scroll se necessário
               }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+              <div style={{ marginBottom: '20px', textAlign: 'center' }}>
                 <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
                   💰 Abertura de Caixa
                 </h3>
@@ -19185,7 +19190,7 @@ const PDVPage: React.FC = () => {
                 backgroundColor: '#374151',
                 borderRadius: '8px',
                 padding: '16px',
-                marginBottom: '20px',
+                marginBottom: '16px', // ✅ NOVO: Espaçamento reduzido
                 border: '1px solid #4b5563'
               }}>
                 <div style={{ marginBottom: '12px' }}>
@@ -19202,8 +19207,45 @@ const PDVPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* ✅ NOVO: Campo de turno */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  color: '#9ca3af',
+                  marginBottom: '8px',
+                  fontWeight: 'bold'
+                }}>
+                  Turno <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  value={turnoAberturaCaixa}
+                  onChange={(e) => setTurnoAberturaCaixa(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#374151',
+                    border: '1px solid #4b5563',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    color: 'white',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="Manhã">Manhã</option>
+                  <option value="Tarde">Tarde</option>
+                  <option value="Noite">Noite</option>
+                </select>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Selecione o turno de trabalho (obrigatório)
+                </p>
+              </div>
+
               {/* Campo de valor */}
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '16px' }}>
                 <label style={{
                   display: 'block',
                   fontSize: '14px',
@@ -19252,7 +19294,7 @@ const PDVPage: React.FC = () => {
               </div>
 
               {/* ✅ NOVO: Campo de observação */}
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <label style={{
                   display: 'block',
                   fontSize: '14px',
@@ -19266,7 +19308,7 @@ const PDVPage: React.FC = () => {
                   value={observacaoAberturaCaixa}
                   onChange={(e) => setObservacaoAberturaCaixa(e.target.value)}
                   placeholder="Digite uma observação para a abertura do caixa (opcional)"
-                  rows={3}
+                  rows={2}
                   style={{
                     width: '100%',
                     backgroundColor: '#374151',
@@ -19277,7 +19319,7 @@ const PDVPage: React.FC = () => {
                     fontSize: '14px',
                     outline: 'none',
                     resize: 'vertical',
-                    minHeight: '80px'
+                    minHeight: '60px' // ✅ NOVO: Altura reduzida
                   }}
                 />
                 <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
@@ -19291,8 +19333,9 @@ const PDVPage: React.FC = () => {
                   onClick={() => {
                     console.log('🚫 Botão Cancelar clicado');
                     setShowAberturaCaixaModal(false);
-                    setValorAberturaCaixa('');
+                    setValorAberturaCaixa('0,00');
                     setObservacaoAberturaCaixa(''); // ✅ NOVO: Limpar observação
+                    setTurnoAberturaCaixa('Manhã'); // ✅ NOVO: Resetar turno
                   }}
                   style={{
                     flex: 1,
@@ -32825,10 +32868,12 @@ const PDVPage: React.FC = () => {
               backgroundColor: '#1f2937',
               borderRadius: '12px',
               border: '2px solid #10b981',
-              padding: '24px',
-              maxWidth: '400px',
+              padding: '32px',
+              maxWidth: '550px', // ✅ NOVO: Largura aumentada
               width: '100%',
-              color: 'white'
+              color: 'white',
+              maxHeight: '90vh', // ✅ NOVO: Altura máxima
+              overflowY: 'auto' // ✅ NOVO: Scroll se necessário
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -32953,8 +32998,9 @@ const PDVPage: React.FC = () => {
                 onClick={() => {
                   console.log('🚫 Botão Cancelar clicado');
                   setShowAberturaCaixaModal(false);
-                  setValorAberturaCaixa('');
+                  setValorAberturaCaixa('0,00');
                   setObservacaoAberturaCaixa(''); // ✅ NOVO: Limpar observação
+                  setTurnoAberturaCaixa('Manhã'); // ✅ NOVO: Resetar turno
                 }}
                 style={{
                   flex: 1,

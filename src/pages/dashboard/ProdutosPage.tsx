@@ -3862,8 +3862,8 @@ const ProdutosPage: React.FC = () => {
           materia_prima: novoProduto.materia_prima || false,
           // ✅ NOVO CAMPO: Produção
           producao: novoProduto.producao || false,
-          // ✅ NOVO CAMPO: Insumos
-          insumos: novoProduto.insumos || [],
+          // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
+          insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
           empresa_id: usuarioData.empresa_id
         };
 
@@ -3927,8 +3927,8 @@ const ProdutosPage: React.FC = () => {
           materia_prima: novoProduto.materia_prima || false,
           // ✅ NOVO CAMPO: Produção
           producao: novoProduto.producao || false,
-          // ✅ NOVO CAMPO: Insumos
-          insumos: novoProduto.insumos || [],
+          // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
+          insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
         };
 
 
