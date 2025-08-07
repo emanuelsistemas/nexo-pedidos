@@ -66,6 +66,7 @@ import { useSidebarStore } from '../../store/sidebarStore';
 import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
 import SeletorSaboresModal from '../../components/pdv/SeletorSaboresModal';
 import SeletorInsumosModal from '../../components/pdv/SeletorInsumosModal';
+import EdicaoInsumosModal from '../../components/pdv/EdicaoInsumosModal';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { salvarAdicionaisItem } from '../../utils/pdvAdicionaisUtils'; // ✅ NOVO: Import da função utilitária
 import LoadingScreen from '../../components/dashboard/LoadingScreen';
@@ -1083,6 +1084,10 @@ const PDVPage: React.FC = () => {
   const [showInsumosModal, setShowInsumosModal] = useState(false);
   const [produtoParaInsumos, setProdutoParaInsumos] = useState<Produto | null>(null);
   const [quantidadeParaInsumos, setQuantidadeParaInsumos] = useState<number>(1);
+
+  // ✅ NOVO: Estados para modal de edição de insumos
+  const [showEdicaoInsumosModal, setShowEdicaoInsumosModal] = useState(false);
+  const [itemParaEdicaoInsumos, setItemParaEdicaoInsumos] = useState<ItemCarrinho | null>(null);
 
   // Estados para edição de nome do produto
   const [itemEditandoNome, setItemEditandoNome] = useState<string | null>(null);
@@ -11135,6 +11140,50 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função para abrir modal de edição de insumos
+  const abrirEdicaoInsumos = (item: ItemCarrinho) => {
+    setItemParaEdicaoInsumos(item);
+    setShowEdicaoInsumosModal(true);
+  };
+
+  // ✅ NOVO: Função para confirmar edição de insumos
+  const confirmarEdicaoInsumos = (insumosEditados: any[]) => {
+    if (!itemParaEdicaoInsumos) return;
+
+    // Atualizar o item no carrinho com os novos insumos
+    setCarrinho(prev =>
+      prev.map(item =>
+        item.id === itemParaEdicaoInsumos.id
+          ? { ...item, insumosSelecionados: insumosEditados }
+          : item
+      )
+    );
+
+    // Fechar modal
+    setShowEdicaoInsumosModal(false);
+    setItemParaEdicaoInsumos(null);
+
+    showMessage('success', 'Insumos atualizados com sucesso!');
+  };
+
+  // ✅ NOVO: Função para remover insumo individual
+  const removerInsumoIndividual = (itemId: string, insumoId: string) => {
+    setCarrinho(prev =>
+      prev.map(item =>
+        item.id === itemId
+          ? {
+              ...item,
+              insumosSelecionados: item.insumosSelecionados?.filter(
+                insumo => insumo.insumo.produto_id !== insumoId
+              ) || []
+            }
+          : item
+      )
+    );
+
+    showMessage('success', 'Insumo removido com sucesso!');
+  };
+
   const removerAdicional = (itemId: string, adicionalIndex: number) => {
     setCarrinho(prev =>
       prev.map(item => {
@@ -20292,26 +20341,46 @@ const PDVPage: React.FC = () => {
                               </div>
                             )}
 
-                            {/* Seção de Insumos - Similar aos Adicionais */}
-                            {item.produto.insumos && Array.isArray(item.produto.insumos) && item.produto.insumos.length > 0 && (
+                            {/* Seção de Insumos Selecionados - Mostra apenas os insumos que foram selecionados */}
+                            {item.insumosSelecionados && Array.isArray(item.insumosSelecionados) && item.insumosSelecionados.length > 0 && (
                               <div className={`${item.adicionais && item.adicionais.length > 0 ? 'mt-3' : 'mt-3 pt-3 border-t border-gray-700/50'}`}>
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-500/10 border border-orange-500/30 rounded-full text-sm text-orange-300 font-medium">
                                     <span>Insumos</span>
+                                    {/* ✅ NOVO: Ícone de lápis para editar */}
+                                    <button
+                                      onClick={() => abrirEdicaoInsumos(item)}
+                                      className="ml-1 p-1 hover:bg-orange-500/20 rounded transition-colors"
+                                      title="Editar insumos"
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                        <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                      </svg>
+                                    </button>
                                   </div>
                                 </div>
                                 <div className="space-y-2">
-                                  {item.produto.insumos.map((insumo, index) => (
+                                  {item.insumosSelecionados.map((insumoSelecionado, index) => (
                                     <div key={index} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-2">
                                       <div className="flex items-center gap-2 flex-1">
+                                        {/* ✅ NOVO: Quantidade na frente do nome */}
                                         <span className="text-gray-300 text-sm font-medium">
-                                          {insumo.nome}
+                                          {(insumoSelecionado.quantidade * item.quantidade).toFixed(3).replace(/\.?0+$/, '')}x - {insumoSelecionado.insumo.nome}
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        {/* Quantidade do insumo (somente leitura) */}
+                                        {/* ✅ NOVO: Botão X para excluir insumo individual */}
+                                        <button
+                                          onClick={() => removerInsumoIndividual(item.id, insumoSelecionado.insumo.produto_id)}
+                                          className="w-5 h-5 rounded-full bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white flex items-center justify-center transition-colors"
+                                          title="Remover insumo"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                        {/* Quantidade total do insumo */}
                                         <span className="text-orange-300 text-sm font-medium min-w-[4rem] text-right">
-                                          {(insumo.quantidade * item.quantidade).toFixed(2)} {insumo.unidade_medida || 'UN'}
+                                          {(insumoSelecionado.quantidade * item.quantidade).toFixed(3).replace(/\.?0+$/, '')} {insumoSelecionado.insumo.unidade_medida || 'UN'}
                                         </span>
                                       </div>
                                     </div>
@@ -28651,6 +28720,20 @@ const PDVPage: React.FC = () => {
           }}
           produto={produtoParaInsumos}
           onConfirm={confirmarInsumos}
+        />
+      )}
+
+      {/* ✅ NOVO: Modal de Edição de Insumos */}
+      {itemParaEdicaoInsumos && (
+        <EdicaoInsumosModal
+          isOpen={showEdicaoInsumosModal}
+          onClose={() => {
+            setShowEdicaoInsumosModal(false);
+            setItemParaEdicaoInsumos(null);
+          }}
+          insumosSelecionados={itemParaEdicaoInsumos.insumosSelecionados || []}
+          controlarQuantidades={itemParaEdicaoInsumos.produto.controlar_quantidades_insumo || false}
+          onConfirm={confirmarEdicaoInsumos}
         />
       )}
 
