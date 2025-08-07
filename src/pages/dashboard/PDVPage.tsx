@@ -32914,27 +32914,7 @@ const PDVPage: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ MODAL DE CONTROLE DE CAIXA - MOVIDO PARA FORA DA ESTRUTURA CONDICIONAL */}
-
-      {/* TESTE: Elemento simples para verificar renderização */}
-      {showCaixaModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '100px',
-            right: '100px',
-            background: 'orange',
-            color: 'white',
-            padding: '20px',
-            zIndex: 999999,
-            fontSize: '20px',
-            fontWeight: 'bold',
-            borderRadius: '8px'
-          }}
-        >
-          MODAL CAIXA ATIVO!
-        </div>
-      )}
+      {/* ✅ MODAL DE CONTROLE DE CAIXA */}
 
       {showCaixaModal && (
         <div
