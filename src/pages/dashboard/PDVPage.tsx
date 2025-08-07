@@ -1929,7 +1929,7 @@ const PDVPage: React.FC = () => {
             usuario_id: authData.user.id,
             caixa_controle_id: caixaAberto.id,
             forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
-            forma_pagamento_nome: forma.nome,
+            forma_pagamento_nome: forma.forma_pagamento_opcoes?.nome || 'Forma não identificada', // ✅ CORREÇÃO: Usar estrutura correta
             valor_atual: valorAtual,
             valor_fiado: valorFiado,
             valor_total: valorTotal
