@@ -442,6 +442,9 @@ const ProdutosPage: React.FC = () => {
   // ✅ NOVO: Estados para edição simples de quantidade de insumo
   const [showEdicaoQuantidadeInsumo, setShowEdicaoQuantidadeInsumo] = useState(false);
   const [insumoParaEdicaoQuantidade, setInsumoParaEdicaoQuantidade] = useState<any>(null);
+
+  // ✅ NOVO: Estado para pesquisa de insumos
+  const [pesquisaInsumo, setPesquisaInsumo] = useState('');
   const [produtosParaInsumos, setProdutosParaInsumos] = useState<any[]>([]);
   const [gruposParaInsumos, setGruposParaInsumos] = useState<any[]>([]);
   const [searchTermInsumos, setSearchTermInsumos] = useState('');
@@ -2687,6 +2690,12 @@ const ProdutosPage: React.FC = () => {
 
     showMessage('success', 'Quantidade atualizada com sucesso!');
   };
+
+  // ✅ NOVO: Função para filtrar matérias-primas por pesquisa
+  const materiasPrimasFiltradas = materiasPrimas.filter(produto =>
+    produto.nome.toLowerCase().includes(pesquisaInsumo.toLowerCase()) ||
+    produto.codigo?.toLowerCase().includes(pesquisaInsumo.toLowerCase())
+  );
 
   const handleEditProduto = async (grupo: Grupo, produto: Produto) => {
     try {
@@ -9626,10 +9635,11 @@ const ProdutosPage: React.FC = () => {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-gray-900 rounded-xl border border-gray-700 p-6 w-full max-w-4xl max-h-[80vh] overflow-hidden"
+              className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-4xl max-h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-6">
+              {/* Header fixo */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-700">
                 <div>
                   <h3 className="text-xl font-semibold text-white">
                     {editingInsumo ? 'Editar Insumo' : 'Adicionar Insumo'}
@@ -9642,6 +9652,7 @@ const ProdutosPage: React.FC = () => {
                   onClick={() => {
                     setShowModalInsumos(false);
                     setEditingInsumo(null);
+                    setPesquisaInsumo(''); // Limpar pesquisa ao fechar
                   }}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
@@ -9652,7 +9663,38 @@ const ProdutosPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="overflow-y-auto max-h-[60vh]">
+              {/* Campo de pesquisa fixo */}
+              <div className="p-6 border-b border-gray-700">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                      <circle cx="11" cy="11" r="8"/>
+                      <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={pesquisaInsumo}
+                    onChange={(e) => setPesquisaInsumo(e.target.value)}
+                    placeholder="Pesquisar por nome ou código..."
+                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                  {pesquisaInsumo && (
+                    <button
+                      onClick={() => setPesquisaInsumo('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Área de conteúdo com scroll */}
+              <div className="flex-1 overflow-y-auto p-6">
                 {loadingMateriasPrimas ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="w-6 h-6 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin"></div>
@@ -9672,9 +9714,24 @@ const ProdutosPage: React.FC = () => {
                       Marque produtos como "Matéria prima" para que apareçam aqui.
                     </p>
                   </div>
+                ) : materiasPrimasFiltradas.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-500 mb-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-3">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                      </svg>
+                    </div>
+                    <p className="text-gray-500 text-sm">
+                      Nenhum produto encontrado para "{pesquisaInsumo}".
+                    </p>
+                    <p className="text-gray-600 text-xs mt-1">
+                      Tente pesquisar por outro termo.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
-                    {materiasPrimas.map((produto) => {
+                    {materiasPrimasFiltradas.map((produto) => {
                       const isSelecionado = insumosSelecionados[produto.id]?.selecionado || false;
                       const quantidade = insumosSelecionados[produto.id]?.quantidade || '';
                       const unidadeMedida = produto.unidade_medida;
@@ -9706,10 +9763,36 @@ const ProdutosPage: React.FC = () => {
                             {/* Informações do produto */}
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 bg-primary-500/20 rounded-lg flex items-center justify-center">
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
-                                    <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
-                                  </svg>
+                                {/* Foto do produto */}
+                                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                                  {(() => {
+                                    const fotoPrincipal = produtosFotosPrincipais[produto.id];
+                                    return fotoPrincipal ? (
+                                      <img
+                                        src={fotoPrincipal.url}
+                                        alt={produto.nome}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          // Fallback para ícone se a imagem falhar
+                                          const target = e.target as HTMLImageElement;
+                                          target.style.display = 'none';
+                                          target.parentElement!.innerHTML = `
+                                            <div class="w-full h-full bg-primary-500/20 flex items-center justify-center">
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary-400">
+                                                <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                                              </svg>
+                                            </div>
+                                          `;
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-primary-500/20 flex items-center justify-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
+                                          <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                                        </svg>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                                 <div>
                                   <label
@@ -9721,6 +9804,11 @@ const ProdutosPage: React.FC = () => {
                                   <p className="text-gray-400 text-sm">
                                     Unidade: {unidadeMedida?.sigla || 'N/A'} ({unidadeMedida?.nome || 'Não definida'})
                                   </p>
+                                  {produto.codigo && (
+                                    <p className="text-gray-500 text-xs">
+                                      Código: {produto.codigo}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
 
@@ -9764,7 +9852,8 @@ const ProdutosPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="mt-6 pt-4 border-t border-gray-700">
+              {/* Footer fixo */}
+              <div className="border-t border-gray-700 p-6">
                 <div className="flex gap-3">
                   <Button
                     type="button"
@@ -9773,6 +9862,7 @@ const ProdutosPage: React.FC = () => {
                     onClick={() => {
                       setShowModalInsumos(false);
                       setEditingInsumo(null);
+                      setPesquisaInsumo(''); // Limpar pesquisa ao cancelar
                     }}
                   >
                     Cancelar
@@ -9805,6 +9895,7 @@ const ProdutosPage: React.FC = () => {
                       // Fechar modal
                       setShowModalInsumos(false);
                       setEditingInsumo(null);
+                      setPesquisaInsumo(''); // Limpar pesquisa ao confirmar
 
                       // Mostrar mensagem de sucesso
                       showMessage('success', `${novosInsumos.length} insumo(s) adicionado(s) com sucesso!`);
