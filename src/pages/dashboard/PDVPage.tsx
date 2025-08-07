@@ -7071,11 +7071,7 @@ const PDVPage: React.FC = () => {
 
             // ✅ NOVO: Adicionar "Fiado" à lista se estiver habilitado na configuração PDV
             let formasComFiado = [...(formasOpcoesData || [])];
-            console.log('🔍 DEBUG FIADO:', {
-              pdvConfig: pdvConfig,
-              fiado: pdvConfig?.fiado,
-              formasOriginais: formasOpcoesData?.length
-            });
+
 
             if (pdvConfig?.fiado) {
               // Verificar se "Fiado" já não está na lista
@@ -9913,17 +9909,7 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função que processa a adição do produto (extraída da função original)
   const processarAdicaoProduto = async (produto: Produto, quantidadePersonalizada?: number) => {
 
-    // 🔍 DEBUG: Log detalhado do produto recebido
-    console.log('🔍 DEBUG processarAdicaoProduto - Produto recebido:', {
-      id: produto.id,
-      nome: produto.nome,
-      temInsumos: produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0,
-      insumos: produto.insumos,
-      selecionar_insumos_venda: produto.selecionar_insumos_venda,
-      controlar_quantidades_insumo: produto.controlar_quantidades_insumo,
-      insumosSelecionados: (produto as any).insumosSelecionados,
-      quantidadePersonalizada
-    });
+
 
     // ✅ Verificar opções adicionais ANTES de qualquer outro fluxo
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
@@ -9932,14 +9918,7 @@ const PDVPage: React.FC = () => {
     const temInsumos = produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0;
     const deveSelecionarInsumos = produto.selecionar_insumos_venda && temInsumos;
 
-    // 🔍 DEBUG: Log da verificação de insumos
-    console.log('🔍 DEBUG verificação insumos:', {
-      temInsumos,
-      selecionar_insumos_venda: produto.selecionar_insumos_venda,
-      deveSelecionarInsumos,
-      jaTemInsumosSelecionados: !!(produto as any).insumosSelecionados,
-      vaiAbrirModal: deveSelecionarInsumos && !(produto as any).insumosSelecionados
-    });
+
 
     if (deveSelecionarInsumos && !(produto as any).insumosSelecionados) {
       console.log('🎯 ABRINDO MODAL DE INSUMOS para produto:', produto.nome);
@@ -10147,12 +10126,7 @@ const PDVPage: React.FC = () => {
 
     // ✅ CORREÇÃO: Aguardar venda ser criada antes de salvar item
     const aguardarVendaEsalvarItem = async () => {
-      console.log('🔍 DEBUG aguardarVendaEsalvarItem INICIADO:', {
-        produto: produto.nome,
-        isFirstItem,
-        vendaEmAndamento: !!vendaEmAndamento,
-        isEditingVenda
-      });
+
 
       // Se é primeiro item e não há venda, aguardar criação
       if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
@@ -10164,25 +10138,15 @@ const PDVPage: React.FC = () => {
         while (!vendaEmAndamento && tentativas < maxTentativas) {
           // Log reduzido para evitar spam no console
           if (tentativas % 10 === 0) {
-            console.log(`🔍 DEBUG: Aguardando estado vendaEmAndamento ser atualizado... Tentativa ${tentativas}/${maxTentativas}`, {
-              vendaEmAndamento: !!vendaEmAndamento,
-              criandoVenda
-            });
+            // Log removido para limpeza do console
           }
           await new Promise(resolve => setTimeout(resolve, 100));
           tentativas++;
         }
 
         if (!vendaEmAndamento) {
-          console.log('❌ DEBUG: Timeout - estado vendaEmAndamento não foi atualizado após', maxTentativas, 'tentativas');
-          console.log('❌ DEBUG: Isso indica um problema de timing/race condition no React state');
           return;
         }
-
-        console.log('✅ DEBUG: Estado vendaEmAndamento finalmente atualizado!', {
-          vendaId: vendaEmAndamento.id,
-          tentativasUsadas: tentativas
-        });
 
 
       }
@@ -10192,11 +10156,6 @@ const PDVPage: React.FC = () => {
 
 
       if (vendaAtual) {
-        console.log('🔍 DEBUG: Venda encontrada, tentando salvar item:', {
-          produto: produto.nome,
-          vendaId: vendaAtual.id,
-          isEditingVenda
-        });
 
         // ✅ CORREÇÃO: Só salvar se não é venda recuperada (para evitar duplicação)
         if (!isEditingVenda) {
@@ -13984,10 +13943,7 @@ const PDVPage: React.FC = () => {
       // ✅ CORREÇÃO: Venda NOVA deve ter isEditingVenda = false
       setIsEditingVenda(false);
 
-      console.log('✅ DEBUG criarVendaEmAndamento SUCESSO:', {
-        vendaId: novaVendaEmAndamento.id,
-        numero: novaVendaEmAndamento.numero_venda
-      });
+
 
       return true;
 
@@ -13999,14 +13955,10 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para salvar item na venda em andamento (adaptada do sistema de rascunhos NFe)
   const salvarItemNaVendaEmAndamento = async (item: ItemCarrinho): Promise<any> => {
-    console.log('🔍 DEBUG salvarItemNaVendaEmAndamento INICIADO:', {
-      produto: item.produto.nome,
-      vendaEmAndamento: !!vendaEmAndamento
-    });
+
 
     try {
       if (!vendaEmAndamento) {
-        console.log('❌ DEBUG: Sem venda em andamento para salvar item:', item.produto.nome);
         return false;
       }
 
@@ -14772,14 +14724,6 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para filtrar vendas abertas
   const filtrarVendasAbertas = (vendas: any[]) => {
-    console.log('🔍 DEBUG - Filtros ativos:', {
-      filtroNomeCliente,
-      filtroMesa,
-      filtroComanda,
-      filtroDataInicioVendas,
-      filtroDataFimVendas,
-      totalVendas: vendas.length
-    });
 
     return vendas.filter(venda => {
       // Filtro por nome do cliente
@@ -16834,18 +16778,44 @@ const PDVPage: React.FC = () => {
               // Sem documento = consumidor não identificado
               return {};
             })(),
-            produtos: carrinho.filter(item => !item.isDevolucao).map(item => ({
-              codigo: item.produto.codigo, // Código real do produto (SEM FALLBACK)
-              descricao: item.produto.nome,
-              quantidade: item.quantidade,
-              valor_unitario: item.produto.preco,
-              // ✅ CORREÇÃO: Para venda sem produto, usar unidade_medida diretamente
-              unidade: item.vendaSemProduto ? item.produto.unidade_medida : item.produto.unidade_medida?.sigla,
-              ncm: item.produto.ncm, // NCM real do produto (SEM FALLBACK)
-              cfop: item.produto.cfop, // CFOP real do produto (SEM FALLBACK)
-              codigo_barras: item.produto.codigo_barras, // Código de barras real (SEM FALLBACK)
-              adicionais: item.adicionais || [] // ✅ NOVO: Incluir adicionais para NFC-e
-            }))
+            produtos: carrinho.filter(item => !item.isDevolucao).map(item => {
+              // ✅ CORREÇÃO CRÍTICA: Para item 999999, usar dados da configuração PDV
+              if (item.produto.codigo === '999999' && configVendaSemProduto) {
+                return {
+                  codigo: item.produto.codigo, // Código 999999
+                  descricao: item.produto.nome,
+                  quantidade: item.quantidade,
+                  valor_unitario: item.produto.preco,
+                  unidade: item.produto.unidade_medida, // 'UN' fixo para venda sem produto
+                  // ✅ DADOS FISCAIS DA CONFIGURAÇÃO PDV (não do produto fictício):
+                  ncm: configVendaSemProduto.venda_sem_produto_ncm,
+                  cfop: configVendaSemProduto.venda_sem_produto_cfop,
+                  origem_produto: configVendaSemProduto.venda_sem_produto_origem,
+                  cst_icms: configVendaSemProduto.venda_sem_produto_cst,
+                  csosn_icms: configVendaSemProduto.venda_sem_produto_csosn,
+                  cest: configVendaSemProduto.venda_sem_produto_cest,
+                  margem_st: configVendaSemProduto.venda_sem_produto_margem_st,
+                  aliquota_icms: configVendaSemProduto.venda_sem_produto_aliquota_icms,
+                  aliquota_pis: configVendaSemProduto.venda_sem_produto_aliquota_pis,
+                  aliquota_cofins: configVendaSemProduto.venda_sem_produto_aliquota_cofins,
+                  codigo_barras: null, // Venda sem produto não tem código de barras
+                  adicionais: item.adicionais || []
+                };
+              } else {
+                // ✅ PRODUTOS NORMAIS: Usar dados reais do produto
+                return {
+                  codigo: item.produto.codigo,
+                  descricao: item.produto.nome,
+                  quantidade: item.quantidade,
+                  valor_unitario: item.produto.preco,
+                  unidade: item.produto.unidade_medida?.sigla,
+                  ncm: item.produto.ncm,
+                  cfop: item.produto.cfop,
+                  codigo_barras: item.produto.codigo_barras,
+                  adicionais: item.adicionais || []
+                };
+              }
+            })
           };
 
           // Dados NFC-e preparados
@@ -28651,14 +28621,7 @@ const PDVPage: React.FC = () => {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={async () => {
-                            // 🔍 DEBUG: Log do clique no produto
-                            console.log('🔍 CLIQUE NO PRODUTO:', {
-                              id: produto.id,
-                              nome: produto.nome,
-                              temInsumos: produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0,
-                              selecionar_insumos_venda: produto.selecionar_insumos_venda,
-                              insumos: produto.insumos
-                            });
+
 
                             // ✅ CORREÇÃO: Fechar o modal de produtos IMEDIATAMENTE (igual ao comportamento da busca por código)
                             setShowAreaProdutos(false);
