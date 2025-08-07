@@ -1089,6 +1089,13 @@ const PDVPage: React.FC = () => {
   const [showEdicaoInsumosModal, setShowEdicaoInsumosModal] = useState(false);
   const [itemParaEdicaoInsumos, setItemParaEdicaoInsumos] = useState<ItemCarrinho | null>(null);
 
+  // ✅ NOVO: Estados para edição individual de insumo
+  const [showEdicaoInsumoIndividual, setShowEdicaoInsumoIndividual] = useState(false);
+  const [insumoParaEdicaoIndividual, setInsumoParaEdicaoIndividual] = useState<{
+    item: ItemCarrinho;
+    insumo: any;
+  } | null>(null);
+
   // Estados para edição de nome do produto
   const [itemEditandoNome, setItemEditandoNome] = useState<string | null>(null);
   const [nomeEditando, setNomeEditando] = useState<string>('');
@@ -1947,27 +1954,51 @@ const PDVPage: React.FC = () => {
       // 1. Salvar detalhes das formas de pagamento
       const formasPagamentoDetalhes = [];
 
-      for (const forma of formasPagamentoCaixa) {
-        const valorAtual = valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.atual || 0;
-        const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
-        const valorTotal = valorAtual + valorFiado;
+      console.log('💰 Processando formas de pagamento para fechamento...');
+      console.log('📊 Formas disponíveis:', formasPagamentoCaixa.length);
+      console.log('📊 Valores reais calculados:', valoresReaisCaixa);
+      console.log('📊 Valores informados pelo usuário:', valoresCaixa);
 
-        // Só salvar se houver algum valor
-        if (valorTotal > 0) {
-          formasPagamentoDetalhes.push({
-            empresa_id: usuarioData.empresa_id,
-            usuario_id: authData.user.id,
-            caixa_controle_id: caixaAberto.id,
-            forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
-            forma_pagamento_nome: forma.forma_pagamento_opcoes?.nome || 'Forma não identificada', // ✅ CORREÇÃO: Usar estrutura correta
-            valor_atual: valorAtual,
-            valor_fiado: valorFiado,
-            valor_total: valorTotal
-          });
-        }
+      for (const forma of formasPagamentoCaixa) {
+        // ✅ CORREÇÃO: Usar forma.id consistentemente (ID da empresa)
+        const valorAtualCalculado = valoresReaisCaixa[forma.id]?.atual || 0;
+        const valorFiadoCalculado = valoresFiadoPorForma[forma.id] || 0;
+
+        // ✅ NOVO: Obter valor informado pelo usuário
+        const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
+        const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
+
+        // ✅ NOVO: Calcular diferença entre informado e calculado
+        const valorTotalCalculado = valorAtualCalculado + valorFiadoCalculado;
+        const diferenca = valorInformadoUsuario - valorTotalCalculado;
+
+        console.log(`💳 ${forma.forma_pagamento_opcoes?.nome}:`, {
+          valorAtualCalculado,
+          valorFiadoCalculado,
+          valorTotalCalculado,
+          valorInformadoUsuario,
+          diferenca
+        });
+
+        // ✅ CORREÇÃO: Incluir TODAS as formas de pagamento (mesmo com valor 0)
+        formasPagamentoDetalhes.push({
+          empresa_id: usuarioData.empresa_id,
+          usuario_id: authData.user.id,
+          caixa_controle_id: caixaAberto.id,
+          forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
+          forma_pagamento_nome: forma.forma_pagamento_opcoes?.nome || 'Forma não identificada',
+          valor_atual: valorAtualCalculado,
+          valor_fiado: valorFiadoCalculado,
+          valor_total: valorTotalCalculado,
+          observacoes: diferenca !== 0 ?
+            `Valor informado: R$ ${valorInformadoUsuario.toFixed(2)} | Diferença: R$ ${diferenca.toFixed(2)}` :
+            null
+        });
       }
 
       // Inserir detalhes das formas de pagamento
+      console.log('💾 Salvando formas de pagamento no fechamento:', formasPagamentoDetalhes.length);
+
       if (formasPagamentoDetalhes.length > 0) {
         const { error: formasError } = await supabase
           .from('formas_pagamento_fechamento_caixa')
@@ -1978,6 +2009,10 @@ const PDVPage: React.FC = () => {
           toast.error('Erro ao salvar detalhes das formas de pagamento');
           return;
         }
+
+        console.log('✅ Formas de pagamento salvas com sucesso no fechamento');
+      } else {
+        console.log('⚠️ Nenhuma forma de pagamento encontrada para salvar');
       }
 
       // 2. Atualizar status do caixa
@@ -6354,6 +6389,15 @@ const PDVPage: React.FC = () => {
                   <strong>Adicionais:</strong><br>
                   ${item.adicionais.map(adicional => `
                     • ${adicional.quantidade || 1}x ${adicional.nome}
+                  `).join('<br>')}
+                </div>
+              ` : ''}
+
+              ${item.insumos_selecionados && Array.isArray(item.insumos_selecionados) && item.insumos_selecionados.length > 0 ? `
+                <div class="adicionais">
+                  <strong>Insumos:</strong><br>
+                  ${item.insumos_selecionados.map(insumoSelecionado => `
+                    • ${(insumoSelecionado.quantidade * (item.quantidade || 1)).toFixed(3).replace(/\.?0+$/, '')}x ${insumoSelecionado.insumo.nome}
                   `).join('<br>')}
                 </div>
               ` : ''}
@@ -11164,6 +11208,34 @@ const PDVPage: React.FC = () => {
     setItemParaEdicaoInsumos(null);
 
     showMessage('success', 'Insumos atualizados com sucesso!');
+  };
+
+  // ✅ NOVO: Função para abrir edição individual de insumo
+  const abrirEdicaoInsumoIndividual = (item: ItemCarrinho, insumo: any) => {
+    setInsumoParaEdicaoIndividual({ item, insumo });
+    setShowEdicaoInsumoIndividual(true);
+  };
+
+  // ✅ NOVO: Função para confirmar edição individual de insumo
+  const confirmarEdicaoInsumoIndividual = (insumosEditados: any[]) => {
+    if (!insumoParaEdicaoIndividual) return;
+
+    const { item } = insumoParaEdicaoIndividual;
+
+    // Atualizar o item no carrinho com os novos insumos
+    setCarrinho(prev =>
+      prev.map(itemCarrinho =>
+        itemCarrinho.id === item.id
+          ? { ...itemCarrinho, insumosSelecionados: insumosEditados }
+          : itemCarrinho
+      )
+    );
+
+    // Fechar modal
+    setShowEdicaoInsumoIndividual(false);
+    setInsumoParaEdicaoIndividual(null);
+
+    showMessage('success', 'Insumo atualizado com sucesso!');
   };
 
   // ✅ NOVO: Função para remover insumo individual
@@ -20372,7 +20444,7 @@ const PDVPage: React.FC = () => {
                                       <div className="flex items-center gap-2">
                                         {/* ✅ NOVO: Botão de lápis para editar insumo individual */}
                                         <button
-                                          onClick={() => abrirEdicaoInsumos(item)}
+                                          onClick={() => abrirEdicaoInsumoIndividual(item, insumoSelecionado)}
                                           className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors"
                                           title="Editar quantidade"
                                         >
@@ -28734,7 +28806,7 @@ const PDVPage: React.FC = () => {
         />
       )}
 
-      {/* ✅ NOVO: Modal de Edição de Insumos */}
+      {/* ✅ NOVO: Modal de Edição de Insumos (Todos) */}
       {itemParaEdicaoInsumos && (
         <EdicaoInsumosModal
           isOpen={showEdicaoInsumosModal}
@@ -28746,6 +28818,25 @@ const PDVPage: React.FC = () => {
           insumosDisponiveis={itemParaEdicaoInsumos.produto.insumos || []}
           controlarQuantidades={itemParaEdicaoInsumos.produto.controlar_quantidades_insumo || false}
           onConfirm={confirmarEdicaoInsumos}
+        />
+      )}
+
+      {/* ✅ NOVO: Modal de Edição Individual de Insumo */}
+      {insumoParaEdicaoIndividual && (
+        <EdicaoInsumosModal
+          isOpen={showEdicaoInsumoIndividual}
+          onClose={() => {
+            setShowEdicaoInsumoIndividual(false);
+            setInsumoParaEdicaoIndividual(null);
+          }}
+          insumosSelecionados={insumoParaEdicaoIndividual.item.insumosSelecionados?.filter(
+            insumo => insumo.insumo.produto_id === insumoParaEdicaoIndividual.insumo.insumo.produto_id
+          ) || []}
+          insumosDisponiveis={insumoParaEdicaoIndividual.item.produto.insumos?.filter(
+            insumo => insumo.produto_id === insumoParaEdicaoIndividual.insumo.insumo.produto_id
+          ) || []}
+          controlarQuantidades={insumoParaEdicaoIndividual.item.produto.controlar_quantidades_insumo || false}
+          onConfirm={confirmarEdicaoInsumoIndividual}
         />
       )}
 
@@ -34121,33 +34212,54 @@ const PDVPage: React.FC = () => {
                 </h4>
 
                 {formasPagamentoCaixa.map(forma => {
+                  // ✅ CORREÇÃO: Usar forma.id consistentemente
                   const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
-                  const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
+                  const valorFiado = valoresFiadoPorForma[forma.id] || 0;
                   const valorTotal = valorAtual + valorFiado;
 
+                  // ✅ NOVO: Obter valor informado pelo usuário
+                  const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
+                  const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
+                  const diferenca = valorInformadoUsuario - valorTotal;
 
-
-                  if (valorTotal > 0) {
-                    return (
-                      <div key={forma.id} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        marginBottom: '8px',
-                        fontSize: '14px'
-                      }}>
-                        <span style={{ color: '#e5e7eb' }}>
-                          {forma.forma_pagamento_opcoes?.nome || forma.nome || 'Forma não identificada'}:
+                  // ✅ CORREÇÃO: Mostrar TODAS as formas de pagamento (não apenas com valor > 0)
+                  return (
+                    <div key={forma.id} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '8px',
+                      fontSize: '14px',
+                      padding: '8px',
+                      backgroundColor: valorTotal > 0 ? '#065f46' : '#374151',
+                      borderRadius: '4px',
+                      border: diferenca !== 0 ? '1px solid #f59e0b' : '1px solid transparent'
+                    }}>
+                      <div>
+                        <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                          {forma.forma_pagamento_opcoes?.nome || forma.nome || 'Forma não identificada'}
                         </span>
-                        <span style={{ color: '#10b981', fontWeight: 'bold' }}>
+                        {diferenca !== 0 && (
+                          <div style={{ fontSize: '12px', color: '#f59e0b' }}>
+                            Diferença: R$ {diferenca.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ color: valorTotal > 0 ? '#10b981' : '#9ca3af', fontWeight: 'bold' }}>
                           R$ {valorTotal.toLocaleString('pt-BR', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2
                           })}
-                        </span>
+                        </div>
+                        {valorInformadoUsuario !== valorTotal && (
+                          <div style={{ fontSize: '12px', color: '#3b82f6' }}>
+                            Informado: R$ {valorInformadoUsuario.toFixed(2)}
+                          </div>
+                        )}
                       </div>
-                    );
-                  }
-                  return null;
+                    </div>
+                  );
                 })}
               </div>
             )}
