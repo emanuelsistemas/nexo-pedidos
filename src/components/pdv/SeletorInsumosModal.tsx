@@ -37,6 +37,8 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
 }) => {
   const [insumosSelecionados, setInsumosSelecionados] = useState<InsumoSelecionado[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [editandoQuantidade, setEditandoQuantidade] = useState<string | null>(null);
+  const [quantidadeTemp, setQuantidadeTemp] = useState<string>('');
 
   // Limpar seleções quando o modal fechar
   useEffect(() => {
@@ -59,6 +61,25 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
   const getQuantidadeInsumo = (insumoId: string): number => {
     const insumoSelecionado = insumosSelecionados.find(i => i.insumo.produto_id === insumoId);
     return insumoSelecionado?.quantidade || 0;
+  };
+
+  // ✅ NOVO: Determinar incremento baseado na unidade de medida
+  const getIncremento = (unidadeMedida: string): number => {
+    const unidadesFracionadas = ['KG', 'L', 'ML', 'G', 'M', 'CM', 'MM'];
+    const unidadeUpper = unidadeMedida.toUpperCase();
+    return unidadesFracionadas.includes(unidadeUpper) ? 0.1 : 1;
+  };
+
+  // ✅ NOVO: Formatar quantidade baseado na unidade
+  const formatarQuantidadeDisplay = (quantidade: number, unidade: string): string => {
+    const incremento = getIncremento(unidade);
+    if (incremento === 1) {
+      // Unidade inteira - mostrar sem decimais
+      return `${Math.round(quantidade)} ${unidade}`;
+    } else {
+      // Unidade fracionada - mostrar com até 3 decimais, removendo zeros desnecessários
+      return `${quantidade.toFixed(3).replace(/\.?0+$/, '')} ${unidade}`;
+    }
   };
 
   const podeIncrementarInsumo = (insumo: Insumo): boolean => {
@@ -88,17 +109,19 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
       return;
     }
 
+    const incremento = getIncremento(insumo.unidade_medida);
+
     setInsumosSelecionados(prev => {
       const insumoExistente = prev.find(i => i.insumo.produto_id === insumo.produto_id);
 
       if (insumoExistente) {
         return prev.map(i =>
           i.insumo.produto_id === insumo.produto_id
-            ? { ...i, quantidade: i.quantidade + 0.1 } // Incremento de 0.1
+            ? { ...i, quantidade: i.quantidade + incremento }
             : i
         );
       } else {
-        return [...prev, { insumo, quantidade: insumo.quantidade + 0.1 }];
+        return [...prev, { insumo, quantidade: insumo.quantidade + incremento }];
       }
     });
   };
@@ -111,13 +134,15 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
       return;
     }
 
+    const incremento = getIncremento(insumo.unidade_medida);
+
     setInsumosSelecionados(prev => {
       const insumoExistente = prev.find(i => i.insumo.produto_id === insumoId);
 
-      if (insumoExistente && insumoExistente.quantidade > 0.1) {
+      if (insumoExistente && insumoExistente.quantidade > incremento) {
         return prev.map(i =>
           i.insumo.produto_id === insumoId
-            ? { ...i, quantidade: Math.max(0, i.quantidade - 0.1) } // Decremento de 0.1
+            ? { ...i, quantidade: Math.max(0, i.quantidade - incremento) }
             : i
         );
       } else {
@@ -153,6 +178,62 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     };
   };
 
+  // ✅ NOVO: Funções para edição manual da quantidade
+  const iniciarEdicaoQuantidade = (insumoId: string) => {
+    const quantidade = getQuantidadeInsumo(insumoId);
+    setEditandoQuantidade(insumoId);
+    setQuantidadeTemp(quantidade.toString());
+  };
+
+  const confirmarEdicaoQuantidade = (insumoId: string) => {
+    const novaQuantidade = parseFloat(quantidadeTemp);
+
+    if (isNaN(novaQuantidade) || novaQuantidade < 0) {
+      showMessage('error', 'Quantidade inválida');
+      cancelarEdicaoQuantidade();
+      return;
+    }
+
+    const insumo = produto.insumos?.find(i => i.produto_id === insumoId);
+    if (!insumo) return;
+
+    // Verificar limites se controle estiver ativo
+    if (produto.controlar_quantidades_insumo) {
+      if (insumo.quantidade_minima && novaQuantidade < insumo.quantidade_minima) {
+        showMessage('error', `Quantidade mínima: ${insumo.quantidade_minima} ${insumo.unidade_medida}`);
+        cancelarEdicaoQuantidade();
+        return;
+      }
+      if (insumo.quantidade_maxima && novaQuantidade > insumo.quantidade_maxima) {
+        showMessage('error', `Quantidade máxima: ${insumo.quantidade_maxima} ${insumo.unidade_medida}`);
+        cancelarEdicaoQuantidade();
+        return;
+      }
+    }
+
+    // Atualizar quantidade
+    setInsumosSelecionados(prev => {
+      const insumoExistente = prev.find(i => i.insumo.produto_id === insumoId);
+
+      if (insumoExistente) {
+        return prev.map(i =>
+          i.insumo.produto_id === insumoId
+            ? { ...i, quantidade: novaQuantidade }
+            : i
+        );
+      } else {
+        return [...prev, { insumo, quantidade: novaQuantidade }];
+      }
+    });
+
+    cancelarEdicaoQuantidade();
+  };
+
+  const cancelarEdicaoQuantidade = () => {
+    setEditandoQuantidade(null);
+    setQuantidadeTemp('');
+  };
+
   const handleConfirmar = () => {
     const validacao = verificarQuantidadesValidas();
 
@@ -166,9 +247,7 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     onClose();
   };
 
-  const formatarQuantidade = (quantidade: number, unidade: string): string => {
-    return `${quantidade.toFixed(3).replace(/\.?0+$/, '')} ${unidade}`;
-  };
+
 
   if (!isOpen) return null;
 
@@ -214,12 +293,12 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                     <div className="flex-1">
                       <p className="text-white font-medium">{insumo.nome}</p>
                       <p className="text-sm text-gray-400">
-                        Padrão: {formatarQuantidade(insumo.quantidade, insumo.unidade_medida)}
+                        Padrão: {formatarQuantidadeDisplay(insumo.quantidade, insumo.unidade_medida)}
                         {produto.controlar_quantidades_insumo && (insumo.quantidade_minima || insumo.quantidade_maxima) && (
                           <span className="ml-2">
-                            ({insumo.quantidade_minima && `mín: ${formatarQuantidade(insumo.quantidade_minima, insumo.unidade_medida)}`}
+                            ({insumo.quantidade_minima && `mín: ${formatarQuantidadeDisplay(insumo.quantidade_minima, insumo.unidade_medida)}`}
                             {insumo.quantidade_minima && insumo.quantidade_maxima && ', '}
-                            {insumo.quantidade_maxima && `máx: ${formatarQuantidade(insumo.quantidade_maxima, insumo.unidade_medida)}`})
+                            {insumo.quantidade_maxima && `máx: ${formatarQuantidadeDisplay(insumo.quantidade_maxima, insumo.unidade_medida)}`})
                           </span>
                         )}
                       </p>
@@ -239,9 +318,37 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                           >
                             <Minus size={16} />
                           </button>
-                          <span className="text-white font-medium w-20 text-center text-sm">
-                            {formatarQuantidade(quantidade, insumo.unidade_medida)}
-                          </span>
+
+                          {/* ✅ NOVO: Campo editável para quantidade */}
+                          {editandoQuantidade === insumo.produto_id ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={quantidadeTemp}
+                                onChange={(e) => setQuantidadeTemp(e.target.value)}
+                                onBlur={() => confirmarEdicaoQuantidade(insumo.produto_id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    confirmarEdicaoQuantidade(insumo.produto_id);
+                                  } else if (e.key === 'Escape') {
+                                    cancelarEdicaoQuantidade();
+                                  }
+                                }}
+                                className="w-16 px-2 py-1 text-center text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary-500"
+                                step={getIncremento(insumo.unidade_medida)}
+                                min="0"
+                                autoFocus
+                              />
+                              <span className="text-xs text-gray-400">{insumo.unidade_medida}</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => iniciarEdicaoQuantidade(insumo.produto_id)}
+                              className="text-white font-medium w-20 text-center text-sm hover:bg-gray-700 rounded px-2 py-1 transition-colors"
+                            >
+                              {formatarQuantidadeDisplay(quantidade, insumo.unidade_medida)}
+                            </button>
+                          )}
                         </>
                       )}
                       <button

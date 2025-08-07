@@ -15787,6 +15787,8 @@ const PDVPage: React.FC = () => {
           // ✅ NOVO: Incluir dados de devolução (se aplicável)
           devolucao_origem_id: item.devolucao_origem_id || null,
           devolucao_codigo: item.devolucao_codigo || null,
+          // ✅ NOVO: Incluir insumos selecionados (se houver)
+          insumos_selecionados: item.insumosSelecionados ? JSON.stringify(item.insumosSelecionados) : '[]',
           // ✅ CORREÇÃO: Incluir dados fiscais
           ...dadosFiscais
         };
@@ -15869,6 +15871,7 @@ const PDVPage: React.FC = () => {
                   observacao_item: itemData.observacao_item,
                   tabela_preco_id: itemData.tabela_preco_id,
                   tabela_preco_nome: itemData.tabela_preco_nome,
+                  insumos_selecionados: itemData.insumos_selecionados,
                   updated_at: new Date().toISOString()
                 })
                 .eq('id', itemExistente.id);
@@ -16062,7 +16065,7 @@ const PDVPage: React.FC = () => {
         }
         // Baixa de estoque concluída
 
-        // ✅ NOVO: Baixa automática de insumos
+        // ✅ NOVO: Baixa automática de insumos (com controle de seleção)
         setEtapaProcessamento('Processando baixa de insumos...');
 
         for (const item of carrinho) {
@@ -16071,34 +16074,80 @@ const PDVPage: React.FC = () => {
             continue;
           }
 
-          // ✅ Verificar se o produto tem insumos configurados
-          if (!item.produto.insumos || !Array.isArray(item.produto.insumos) || item.produto.insumos.length === 0) {
-            continue;
-          }
+          // ✅ NOVA LÓGICA: Verificar se deve usar insumos selecionados ou automáticos
+          const temSelecaoInsumos = item.produto.selecionar_insumos_venda &&
+                                   item.insumosSelecionados &&
+                                   Array.isArray(item.insumosSelecionados) &&
+                                   item.insumosSelecionados.length > 0;
 
-          // ✅ Processar cada insumo do produto
-          for (const insumo of item.produto.insumos) {
-            try {
-              // ✅ Calcular quantidade proporcional do insumo
-              const quantidadeInsumo = insumo.quantidade * item.quantidade;
+          if (temSelecaoInsumos) {
+            // ✅ MODO SELEÇÃO: Dar baixa APENAS nos insumos selecionados pelo usuário
+            console.log(`🎯 [INSUMOS] Processando insumos SELECIONADOS para: ${item.produto.nome}`);
 
-              // ✅ Dar baixa no estoque do insumo
-              const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
-                p_produto_id: insumo.produto_id,
-                p_quantidade: -quantidadeInsumo, // Quantidade negativa para baixa
-                p_tipo_operacao: 'consumo_insumo',
-                p_observacao: `Consumo de insumo - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome}`
-              });
+            for (const insumoSelecionado of item.insumosSelecionados) {
+              try {
+                // ✅ Calcular quantidade proporcional do insumo selecionado
+                const quantidadeInsumoTotal = insumoSelecionado.quantidade * item.quantidade;
 
-              if (insumoError) {
-                console.error(`❌ [INSUMOS] Erro ao baixar insumo ${insumo.nome}:`, insumoError);
-                // ✅ NÃO INTERROMPER a venda por erro de insumo - apenas logar
-                console.warn(`⚠️ [INSUMOS] Continuando venda apesar do erro no insumo: ${insumo.nome}`);
+                console.log(`🔍 [INSUMOS] Baixando insumo selecionado: ${insumoSelecionado.insumo.nome} - Quantidade: ${quantidadeInsumoTotal}`);
+
+                // ✅ Dar baixa no estoque do insumo selecionado
+                const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
+                  p_produto_id: insumoSelecionado.insumo.produto_id,
+                  p_quantidade: -quantidadeInsumoTotal, // Quantidade negativa para baixa
+                  p_tipo_operacao: 'consumo_insumo_selecionado',
+                  p_observacao: `Consumo de insumo selecionado - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumoSelecionado.insumo.nome}`
+                });
+
+                if (insumoError) {
+                  console.error(`❌ [INSUMOS] Erro ao baixar insumo selecionado ${insumoSelecionado.insumo.nome}:`, insumoError);
+                  // ✅ NÃO INTERROMPER a venda por erro de insumo - apenas logar
+                  console.warn(`⚠️ [INSUMOS] Continuando venda apesar do erro no insumo selecionado: ${insumoSelecionado.insumo.nome}`);
+                } else {
+                  console.log(`✅ [INSUMOS] Baixa realizada com sucesso: ${insumoSelecionado.insumo.nome}`);
+                }
+
+              } catch (error) {
+                console.error(`❌ [INSUMOS] Erro inesperado ao processar insumo selecionado ${insumoSelecionado.insumo.nome}:`, error);
+                // ✅ Continuar processamento mesmo com erro
               }
+            }
+          } else {
+            // ✅ MODO AUTOMÁTICO: Verificar se o produto tem insumos configurados e dar baixa em todos
+            if (!item.produto.insumos || !Array.isArray(item.produto.insumos) || item.produto.insumos.length === 0) {
+              continue;
+            }
 
-            } catch (error) {
-              console.error(`❌ [INSUMOS] Erro inesperado ao processar insumo ${insumo.nome}:`, error);
-              // ✅ Continuar processamento mesmo com erro
+            console.log(`🔄 [INSUMOS] Processando insumos AUTOMÁTICOS para: ${item.produto.nome}`);
+
+            // ✅ Processar cada insumo do produto automaticamente
+            for (const insumo of item.produto.insumos) {
+              try {
+                // ✅ Calcular quantidade proporcional do insumo
+                const quantidadeInsumo = insumo.quantidade * item.quantidade;
+
+                console.log(`🔍 [INSUMOS] Baixando insumo automático: ${insumo.nome} - Quantidade: ${quantidadeInsumo}`);
+
+                // ✅ Dar baixa no estoque do insumo
+                const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
+                  p_produto_id: insumo.produto_id,
+                  p_quantidade: -quantidadeInsumo, // Quantidade negativa para baixa
+                  p_tipo_operacao: 'consumo_insumo',
+                  p_observacao: `Consumo de insumo automático - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumo.nome}`
+                });
+
+                if (insumoError) {
+                  console.error(`❌ [INSUMOS] Erro ao baixar insumo automático ${insumo.nome}:`, insumoError);
+                  // ✅ NÃO INTERROMPER a venda por erro de insumo - apenas logar
+                  console.warn(`⚠️ [INSUMOS] Continuando venda apesar do erro no insumo automático: ${insumo.nome}`);
+                } else {
+                  console.log(`✅ [INSUMOS] Baixa automática realizada com sucesso: ${insumo.nome}`);
+                }
+
+              } catch (error) {
+                console.error(`❌ [INSUMOS] Erro inesperado ao processar insumo automático ${insumo.nome}:`, error);
+                // ✅ Continuar processamento mesmo com erro
+              }
             }
           }
         }
