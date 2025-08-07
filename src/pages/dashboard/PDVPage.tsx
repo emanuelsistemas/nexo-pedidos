@@ -1078,6 +1078,11 @@ const PDVPage: React.FC = () => {
   const [showAdicionaisModal, setShowAdicionaisModal] = useState(false);
   const [itemParaAdicionais, setItemParaAdicionais] = useState<ItemCarrinho | null>(null);
 
+  // ✅ NOVO: Estados para modal de seleção de insumos
+  const [showInsumosModal, setShowInsumosModal] = useState(false);
+  const [produtoParaInsumos, setProdutoParaInsumos] = useState<Produto | null>(null);
+  const [quantidadeParaInsumos, setQuantidadeParaInsumos] = useState<number>(1);
+
   // Estados para edição de nome do produto
   const [itemEditandoNome, setItemEditandoNome] = useState<string | null>(null);
   const [nomeEditando, setNomeEditando] = useState<string>('');
@@ -4201,6 +4206,8 @@ const PDVPage: React.FC = () => {
         promocao_data_fim,
         promocao_data_cardapio,
         insumos,
+        selecionar_insumos_venda,
+        controlar_quantidades_insumo,
         grupo:grupos(nome),
         unidade_medida:unidade_medida_id (
           id,
@@ -9467,6 +9474,10 @@ const PDVPage: React.FC = () => {
       nome: produto.nome,
       codigo: produto.codigo,
       temDevolucaoProps: !!(produto as any).devolucao_codigo || !!(produto as any).isDevolucao,
+      // 🔍 NOVO: Debug específico para insumos
+      temInsumos: produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0,
+      selecionar_insumos_venda: produto.selecionar_insumos_venda,
+      insumos: produto.insumos,
       produtoCompleto: produto
     });
 
@@ -9501,8 +9512,46 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função que processa a adição do produto (extraída da função original)
   const processarAdicaoProduto = async (produto: Produto, quantidadePersonalizada?: number) => {
 
+    // 🔍 DEBUG: Log detalhado do produto recebido
+    console.log('🔍 DEBUG processarAdicaoProduto - Produto recebido:', {
+      id: produto.id,
+      nome: produto.nome,
+      temInsumos: produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0,
+      insumos: produto.insumos,
+      selecionar_insumos_venda: produto.selecionar_insumos_venda,
+      controlar_quantidades_insumo: produto.controlar_quantidades_insumo,
+      insumosSelecionados: (produto as any).insumosSelecionados,
+      quantidadePersonalizada
+    });
+
     // ✅ Verificar opções adicionais ANTES de qualquer outro fluxo
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+
+    // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa selecionar insumos primeiro
+    const temInsumos = produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0;
+    const deveSelecionarInsumos = produto.selecionar_insumos_venda && temInsumos;
+
+    // 🔍 DEBUG: Log da verificação de insumos
+    console.log('🔍 DEBUG verificação insumos:', {
+      temInsumos,
+      selecionar_insumos_venda: produto.selecionar_insumos_venda,
+      deveSelecionarInsumos,
+      jaTemInsumosSelecionados: !!(produto as any).insumosSelecionados,
+      vaiAbrirModal: deveSelecionarInsumos && !(produto as any).insumosSelecionados
+    });
+
+    if (deveSelecionarInsumos && !(produto as any).insumosSelecionados) {
+      console.log('🎯 ABRINDO MODAL DE INSUMOS para produto:', produto.nome);
+      setProdutoParaInsumos(produto);
+      setQuantidadeParaInsumos(quantidadePersonalizada || 1);
+      setShowInsumosModal(true);
+      return;
+    } else {
+      console.log('❌ NÃO vai abrir modal de insumos. Motivo:', {
+        deveSelecionarInsumos,
+        jaTemInsumosSelecionados: !!(produto as any).insumosSelecionados
+      });
+    }
 
     // ✅ FLUXO SEQUENCIAL: Verificar se precisa selecionar vendedor primeiro
     if (pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
@@ -27958,6 +28007,15 @@ const PDVPage: React.FC = () => {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={async () => {
+                            // 🔍 DEBUG: Log do clique no produto
+                            console.log('🔍 CLIQUE NO PRODUTO:', {
+                              id: produto.id,
+                              nome: produto.nome,
+                              temInsumos: produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0,
+                              selecionar_insumos_venda: produto.selecionar_insumos_venda,
+                              insumos: produto.insumos
+                            });
+
                             // ✅ CORREÇÃO: Fechar o modal de produtos IMEDIATAMENTE (igual ao comportamento da busca por código)
                             setShowAreaProdutos(false);
 
