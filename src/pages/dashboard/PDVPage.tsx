@@ -3982,13 +3982,21 @@ const PDVPage: React.FC = () => {
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
+  // ✅ NOVO: Monitor do buffer para debug
+  useEffect(() => {
+    console.log('🔄 Buffer de código de barras mudou:', codigoBarrasBuffer);
+  }, [codigoBarrasBuffer]);
+
   // Listener global para captura de código de barras, F1-F9 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
+      console.log('🎹 Tecla pressionada:', event.key, 'Código:', event.code);
+
       // ✅ CORRIGIDO: Capturar apenas teclas F reais (F1, F2, etc.) para atalhos do menu PDV
       if (event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3) {
         const fNumber = parseInt(event.key.substring(1));
         if (!isNaN(fNumber) && fNumber >= 0 && fNumber <= 9) {
+          console.log('🔧 Atalho F detectado:', fNumber);
           event.preventDefault();
           let menuIndex;
           if (fNumber === 0) {
@@ -4013,7 +4021,11 @@ const PDVPage: React.FC = () => {
       }
 
       // Só funciona se a configuração estiver habilitada
-      if (!pdvConfig?.venda_codigo_barras) return;
+      if (!pdvConfig?.venda_codigo_barras) {
+        console.log('⚠️ Captura de código de barras desabilitada na configuração');
+        return;
+      }
+      console.log('✅ Captura de código de barras habilitada');
 
       // Ignorar se estiver digitando em um input, textarea ou elemento editável
       const target = event.target as HTMLElement;
@@ -4030,18 +4042,28 @@ const PDVPage: React.FC = () => {
       if (!/^\d$/.test(event.key)) {
         // Se pressionar Enter e tiver código no buffer, processar
         if (event.key === 'Enter' && codigoBarrasBuffer.length > 0) {
+          console.log('🚀 Enter pressionado com buffer:', codigoBarrasBuffer);
           processarCodigoBarras(codigoBarrasBuffer);
           setCodigoBarrasBuffer('');
           if (timeoutId) {
             clearTimeout(timeoutId);
             setTimeoutId(null);
           }
+        } else if (event.key === 'Enter') {
+          console.log('⚠️ Enter pressionado mas buffer vazio. Buffer atual:', codigoBarrasBuffer);
+          // ✅ NOVO: Teste direto da função para debug
+          console.log('🧪 Testando função diretamente com código "49"');
+          processarCodigoBarras('49');
         }
+        console.log('🔍 Tecla não numérica ignorada:', event.key);
         return;
       }
 
       // Adicionar número ao buffer
       const novoBuffer = codigoBarrasBuffer + event.key;
+      console.log('📝 Adicionando dígito:', event.key, '→ Buffer anterior:', codigoBarrasBuffer, '→ Novo buffer:', novoBuffer);
+      console.log('🔍 Estado React do buffer antes:', codigoBarrasBuffer);
+      console.log('🔍 Novo valor calculado:', novoBuffer);
       setCodigoBarrasBuffer(novoBuffer);
 
       // Limpar timeout anterior
@@ -4074,8 +4096,13 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Função para buscar produto incluindo ocultos (para validação)
   const buscarProdutoComOcultos = async (codigo: string): Promise<Produto | null> => {
+    console.log('🔍 Buscando produto com código:', codigo);
+
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return null;
+    if (!userData.user) {
+      console.log('❌ Usuário não autenticado');
+      return null;
+    }
 
     const { data: usuarioData } = await supabase
       .from('usuarios')
@@ -4083,7 +4110,12 @@ const PDVPage: React.FC = () => {
       .eq('id', userData.user.id)
       .single();
 
-    if (!usuarioData?.empresa_id) return null;
+    if (!usuarioData?.empresa_id) {
+      console.log('❌ Empresa não encontrada para o usuário');
+      return null;
+    }
+
+    console.log('🏢 Empresa ID:', usuarioData.empresa_id);
 
     const { data, error } = await supabase
       .from('produtos')
@@ -4131,48 +4163,69 @@ const PDVPage: React.FC = () => {
         controlar_quantidades_insumo,
         materia_prima,
         ocultar_visualizacao_pdv,
-        grupo:grupos(nome),
-        unidade_medida:unidade_medida_id (
-          id,
-          sigla,
-          nome,
-          fracionado
-        ),
-        produto_fotos(url, principal)
+        grupo_id,
+        unidade_medida_id
       `)
       .eq('empresa_id', usuarioData.empresa_id)
       .eq('ativo', true)
       .eq('deletado', false)
       .or(`codigo.eq.${codigo},codigo_barras.eq.${codigo}`)
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (error || !data) return null;
-    return data as Produto;
+    if (error) {
+      console.log('❌ Erro na consulta:', error);
+      return null;
+    }
+
+    if (!data || data.length === 0) {
+      console.log('❌ Nenhum produto encontrado com código:', codigo);
+      return null;
+    }
+
+    const produto = data[0] as Produto;
+    console.log('✅ Produto encontrado:', {
+      id: produto.id,
+      nome: produto.nome,
+      codigo: produto.codigo,
+      materia_prima: produto.materia_prima,
+      ocultar_visualizacao_pdv: produto.ocultar_visualizacao_pdv
+    });
+
+    return produto;
   };
 
   // Função para processar código de barras capturado
   const processarCodigoBarras = async (codigo: string) => {
+    console.log('🚀 Processando código de barras:', codigo);
+
     // Primeiro, buscar produto incluindo ocultos para validação
     const produtoCompleto = await buscarProdutoComOcultos(codigo);
 
     if (produtoCompleto) {
+      console.log('📦 Produto encontrado na busca completa');
+
       // ✅ NOVO: Verificar se produto está oculto no PDV
       if (produtoCompleto.ocultar_visualizacao_pdv) {
+        console.log('🚫 Produto está oculto no PDV - mostrando modal específico');
         setProdutoOcultoPDV(produtoCompleto);
         setShowProdutoOcultoPDV(true);
         return;
       }
 
+      console.log('✅ Produto não está oculto - buscando na lista normal');
       // Se não está oculto, buscar na lista normal (que já exclui ocultos) - BUSCA EXATA
       const produto = produtos.find(p =>
         (p.codigo_barras && p.codigo_barras === codigo) ||
         (p.codigo && p.codigo === codigo)
       );
       if (produto) {
+        console.log('✅ Produto encontrado na lista normal - adicionando ao carrinho');
         adicionarAoCarrinho(produto);
+      } else {
+        console.log('❌ Produto não encontrado na lista normal (pode estar oculto)');
       }
     } else {
+      console.log('❌ Produto não encontrado - mostrando modal não encontrado');
       // Produto não encontrado
       setProdutoNaoEncontradoTermo(codigo);
       setShowProdutoNaoEncontrado(true);

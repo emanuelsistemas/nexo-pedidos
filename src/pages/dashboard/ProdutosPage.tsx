@@ -9811,7 +9811,7 @@ const ProdutosPage: React.FC = () => {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-4xl max-h-[90vh] flex flex-col"
+              className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-4xl h-[95vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header fixo */}
