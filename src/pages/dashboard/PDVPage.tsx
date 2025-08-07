@@ -156,6 +156,17 @@ interface ItemCarrinho {
     porcentagem: number;
   }>;
   descricaoSabores?: string; // ✅ NOVO: Descrição formatada dos sabores
+  insumosSelecionados?: Array<{ // ✅ NOVO: Insumos selecionados para o produto
+    insumo: {
+      produto_id: string;
+      nome: string;
+      quantidade: number;
+      unidade_medida: string;
+      quantidade_minima?: number;
+      quantidade_maxima?: number;
+    };
+    quantidade: number;
+  }> | null;
 }
 
 interface Cliente {
@@ -2256,8 +2267,9 @@ const PDVPage: React.FC = () => {
           console.log('📊 Vendas encontradas para o caixa:', vendasCaixa?.length || 0);
 
           // Inicializar contadores para cada forma de pagamento
+          // ✅ CORREÇÃO: Usar o ID da empresa como chave, não o ID da opção
           formasData.forEach(forma => {
-            valoresReais[forma.forma_pagamento_opcao_id] = { atual: 0, formatado: '0,00' };
+            valoresReais[forma.id] = { atual: 0, formatado: '0,00' };
           });
 
           // Processar cada venda
@@ -9554,7 +9566,9 @@ const PDVPage: React.FC = () => {
       tabela_preco_id: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao' ? tabelaPrecoSelecionada : null,
       tabela_preco_nome: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao'
         ? tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada)?.nome
-        : null
+        : null,
+      // ✅ NOVO: Salvar insumos selecionados se houver
+      insumosSelecionados: (produto as any).insumosSelecionados || null
     };
 
     // 🔍 DEBUG: Log do item criado para investigar devolucao_codigo
@@ -11039,6 +11053,36 @@ const PDVPage: React.FC = () => {
     setShowOpcoesAdicionaisModal(false);
     setProdutoParaAdicionais(null);
     setItemCarrinhoParaAdicionais(null);
+  };
+
+  // ✅ NOVO: Função para confirmar seleção de insumos
+  const confirmarInsumos = async (insumosSelecionados: any[]) => {
+    if (!produtoParaInsumos) return;
+
+    try {
+      // Salvar referências antes de limpar os estados
+      const produto = produtoParaInsumos;
+      const quantidade = quantidadeParaInsumos;
+
+      // Limpar estados do modal de insumos
+      setProdutoParaInsumos(null);
+      setQuantidadeParaInsumos(1);
+      setShowInsumosModal(false);
+
+      // Continuar com o fluxo normal de adição do produto, mas com insumos selecionados
+      // Adicionar os insumos selecionados ao produto para usar no carrinho
+      const produtoComInsumos = {
+        ...produto,
+        insumosSelecionados // Adicionar insumos selecionados ao produto
+      };
+
+      // Continuar com o fluxo normal (verificar vendedor, quantidade, etc.)
+      await processarAdicaoProduto(produtoComInsumos, quantidade);
+
+    } catch (error) {
+      console.error('Erro ao confirmar insumos:', error);
+      showMessage('error', 'Erro ao processar insumos selecionados');
+    }
   };
 
   const removerAdicional = (itemId: string, adicionalIndex: number) => {
@@ -28488,6 +28532,20 @@ const PDVPage: React.FC = () => {
         />
       )}
 
+      {/* ✅ NOVO: Modal de Seleção de Insumos */}
+      {produtoParaInsumos && (
+        <SeletorInsumosModal
+          isOpen={showInsumosModal}
+          onClose={() => {
+            setShowInsumosModal(false);
+            setProdutoParaInsumos(null);
+            setQuantidadeParaInsumos(1);
+          }}
+          produto={produtoParaInsumos}
+          onConfirm={confirmarInsumos}
+        />
+      )}
+
       {/* Modal de Observação Adicional */}
       {showObservacaoModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -33212,7 +33270,7 @@ const PDVPage: React.FC = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   {formasPagamentoCaixa.map((forma) => (
                     <div
-                      key={forma.forma_pagamento_opcao_id}
+                      key={forma.id}
                       style={{
                         backgroundColor: '#374151',
                         borderRadius: '8px',
@@ -33230,7 +33288,7 @@ const PDVPage: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
                           <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
-                            R$ {valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.formatado || '0,00'}
+                            R$ {valoresReaisCaixa[forma.id]?.formatado || '0,00'}
                           </span>
                         </div>
 
@@ -33259,7 +33317,7 @@ const PDVPage: React.FC = () => {
                             <span style={{ fontSize: '12px', color: '#e5e7eb', fontWeight: 'bold' }}>Valor Total:</span>
                             <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3b82f6' }}>
                               R$ {(
-                                (valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.atual || 0) +
+                                (valoresReaisCaixa[forma.id]?.atual || 0) +
                                 (valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0)
                               ).toLocaleString('pt-BR', {
                                 minimumFractionDigits: 2,
@@ -33275,12 +33333,12 @@ const PDVPage: React.FC = () => {
                           </label>
                           <input
                             type="text"
-                            value={valoresCaixa[forma.forma_pagamento_opcao_id] || '0,00'}
+                            value={valoresCaixa[forma.id] || '0,00'}
                             onChange={(e) => {
                               const novoValor = formatarValorMonetario(e.target.value);
                               setValoresCaixa(prev => ({
                                 ...prev,
-                                [forma.forma_pagamento_opcao_id]: novoValor
+                                [forma.id]: novoValor
                               }));
                             }}
                             placeholder="0,00"
@@ -33860,7 +33918,7 @@ const PDVPage: React.FC = () => {
                 </h4>
 
                 {formasPagamentoCaixa.map(forma => {
-                  const valorAtual = valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.atual || 0;
+                  const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
                   const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
                   const valorTotal = valorAtual + valorFiado;
 
@@ -33868,7 +33926,7 @@ const PDVPage: React.FC = () => {
 
                   if (valorTotal > 0) {
                     return (
-                      <div key={forma.forma_pagamento_opcao_id} style={{
+                      <div key={forma.id} style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         marginBottom: '8px',
