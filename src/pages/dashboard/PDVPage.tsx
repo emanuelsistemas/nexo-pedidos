@@ -493,6 +493,7 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
+  const [observacaoFechamento, setObservacaoFechamento] = useState('');
 
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
@@ -1950,13 +1951,15 @@ const PDVPage: React.FC = () => {
       }
 
       // 2. Atualizar status do caixa
+      const observacaoFinal = observacaoFechamento.trim() || `Caixa fechado em ${new Date().toLocaleString('pt-BR')}`;
+
       const { error: updateError } = await supabase
         .from('caixa_controle')
         .update({
           status: 'fechado',
           status_caixa: false,
           data_fechamento: new Date().toISOString(),
-          observacao_fechamento: `Caixa fechado em ${new Date().toLocaleString('pt-BR')}`
+          observacao_fechamento: observacaoFinal
         })
         .eq('id', caixaAberto.id);
 
@@ -1972,6 +1975,7 @@ const PDVPage: React.FC = () => {
       // Limpar estados e recarregar dados
       setShowCaixaModal(false);
       setShowFecharCaixaModal(false);
+      setObservacaoFechamento(''); // ✅ Limpar observação do fechamento
       setDadosCaixa(null);
       setFormasPagamentoCaixa([]);
       setValoresCaixa({});
@@ -2007,11 +2011,12 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Buscar caixa aberto
+      // Buscar caixa aberto do usuário logado
       const { data: caixaData, error: caixaError } = await supabase
         .from('caixa_controle')
         .select('*')
         .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', authData.user.id)  // ✅ CORREÇÃO: Filtrar pelo usuário logado
         .eq('status', 'aberto')
         .order('data_abertura', { ascending: false })
         .limit(1)
@@ -33749,10 +33754,51 @@ const PDVPage: React.FC = () => {
               </div>
             )}
 
+            {/* Campo de observação do fechamento */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                color: '#e5e7eb',
+                marginBottom: '8px'
+              }}>
+                💬 Observação do Fechamento (opcional)
+              </label>
+              <textarea
+                value={observacaoFechamento}
+                onChange={(e) => setObservacaoFechamento(e.target.value)}
+                placeholder="Digite uma observação sobre o fechamento do caixa..."
+                disabled={loadingFecharCaixa}
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '12px',
+                  backgroundColor: '#374151',
+                  border: '1px solid #4b5563',
+                  borderRadius: '8px',
+                  color: '#e5e7eb',
+                  fontSize: '14px',
+                  resize: 'vertical',
+                  outline: 'none',
+                  opacity: loadingFecharCaixa ? 0.6 : 1
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#3b82f6';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#4b5563';
+                }}
+              />
+            </div>
+
             {/* Botões */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
-                onClick={() => setShowFecharCaixaModal(false)}
+                onClick={() => {
+                  setShowFecharCaixaModal(false);
+                  setObservacaoFechamento(''); // ✅ Limpar observação ao cancelar
+                }}
                 disabled={loadingFecharCaixa}
                 style={{
                   flex: 1,
