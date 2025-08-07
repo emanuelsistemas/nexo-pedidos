@@ -2767,6 +2767,8 @@ const ProdutosPage: React.FC = () => {
       producao: produto.producao || false,
       // Campo para insumos
       insumos: produto.insumos || [],
+      // Campo para selecionar insumos na venda
+      selecionar_insumos_venda: produto.selecionar_insumos_venda || false,
     };
 
     // Definir o estado do novo produto
@@ -3866,6 +3868,8 @@ const ProdutosPage: React.FC = () => {
           producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
           insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
+          // ✅ NOVO CAMPO: Selecionar insumos na venda
+          selecionar_insumos_venda: novoProduto.selecionar_insumos_venda || false,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -3931,6 +3935,8 @@ const ProdutosPage: React.FC = () => {
           producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
           insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
+          // ✅ NOVO CAMPO: Selecionar insumos na venda
+          selecionar_insumos_venda: novoProduto.selecionar_insumos_venda || false,
         };
 
 
@@ -4200,6 +4206,7 @@ const ProdutosPage: React.FC = () => {
         materia_prima: produtoOriginal.materia_prima || false,
         producao: produtoOriginal.producao || false,
         insumos: produtoOriginal.insumos || [],
+        selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda || false,
         // Campos obrigatórios
         grupo_id: grupo.id,
         empresa_id: usuarioData.empresa_id,
@@ -9006,6 +9013,29 @@ const ProdutosPage: React.FC = () => {
                           <p className="text-gray-400 text-sm mb-4">
                             Configure quais produtos serão descontados do estoque quando este produto for vendido.
                           </p>
+
+                          {/* Checkbox para selecionar insumos na venda */}
+                          <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4 mb-4">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={novoProduto.selecionar_insumos_venda || false}
+                                onChange={(e) => setNovoProduto(prev => ({
+                                  ...prev,
+                                  selecionar_insumos_venda: e.target.checked
+                                }))}
+                                className="w-4 h-4 text-primary-500 bg-gray-700 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                              />
+                              <div className="flex-1">
+                                <span className="text-white font-medium text-sm">
+                                  Selecionar insumos na venda
+                                </span>
+                                <p className="text-gray-400 text-xs mt-1">
+                                  Quando ativado, permitirá selecionar quais insumos usar durante a venda no PDV
+                                </p>
+                              </div>
+                            </label>
+                          </div>
 
                           {produtoInsumos.length === 0 ? (
                             <div className="text-center py-8">
