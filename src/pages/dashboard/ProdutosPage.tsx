@@ -354,6 +354,8 @@ const ProdutosPage: React.FC = () => {
     insumos: [],
     // Campo para selecionar insumos na venda
     selecionar_insumos_venda: false,
+    // Campo para controlar quantidades no insumo
+    controlar_quantidades_insumo: false,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -2769,6 +2771,8 @@ const ProdutosPage: React.FC = () => {
       insumos: produto.insumos || [],
       // Campo para selecionar insumos na venda
       selecionar_insumos_venda: produto.selecionar_insumos_venda || false,
+      // Campo para controlar quantidades no insumo
+      controlar_quantidades_insumo: produto.controlar_quantidades_insumo || false,
     };
 
     // Definir o estado do novo produto
@@ -3868,8 +3872,10 @@ const ProdutosPage: React.FC = () => {
           producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
           insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
-          // ✅ NOVO CAMPO: Selecionar insumos na venda
-          selecionar_insumos_venda: novoProduto.selecionar_insumos_venda || false,
+          // ✅ NOVO CAMPO: Selecionar insumos na venda (só se houver insumos)
+          selecionar_insumos_venda: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda) || false,
+          // ✅ NOVO CAMPO: Controlar quantidades no insumo (só se houver insumos e selecionar_insumos_venda estiver ativo)
+          controlar_quantidades_insumo: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda && novoProduto.controlar_quantidades_insumo) || false,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -3935,8 +3941,10 @@ const ProdutosPage: React.FC = () => {
           producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
           insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
-          // ✅ NOVO CAMPO: Selecionar insumos na venda
-          selecionar_insumos_venda: novoProduto.selecionar_insumos_venda || false,
+          // ✅ NOVO CAMPO: Selecionar insumos na venda (só se houver insumos)
+          selecionar_insumos_venda: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda) || false,
+          // ✅ NOVO CAMPO: Controlar quantidades no insumo (só se houver insumos e selecionar_insumos_venda estiver ativo)
+          controlar_quantidades_insumo: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda && novoProduto.controlar_quantidades_insumo) || false,
         };
 
 
@@ -4207,6 +4215,7 @@ const ProdutosPage: React.FC = () => {
         producao: produtoOriginal.producao || false,
         insumos: produtoOriginal.insumos || [],
         selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda || false,
+        controlar_quantidades_insumo: produtoOriginal.controlar_quantidades_insumo || false,
         // Campos obrigatórios
         grupo_id: grupo.id,
         empresa_id: usuarioData.empresa_id,
@@ -9014,16 +9023,22 @@ const ProdutosPage: React.FC = () => {
                             Configure quais produtos serão descontados do estoque quando este produto for vendido.
                           </p>
 
-                          {/* Checkbox para selecionar insumos na venda */}
-                          <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4 mb-4">
+                          {/* Checkbox para selecionar insumos na venda - só aparece se houver insumos */}
+                          {produtoInsumos.length > 0 && (
+                            <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4 mb-4">
                             <label className="flex items-center gap-3 cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={novoProduto.selecionar_insumos_venda || false}
-                                onChange={(e) => setNovoProduto(prev => ({
-                                  ...prev,
-                                  selecionar_insumos_venda: e.target.checked
-                                }))}
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  setNovoProduto(prev => ({
+                                    ...prev,
+                                    selecionar_insumos_venda: isChecked,
+                                    // Se desmarcar o principal, desmarcar também a subopção
+                                    controlar_quantidades_insumo: isChecked ? prev.controlar_quantidades_insumo : false
+                                  }));
+                                }}
                                 className="w-4 h-4 text-primary-500 bg-gray-700 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
                               />
                               <div className="flex-1">
@@ -9035,7 +9050,41 @@ const ProdutosPage: React.FC = () => {
                                 </p>
                               </div>
                             </label>
+
+                            {/* Subopção - só aparece quando o principal estiver marcado */}
+                            {novoProduto.selecionar_insumos_venda && (
+                              <div className="mt-4 ml-7 pl-4 border-l-2 border-primary-500/30">
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={novoProduto.controlar_quantidades_insumo || false}
+                                    onChange={(e) => {
+                                      const isChecked = e.target.checked;
+                                      setNovoProduto(prev => ({
+                                        ...prev,
+                                        controlar_quantidades_insumo: isChecked,
+                                        // Se desmarcar, limpar os valores de quantidade
+                                        insumo_quantidade_minima: isChecked ? prev.insumo_quantidade_minima : 0,
+                                        insumo_quantidade_maxima: isChecked ? prev.insumo_quantidade_maxima : 0
+                                      }));
+                                    }}
+                                    className="w-4 h-4 text-orange-500 bg-gray-700 border-gray-600 rounded focus:ring-orange-500 focus:ring-2"
+                                  />
+                                  <div className="flex-1">
+                                    <span className="text-gray-300 font-medium text-sm">
+                                      Controlar quantidades no insumo
+                                    </span>
+                                    <p className="text-gray-400 text-xs mt-1">
+                                      Permitirá alterar as quantidades dos insumos durante a venda
+                                    </p>
+                                  </div>
+                                </label>
+
+
+                              </div>
+                            )}
                           </div>
+                          )}
 
                           {produtoInsumos.length === 0 ? (
                             <div className="text-center py-8">
@@ -9055,7 +9104,7 @@ const ProdutosPage: React.FC = () => {
                             <div className="space-y-3">
                               {produtoInsumos.map((insumo, index) => (
                                 <div key={index} className="bg-gray-900/50 border border-gray-600 rounded-lg p-3">
-                                  <div className="flex items-center justify-between">
+                                  <div className="flex items-center justify-between mb-3">
                                     <div className="flex-1">
                                       <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 bg-primary-500/20 rounded-lg flex items-center justify-center">
@@ -9091,6 +9140,16 @@ const ProdutosPage: React.FC = () => {
                                         onClick={() => {
                                           const novosInsumos = produtoInsumos.filter((_, i) => i !== index);
                                           setProdutoInsumos(novosInsumos);
+
+                                          // Se não restaram insumos, limpar as opções relacionadas
+                                          if (novosInsumos.length === 0) {
+                                            setNovoProduto(prev => ({
+                                              ...prev,
+                                              selecionar_insumos_venda: false,
+                                              controlar_quantidades_insumo: false
+                                            }));
+                                          }
+
                                           showMessage('success', 'Insumo removido com sucesso');
                                         }}
                                         className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
@@ -9103,6 +9162,58 @@ const ProdutosPage: React.FC = () => {
                                       </button>
                                     </div>
                                   </div>
+
+                                  {/* Campos de quantidade mínima e máxima - só aparecem quando controlar quantidades estiver marcado */}
+                                  {novoProduto.controlar_quantidades_insumo && (
+                                    <div className="pt-3 border-t border-gray-700/50">
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-400 mb-1">
+                                            Quantidade Mínima
+                                          </label>
+                                          <input
+                                            type="number"
+                                            value={insumo.quantidade_minima || 0}
+                                            onChange={(e) => {
+                                              const valor = parseFloat(e.target.value) || 0;
+                                              const novosInsumos = [...produtoInsumos];
+                                              novosInsumos[index] = {
+                                                ...novosInsumos[index],
+                                                quantidade_minima: valor >= 0 ? valor : 0
+                                              };
+                                              setProdutoInsumos(novosInsumos);
+                                            }}
+                                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
+                                            placeholder="0.00"
+                                            step="0.01"
+                                            min="0"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-400 mb-1">
+                                            Quantidade Máxima
+                                          </label>
+                                          <input
+                                            type="number"
+                                            value={insumo.quantidade_maxima || 0}
+                                            onChange={(e) => {
+                                              const valor = parseFloat(e.target.value) || 0;
+                                              const novosInsumos = [...produtoInsumos];
+                                              novosInsumos[index] = {
+                                                ...novosInsumos[index],
+                                                quantidade_maxima: valor >= 0 ? valor : 0
+                                              };
+                                              setProdutoInsumos(novosInsumos);
+                                            }}
+                                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
+                                            placeholder="0.00"
+                                            step="0.01"
+                                            min="0"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
