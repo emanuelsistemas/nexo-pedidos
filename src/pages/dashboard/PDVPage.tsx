@@ -4039,6 +4039,7 @@ const PDVPage: React.FC = () => {
       }
 
       // Só capturar números
+      console.log('🔍 Testando se é número:', event.key, '| Teste regex:', /^\d$/.test(event.key));
       if (!/^\d$/.test(event.key)) {
         // Se pressionar Enter e tiver código no buffer, processar
         if (event.key === 'Enter' && codigoBarrasBuffer.length > 0) {
@@ -4053,6 +4054,10 @@ const PDVPage: React.FC = () => {
           console.log('⚠️ Enter pressionado mas buffer vazio. Buffer atual:', codigoBarrasBuffer);
           // ✅ NOVO: Teste direto da função para debug
           console.log('🧪 Testando função diretamente com código "49"');
+          processarCodigoBarras('49');
+        } else if (event.key === 'F12') {
+          // ✅ NOVO: Teste com F12 para debug
+          console.log('🧪 F12 pressionado - testando busca de produto oculto');
           processarCodigoBarras('49');
         }
         console.log('🔍 Tecla não numérica ignorada:', event.key);
@@ -4226,9 +4231,8 @@ const PDVPage: React.FC = () => {
       }
     } else {
       console.log('❌ Produto não encontrado - mostrando modal não encontrado');
-      // Produto não encontrado
-      setProdutoNaoEncontradoTermo(codigo);
-      setShowProdutoNaoEncontrado(true);
+      // Produto realmente não encontrado
+      mostrarProdutoNaoEncontrado(codigo);
     }
   };
 
@@ -19453,8 +19457,9 @@ const PDVPage: React.FC = () => {
           }
         }
 
-        // Mostrar modal de produto não encontrado
-        mostrarProdutoNaoEncontrado(termoBusca);
+        // ✅ NOVO: Verificar se é produto oculto antes de mostrar "não encontrado"
+        console.log('🔍 Produto não encontrado no campo de busca, verificando se está oculto:', termoBusca);
+        processarCodigoBarras(termoBusca);
 
         // Manter o foco
         setTimeout(() => {
@@ -28618,8 +28623,9 @@ const PDVPage: React.FC = () => {
                               }
                             }
 
-                            // Mostrar modal de produto não encontrado
-                            mostrarProdutoNaoEncontrado(termoBusca);
+                            // ✅ NOVO: Verificar se é produto oculto antes de mostrar "não encontrado"
+                            console.log('🔍 Produto não encontrado no campo de busca (2), verificando se está oculto:', termoBusca);
+                            processarCodigoBarras(termoBusca);
 
                             // Manter o foco
                             setTimeout(() => {

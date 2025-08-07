@@ -5061,8 +5061,9 @@ const ConfiguracoesPage: React.FC = () => {
     setVendaSemProdutoCfopDropdownOpen(false);
     setVendaSemProdutoCfopSearchTerm('');
 
-    // Atualizar situação tributária baseada no CFOP
-    atualizarSituacaoTributariaVendaSemProduto(cfop.codigo);
+    // ✅ REMOVIDO: Não atualizar automaticamente situação tributária
+    // Deixar o usuário configurar manualmente os campos CST/CSOSN
+    // atualizarSituacaoTributariaVendaSemProduto(cfop.codigo);
   };
 
   // Função para detectar se a empresa é Simples Nacional
