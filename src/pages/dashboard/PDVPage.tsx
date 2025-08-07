@@ -975,6 +975,10 @@ const PDVPage: React.FC = () => {
   const [showProdutoNaoEncontrado, setShowProdutoNaoEncontrado] = useState(false);
   const [produtoNaoEncontradoTermo, setProdutoNaoEncontradoTermo] = useState('');
 
+  // ✅ NOVO: Estado para modal de produto oculto no PDV
+  const [showProdutoOcultoPDV, setShowProdutoOcultoPDV] = useState(false);
+  const [produtoOcultoPDV, setProdutoOcultoPDV] = useState<Produto | null>(null);
+
   // Estado para dados do usuário
   const [userData, setUserData] = useState<{ nome: string } | null>(null);
 
@@ -3981,10 +3985,10 @@ const PDVPage: React.FC = () => {
   // Listener global para captura de código de barras, F1-F9 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      // Capturar teclas F0-F9 para atalhos do menu PDV
-      if (event.key.startsWith('F') && event.key.length <= 3) {
+      // ✅ CORRIGIDO: Capturar apenas teclas F reais (F1, F2, etc.) para atalhos do menu PDV
+      if (event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3) {
         const fNumber = parseInt(event.key.substring(1));
-        if (fNumber >= 0 && fNumber <= 9) {
+        if (!isNaN(fNumber) && fNumber >= 0 && fNumber <= 9) {
           event.preventDefault();
           let menuIndex;
           if (fNumber === 0) {
@@ -4068,23 +4072,110 @@ const PDVPage: React.FC = () => {
     };
   }, [pdvConfig?.venda_codigo_barras, codigoBarrasBuffer, timeoutId, showAreaProdutos, menuPDVItems]);
 
-  // Função para processar código de barras capturado
-  const processarCodigoBarras = (codigo: string) => {
-    // Buscar produto pelo código de barras
-    const produto = produtos.find(p => p.codigo_barras === codigo);
+  // ✅ NOVO: Função para buscar produto incluindo ocultos (para validação)
+  const buscarProdutoComOcultos = async (codigo: string): Promise<Produto | null> => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return null;
 
-    if (produto) {
-      adicionarAoCarrinho(produto);
-      // ✅ REMOVIDO: Toast removido para não confundir com outros processos
-    } else {
-      // Se não encontrou por código de barras, tentar por código normal
-      const produtoPorCodigo = produtos.find(p => p.codigo === codigo);
-      if (produtoPorCodigo) {
-        adicionarAoCarrinho(produtoPorCodigo);
-        // ✅ REMOVIDO: Toast removido para não confundir com outros processos
-      } else {
-        toast.error(`Produto não encontrado para o código: ${codigo}`);
+    const { data: usuarioData } = await supabase
+      .from('usuarios')
+      .select('empresa_id')
+      .eq('id', userData.user.id)
+      .single();
+
+    if (!usuarioData?.empresa_id) return null;
+
+    const { data, error } = await supabase
+      .from('produtos')
+      .select(`
+        id,
+        nome,
+        preco,
+        codigo,
+        codigo_barras,
+        descricao,
+        promocao,
+        producao,
+        tipo_desconto,
+        valor_desconto,
+        desconto_quantidade,
+        quantidade_minima,
+        tipo_desconto_quantidade,
+        valor_desconto_quantidade,
+        percentual_desconto_quantidade,
+        unidade_medida_id,
+        grupo_id,
+        estoque_inicial,
+        ncm,
+        cfop,
+        origem_produto,
+        situacao_tributaria,
+        cst_icms,
+        csosn_icms,
+        cst_pis,
+        cst_cofins,
+        cst_ipi,
+        aliquota_icms,
+        aliquota_pis,
+        aliquota_cofins,
+        aliquota_ipi,
+        cest,
+        margem_st,
+        peso_liquido,
+        promocao_data_habilitada,
+        promocao_data_inicio,
+        promocao_data_fim,
+        promocao_data_cardapio,
+        insumos,
+        selecionar_insumos_venda,
+        controlar_quantidades_insumo,
+        materia_prima,
+        ocultar_visualizacao_pdv,
+        grupo:grupos(nome),
+        unidade_medida:unidade_medida_id (
+          id,
+          sigla,
+          nome,
+          fracionado
+        ),
+        produto_fotos(url, principal)
+      `)
+      .eq('empresa_id', usuarioData.empresa_id)
+      .eq('ativo', true)
+      .eq('deletado', false)
+      .or(`codigo.eq.${codigo},codigo_barras.eq.${codigo}`)
+      .limit(1)
+      .single();
+
+    if (error || !data) return null;
+    return data as Produto;
+  };
+
+  // Função para processar código de barras capturado
+  const processarCodigoBarras = async (codigo: string) => {
+    // Primeiro, buscar produto incluindo ocultos para validação
+    const produtoCompleto = await buscarProdutoComOcultos(codigo);
+
+    if (produtoCompleto) {
+      // ✅ NOVO: Verificar se produto está oculto no PDV
+      if (produtoCompleto.ocultar_visualizacao_pdv) {
+        setProdutoOcultoPDV(produtoCompleto);
+        setShowProdutoOcultoPDV(true);
+        return;
       }
+
+      // Se não está oculto, buscar na lista normal (que já exclui ocultos) - BUSCA EXATA
+      const produto = produtos.find(p =>
+        (p.codigo_barras && p.codigo_barras === codigo) ||
+        (p.codigo && p.codigo === codigo)
+      );
+      if (produto) {
+        adicionarAoCarrinho(produto);
+      }
+    } else {
+      // Produto não encontrado
+      setProdutoNaoEncontradoTermo(codigo);
+      setShowProdutoNaoEncontrado(true);
     }
   };
 
@@ -4477,6 +4568,8 @@ const PDVPage: React.FC = () => {
         insumos,
         selecionar_insumos_venda,
         controlar_quantidades_insumo,
+        materia_prima,
+        ocultar_visualizacao_pdv,
         grupo:grupos(nome),
         unidade_medida:unidade_medida_id (
           id,
@@ -4489,6 +4582,7 @@ const PDVPage: React.FC = () => {
       .eq('empresa_id', usuarioData.empresa_id)
       .eq('ativo', true)
       .eq('deletado', false)
+      .eq('ocultar_visualizacao_pdv', false) // ✅ NOVO: Excluir produtos ocultos no PDV
       .order('nome');
 
     if (error) throw error;
@@ -9684,9 +9778,31 @@ const PDVPage: React.FC = () => {
       }
     }
 
-    const matchesSearch = (produto.nome && produto.nome.toLowerCase().includes(termoBusca.toLowerCase())) ||
-                         (produto.codigo && produto.codigo.toLowerCase().includes(termoBusca.toLowerCase())) ||
-                         (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(termoBusca.toLowerCase()));
+    // ✅ NOVO: Busca inteligente - priorizar correspondências exatas
+    const termoLower = termoBusca.toLowerCase();
+    const nomeMatch = produto.nome && produto.nome.toLowerCase().includes(termoLower);
+    const codigoExato = produto.codigo && produto.codigo.toLowerCase() === termoLower;
+    const codigoBarrasExato = produto.codigo_barras && produto.codigo_barras.toLowerCase() === termoLower;
+    const codigoContains = produto.codigo && produto.codigo.toLowerCase().includes(termoLower);
+    const codigoBarrasContains = produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(termoLower);
+
+    // Se o termo é numérico e tem 13 dígitos ou menos, priorizar busca exata
+    const isNumerico = /^\d+$/.test(termoBusca);
+    const isCodigoBarras = isNumerico && termoBusca.length >= 8; // Códigos de barras geralmente têm 8+ dígitos
+    const isCodigoProduto = isNumerico && termoBusca.length <= 6; // Códigos de produto geralmente têm até 6 dígitos
+
+    let matchesSearch = false;
+
+    if (isCodigoBarras) {
+      // Para códigos de barras (8+ dígitos), buscar apenas correspondência exata
+      matchesSearch = codigoBarrasExato;
+    } else if (isCodigoProduto) {
+      // Para códigos de produto (até 6 dígitos), buscar apenas correspondência exata
+      matchesSearch = codigoExato;
+    } else {
+      // Para texto ou números mistos, usar busca normal (includes)
+      matchesSearch = nomeMatch || codigoContains || codigoBarrasContains;
+    }
     const matchesGrupo = grupoSelecionado === 'todos' || produto.grupo_id === grupoSelecionado;
     return matchesSearch && matchesGrupo;
   }).sort((a, b) => {
@@ -29250,6 +29366,90 @@ const PDVPage: React.FC = () => {
                 className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors"
               >
                 Ver Produtos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NOVO: Modal de Produto Oculto no PDV */}
+      {showProdutoOcultoPDV && produtoOcultoPDV && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background-card border border-red-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <Package size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Produto Não Pode Ser Vendido</h3>
+                <p className="text-sm text-gray-400">Este item está marcado para não ser utilizado no PDV</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <div className="bg-red-900/20 border border-red-600/30 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                    {produtoOcultoPDV.produto_fotos && produtoOcultoPDV.produto_fotos.length > 0 ? (
+                      <img
+                        src={produtoOcultoPDV.produto_fotos[0].url}
+                        alt={produtoOcultoPDV.nome}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-full h-full flex items-center justify-center ${produtoOcultoPDV.produto_fotos && produtoOcultoPDV.produto_fotos.length > 0 ? 'hidden' : ''}`}>
+                      <Package size={16} className="text-gray-500" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-white">{produtoOcultoPDV.nome}</h4>
+                    <p className="text-sm text-gray-400">Código: {produtoOcultoPDV.codigo}</p>
+                    {produtoOcultoPDV.codigo_barras && (
+                      <p className="text-sm text-gray-400">Barras: {produtoOcultoPDV.codigo_barras}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-gray-300 font-medium">🚫 Este produto não pode ser vendido porque:</p>
+                <ul className="text-gray-400 text-sm space-y-1 ml-4">
+                  <li>• Está marcado como "Matéria Prima"</li>
+                  <li>• Tem a opção "Ocultar visualização no PDV" ativada</li>
+                  <li>• É usado apenas como insumo para outros produtos</li>
+                </ul>
+              </div>
+
+              <div className="mt-4 p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                <p className="text-blue-300 text-sm">
+                  💡 <strong>Dica:</strong> Para vender este produto, vá em <strong>Produtos → Editar</strong> e desmarque a opção "Ocultar visualização no PDV".
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowProdutoOcultoPDV(false);
+                  setProdutoOcultoPDV(null);
+                }}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Entendi
+              </button>
+              <button
+                onClick={() => {
+                  setShowProdutoOcultoPDV(false);
+                  setProdutoOcultoPDV(null);
+                  setShowAreaProdutos(true);
+                }}
+                className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Ver Outros Produtos
               </button>
             </div>
           </div>

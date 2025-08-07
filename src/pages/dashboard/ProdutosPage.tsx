@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode, Copy, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move } from 'lucide-react';
+import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode, Copy, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, Filter } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Grupo, Produto, OpcaoAdicional, ProdutoOpcao } from '../../types';
 import { showMessage } from '../../utils/toast';
@@ -303,6 +303,11 @@ const ProdutosPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [productSearchTerms, setProductSearchTerms] = useState<Record<string, string>>({});
   const [productSortOrders, setProductSortOrders] = useState<Record<string, 'asc' | 'desc'>>({});
+
+  // Estados para filtro geral
+  const [showGlobalFilter, setShowGlobalFilter] = useState(false);
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+  const [filterMateriaPrima, setFilterMateriaPrima] = useState(false);
   const [produtoChacoalhando, setProdutoChacoalhando] = useState<string | null>(null);
   const [imagensCarregando, setImagensCarregando] = useState<Record<string, boolean>>({});
   const [novoProduto, setNovoProduto] = useState<Partial<Produto>>({
@@ -4945,6 +4950,39 @@ const ProdutosPage: React.FC = () => {
   };
 
   const filteredAndSortedGrupos = (() => {
+    // Se há filtro global ativo, filtrar produtos dentro dos grupos
+    if (globalSearchTerm || filterMateriaPrima) {
+      const gruposComProdutosFiltrados = grupos.map(grupo => {
+        const produtosFiltrados = grupo.produtos.filter(produto => {
+          let incluir = true;
+
+          // Filtro de busca global
+          if (globalSearchTerm) {
+            const searchLower = globalSearchTerm.toLowerCase();
+            incluir = incluir && (
+              produto.nome.toLowerCase().includes(searchLower) ||
+              produto.codigo.toLowerCase().includes(searchLower) ||
+              (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(searchLower))
+            );
+          }
+
+          // Filtro de matéria-prima
+          if (filterMateriaPrima) {
+            incluir = incluir && produto.materia_prima === true;
+          }
+
+          return incluir;
+        });
+
+        return {
+          ...grupo,
+          produtos: produtosFiltrados
+        };
+      }).filter(grupo => grupo.produtos.length > 0); // Só mostrar grupos que têm produtos
+
+      return gruposComProdutosFiltrados;
+    }
+
     // Primeiro filtrar por termo de busca
     const filtered = grupos.filter(grupo =>
       grupo.nome.toLowerCase().includes(searchTerm.toLowerCase())
@@ -5955,7 +5993,17 @@ const ProdutosPage: React.FC = () => {
   return (
     <div className="w-full px-4 py-1">
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-semibold text-white">Produtos</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-white">Produtos</h1>
+          <Button
+            type="button"
+            variant="text"
+            className="flex items-center gap-2 text-gray-400 hover:text-white"
+            onClick={() => setShowGlobalFilter(!showGlobalFilter)}
+          >
+            <Filter size={18} />
+          </Button>
+        </div>
         <Button
           type="button"
           variant="primary"
@@ -5965,6 +6013,62 @@ const ProdutosPage: React.FC = () => {
           + Adicionar Grupo
         </Button>
       </div>
+
+      {/* Área de filtros globais */}
+      <AnimatePresence>
+        {showGlobalFilter && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-4 bg-gray-800/50 border border-gray-700 rounded-lg p-4"
+          >
+            <div className="space-y-4">
+              {/* Campo de busca global */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar produtos em todos os grupos..."
+                  value={globalSearchTerm}
+                  onChange={(e) => setGlobalSearchTerm(e.target.value)}
+                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                />
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              </div>
+
+              {/* Filtros adicionais */}
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-white cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filterMateriaPrima}
+                    onChange={(e) => setFilterMateriaPrima(e.target.checked)}
+                    className="rounded border-gray-600 bg-gray-700 text-primary-500 focus:ring-primary-500/20"
+                  />
+                  <span className="text-sm">Apenas Matérias-Primas</span>
+                </label>
+              </div>
+
+              {/* Botão para limpar filtros */}
+              {(globalSearchTerm || filterMateriaPrima) && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="text"
+                    className="text-sm text-gray-400 hover:text-white"
+                    onClick={() => {
+                      setGlobalSearchTerm('');
+                      setFilterMateriaPrima(false);
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!isDataReady ? (
         <div>
@@ -5983,17 +6087,43 @@ const ProdutosPage: React.FC = () => {
         </div>
       ) : (
         <div>
-          <div className="mb-3 flex gap-4">
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                placeholder="Buscar grupos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-              />
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          {/* Indicador de filtros ativos */}
+          {(globalSearchTerm || filterMateriaPrima) && (
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-400">
+                <Filter size={16} />
+                <div className="text-sm">
+                  <div className="font-medium">
+                    Filtros ativos - Mostrando apenas produtos que atendem aos critérios
+                  </div>
+                  {globalSearchTerm && (
+                    <div className="text-xs text-blue-300">
+                      Busca: "{globalSearchTerm}"
+                    </div>
+                  )}
+                  {filterMateriaPrima && (
+                    <div className="text-xs text-blue-300">
+                      Apenas matérias-primas
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* Barra de busca de grupos - só aparece quando não há filtros globais */}
+          {!(globalSearchTerm || filterMateriaPrima) && (
+            <div className="mb-3 flex gap-4">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      placeholder="Buscar grupos..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    />
+                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  </div>
             <Button
               type="button"
               variant="text"
@@ -6036,20 +6166,29 @@ const ProdutosPage: React.FC = () => {
               <Move size={18} />
               {isOrganizingMode ? 'Salvar alterações' : 'Organizar'}
             </Button>
-          </div>
+            </div>
+          )}
 
           {filteredAndSortedGrupos.length === 0 ? (
             <div className="bg-background-card rounded-lg p-8 text-center">
+              <AlertCircle size={32} className="mx-auto text-gray-500 mb-2" />
               <h3 className="text-lg font-medium text-white mb-2">
-                {searchTerm ? 'Nenhum grupo encontrado' : 'Nenhum grupo cadastrado'}
+                {(globalSearchTerm || filterMateriaPrima)
+                  ? 'Nenhum produto encontrado'
+                  : searchTerm
+                    ? 'Nenhum grupo encontrado'
+                    : 'Nenhum grupo cadastrado'
+                }
               </h3>
               <p className="text-gray-400 mb-6">
-                {searchTerm
-                  ? 'Tente buscar com outros termos'
-                  : 'Crie seu primeiro grupo de produtos para começar.'
+                {(globalSearchTerm || filterMateriaPrima)
+                  ? 'Tente ajustar os filtros ou termos de busca.'
+                  : searchTerm
+                    ? 'Tente buscar com outros termos'
+                    : 'Crie seu primeiro grupo de produtos para começar.'
                 }
               </p>
-              {!searchTerm && (
+              {!searchTerm && !(globalSearchTerm || filterMateriaPrima) && (
                 <Button
                   type="button"
                   variant="primary"
@@ -6257,7 +6396,7 @@ const ProdutosPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                  );
+                );
                 })}
               </div>
             </div>
