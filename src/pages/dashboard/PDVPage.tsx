@@ -65,6 +65,7 @@ import Sidebar from '../../components/dashboard/Sidebar';
 import { useSidebarStore } from '../../store/sidebarStore';
 import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
 import SeletorSaboresModal from '../../components/pdv/SeletorSaboresModal';
+import SeletorInsumosModal from '../../components/pdv/SeletorInsumosModal';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { salvarAdicionaisItem } from '../../utils/pdvAdicionaisUtils'; // ✅ NOVO: Import da função utilitária
 import LoadingScreen from '../../components/dashboard/LoadingScreen';
