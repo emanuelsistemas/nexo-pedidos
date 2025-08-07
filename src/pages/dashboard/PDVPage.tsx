@@ -454,6 +454,7 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Estados para controle de caixa
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
   const [valorAberturaCaixa, setValorAberturaCaixa] = useState('');
+  const [observacaoAberturaCaixa, setObservacaoAberturaCaixa] = useState(''); // ✅ NOVO: Campo observação
   const [caixaAberto, setCaixaAberto] = useState(false);
   const [loadingCaixa, setLoadingCaixa] = useState(false);
 
@@ -1570,6 +1571,9 @@ const PDVPage: React.FC = () => {
       const valorNumerico = desformatarValorMonetario(valorAberturaCaixa);
 
       // Criar registro de abertura de caixa
+      const observacaoFinal = observacaoAberturaCaixa.trim() ||
+        `Abertura de caixa com valor inicial de ${formatarPreco(valorNumerico)}`;
+
       const { data: caixaData, error } = await supabase
         .from('caixa_controle')
         .insert({
@@ -1578,7 +1582,7 @@ const PDVPage: React.FC = () => {
           data_abertura: new Date().toISOString(),
           status_caixa: true,
           status: 'aberto',
-          observacao_abertura: `Abertura de caixa com valor inicial de ${formatarPreco(valorNumerico)}`
+          observacao_abertura: observacaoFinal // ✅ NOVO: Usar observação personalizada
         })
         .select()
         .single();
@@ -1613,6 +1617,7 @@ const PDVPage: React.FC = () => {
       setCaixaAberto(true);
       setShowAberturaCaixaModal(false);
       setValorAberturaCaixa('');
+      setObservacaoAberturaCaixa(''); // ✅ NOVO: Limpar observação
 
       toast.success('Caixa aberto com sucesso!');
     } catch (error) {
@@ -1984,8 +1989,29 @@ const PDVPage: React.FC = () => {
       setTotalRecebimentosFiado(0);
       setValoresFiadoPorForma({});
 
-      // Recarregar dados do caixa
-      await verificarCaixaAberto();
+      // ✅ NOVO: Validar se não há erros antes de atualizar a página
+      console.log('🔍 Validando estado do sistema antes de atualizar...');
+
+      // Verificar se o caixa foi realmente fechado
+      const { data: caixaValidacao } = await supabase
+        .from('caixa_controle')
+        .select('status')
+        .eq('id', caixaAberto.id)
+        .single();
+
+      if (caixaValidacao?.status !== 'fechado') {
+        console.error('❌ Erro: Caixa não foi fechado corretamente');
+        toast.error('Erro: Caixa não foi fechado corretamente');
+        return;
+      }
+
+      console.log('✅ Caixa validado como fechado, atualizando página...');
+
+      // Aguardar um momento para garantir que todas as operações foram concluídas
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Atualizar a página com limpeza de cache
+      window.location.reload();
 
     } catch (error) {
       console.error('❌ Erro ao fechar caixa:', error);
@@ -19241,6 +19267,40 @@ const PDVPage: React.FC = () => {
                 </p>
               </div>
 
+              {/* ✅ NOVO: Campo de observação */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  color: '#9ca3af',
+                  marginBottom: '8px',
+                  fontWeight: 'bold'
+                }}>
+                  Observação de Abertura
+                </label>
+                <textarea
+                  value={observacaoAberturaCaixa}
+                  onChange={(e) => setObservacaoAberturaCaixa(e.target.value)}
+                  placeholder="Digite uma observação para a abertura do caixa (opcional)"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#374151',
+                    border: '1px solid #4b5563',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    color: 'white',
+                    fontSize: '14px',
+                    outline: 'none',
+                    resize: 'vertical',
+                    minHeight: '80px'
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Ex: "Caixa principal", "Turno manhã", etc.
+                </p>
+              </div>
+
               {/* Botões */}
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button
@@ -19248,6 +19308,7 @@ const PDVPage: React.FC = () => {
                     console.log('🚫 Botão Cancelar clicado');
                     setShowAberturaCaixaModal(false);
                     setValorAberturaCaixa('');
+                    setObservacaoAberturaCaixa(''); // ✅ NOVO: Limpar observação
                   }}
                   style={{
                     flex: 1,
@@ -32868,6 +32929,40 @@ const PDVPage: React.FC = () => {
               </p>
             </div>
 
+            {/* ✅ NOVO: Campo de observação */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                color: '#9ca3af',
+                marginBottom: '8px',
+                fontWeight: 'bold'
+              }}>
+                Observação de Abertura
+              </label>
+              <textarea
+                value={observacaoAberturaCaixa}
+                onChange={(e) => setObservacaoAberturaCaixa(e.target.value)}
+                placeholder="Digite uma observação para a abertura do caixa (opcional)"
+                rows={3}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#374151',
+                  border: '1px solid #4b5563',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  color: 'white',
+                  fontSize: '14px',
+                  outline: 'none',
+                  resize: 'vertical',
+                  minHeight: '80px'
+                }}
+              />
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                Ex: "Caixa principal", "Turno manhã", etc.
+              </p>
+            </div>
+
             {/* Botões */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -32875,6 +32970,7 @@ const PDVPage: React.FC = () => {
                   console.log('🚫 Botão Cancelar clicado');
                   setShowAberturaCaixaModal(false);
                   setValorAberturaCaixa('');
+                  setObservacaoAberturaCaixa(''); // ✅ NOVO: Limpar observação
                 }}
                 style={{
                   flex: 1,
