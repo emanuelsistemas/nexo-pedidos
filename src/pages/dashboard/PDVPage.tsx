@@ -19131,33 +19131,17 @@ const PDVPage: React.FC = () => {
     );
   }
 
-  // ✅ NOVO: Bloquear PDV se controle de caixa estiver habilitado e caixa não estiver aberto
+  // ✅ NOVO: Se controle de caixa estiver habilitado e caixa não estiver aberto, mostrar modal de abertura
   if (pdvConfig?.controla_caixa && !caixaAberto) {
+    // Mostrar modal de abertura automaticamente
+    if (!showAberturaCaixaModal) {
+      setShowAberturaCaixaModal(true);
+    }
+
     return (
       <>
-        {/* Modal de Bloqueio */}
-        <div className="bg-background-dark h-screen flex items-center justify-center">
-          <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4 text-center">
-            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <X size={32} className="text-red-400" />
-            </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Caixa Fechado</h2>
-            <p className="text-gray-400 mb-6">
-              O controle de caixa está habilitado. É necessário abrir o caixa antes de operar o PDV.
-            </p>
 
-            <button
-              onClick={() => {
-                setShowAberturaCaixaModal(true);
-              }}
-              className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-            >
-              Abrir Caixa
-            </button>
-          </div>
-        </div>
-
-        {/* ✅ MODAL DE ABERTURA - AGORA DENTRO DO RETURN */}
+        {/* ✅ MODAL DE ABERTURA DE CAIXA REATIVADO */}
         {showAberturaCaixaModal && (
           <div
             style={{
