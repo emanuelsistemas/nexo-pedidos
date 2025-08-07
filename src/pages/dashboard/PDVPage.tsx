@@ -34302,7 +34302,7 @@ const PDVPage: React.FC = () => {
           <div style={{
             backgroundColor: '#1f2937',
             borderRadius: '12px',
-            maxWidth: '600px',
+            maxWidth: '800px',
             width: '100%',
             maxHeight: '90vh',
             border: '1px solid #374151',
@@ -34365,20 +34365,20 @@ const PDVPage: React.FC = () => {
                 {/* Cabeçalho da tabela */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                  gap: '8px',
-                  padding: '8px 12px',
+                  gridTemplateColumns: '2fr 1fr 1fr 2fr',
+                  gap: '12px',
+                  padding: '12px 16px',
                   backgroundColor: '#4b5563',
-                  borderRadius: '4px',
-                  marginBottom: '8px',
-                  fontSize: '12px',
+                  borderRadius: '6px',
+                  marginBottom: '12px',
+                  fontSize: '13px',
                   fontWeight: 'bold',
                   color: '#d1d5db'
                 }}>
                   <div>Forma de Pagamento</div>
                   <div style={{ textAlign: 'center' }}>Contabilizado</div>
                   <div style={{ textAlign: 'center' }}>Informado</div>
-                  <div style={{ textAlign: 'center' }}>Diferença</div>
+                  <div style={{ textAlign: 'center' }}>Status / Diferença</div>
                 </div>
 
                 {/* Linhas das formas de pagamento */}
@@ -34404,14 +34404,15 @@ const PDVPage: React.FC = () => {
                     return (
                       <div key={forma.id} style={{
                         display: 'grid',
-                        gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                        gap: '8px',
-                        padding: '8px 12px',
+                        gridTemplateColumns: '2fr 1fr 1fr 2fr',
+                        gap: '12px',
+                        padding: '12px 16px',
                         backgroundColor: diferenca !== 0 ? '#451a03' : '#1f2937',
-                        borderRadius: '4px',
-                        marginBottom: '4px',
-                        fontSize: '13px',
-                        border: diferenca !== 0 ? '1px solid #f59e0b' : '1px solid transparent'
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        fontSize: '14px',
+                        border: diferenca !== 0 ? '2px solid #f59e0b' : '1px solid transparent',
+                        alignItems: 'center'
                       }}>
                         <div style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
                           {forma.forma_pagamento_opcoes?.nome || forma.nome || 'Forma não identificada'}
@@ -34433,9 +34434,28 @@ const PDVPage: React.FC = () => {
                         <div style={{
                           textAlign: 'center',
                           color: diferenca === 0 ? '#10b981' : diferenca > 0 ? '#f59e0b' : '#ef4444',
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
                         }}>
-                          {diferenca === 0 ? '✓' : `R$ ${diferenca.toFixed(2)}`}
+                          {diferenca === 0 ? (
+                            <>
+                              <span style={{ fontSize: '16px' }}>✅</span>
+                              <span>OK</span>
+                            </>
+                          ) : diferenca > 0 ? (
+                            <>
+                              <span style={{ fontSize: '16px' }}>💰</span>
+                              <span>+R$ {diferenca.toFixed(2)}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ fontSize: '16px' }}>⚠️</span>
+                              <span>R$ {diferenca.toFixed(2)}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     );
@@ -34458,35 +34478,54 @@ const PDVPage: React.FC = () => {
                       {/* Linha do total */}
                       <div style={{
                         display: 'grid',
-                        gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                        gap: '8px',
-                        padding: '12px',
-                        backgroundColor: diferencaTotal === 0 ? '#065f46' : '#7f1d1d',
-                        borderRadius: '6px',
-                        fontSize: '14px',
+                        gridTemplateColumns: '2fr 1fr 1fr 2fr',
+                        gap: '12px',
+                        padding: '16px',
+                        backgroundColor: diferencaTotal === 0 ? '#065f46' : diferencaTotal > 0 ? '#92400e' : '#7f1d1d',
+                        borderRadius: '8px',
+                        fontSize: '15px',
                         fontWeight: 'bold',
-                        border: `2px solid ${diferencaTotal === 0 ? '#10b981' : '#ef4444'}`
+                        border: `3px solid ${diferencaTotal === 0 ? '#10b981' : diferencaTotal > 0 ? '#f59e0b' : '#ef4444'}`,
+                        alignItems: 'center'
                       }}>
-                        <div style={{ color: '#ffffff' }}>
+                        <div style={{ color: '#ffffff', fontSize: '16px' }}>
                           TOTAL GERAL
                         </div>
-                        <div style={{ textAlign: 'center', color: '#ffffff' }}>
+                        <div style={{ textAlign: 'center', color: '#ffffff', fontSize: '16px' }}>
                           R$ {totalContabilizado.toFixed(2)}
                         </div>
-                        <div style={{ textAlign: 'center', color: '#ffffff' }}>
+                        <div style={{ textAlign: 'center', color: '#ffffff', fontSize: '16px' }}>
                           R$ {totalInformado.toFixed(2)}
                         </div>
                         <div style={{
                           textAlign: 'center',
                           color: '#ffffff',
-                          fontSize: '16px'
+                          fontSize: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          whiteSpace: 'nowrap'
                         }}>
                           {diferencaTotal === 0 ? (
-                            <span style={{ color: '#10b981' }}>✅ CAIXA BATEU</span>
+                            <>
+                              <span style={{ fontSize: '20px' }}>🎉</span>
+                              <span style={{ color: '#10b981', fontWeight: 'bold' }}>CAIXA BATEU</span>
+                            </>
                           ) : diferencaTotal > 0 ? (
-                            <span style={{ color: '#f59e0b' }}>📈 Sobrou R$ {diferencaTotal.toFixed(2)}</span>
+                            <>
+                              <span style={{ fontSize: '20px' }}>💰</span>
+                              <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                                Sobrou R$ {diferencaTotal.toFixed(2)}
+                              </span>
+                            </>
                           ) : (
-                            <span style={{ color: '#ef4444' }}>📉 Faltou R$ {Math.abs(diferencaTotal).toFixed(2)}</span>
+                            <>
+                              <span style={{ fontSize: '20px' }}>⚠️</span>
+                              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
+                                Faltou R$ {Math.abs(diferencaTotal).toFixed(2)}
+                              </span>
+                            </>
                           )}
                         </div>
                       </div>
