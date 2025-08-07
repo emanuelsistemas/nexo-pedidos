@@ -9198,41 +9198,69 @@ const ProdutosPage: React.FC = () => {
                                           </label>
                                           <input
                                             type="number"
-                                            value={insumo.quantidade_minima || 0}
+                                            value={insumo.quantidade_minima !== undefined ? insumo.quantidade_minima : insumo.quantidade}
                                             onChange={(e) => {
                                               const valor = parseFloat(e.target.value) || 0;
+
+                                              // ✅ NOVO: Validar se a quantidade mínima não é menor que a quantidade padrão
+                                              if (valor < insumo.quantidade) {
+                                                showMessage('error', `Quantidade mínima não pode ser menor que a quantidade padrão: ${insumo.quantidade} ${insumo.unidade_medida}`);
+                                                return;
+                                              }
+
                                               const novosInsumos = [...produtoInsumos];
                                               novosInsumos[index] = {
                                                 ...novosInsumos[index],
-                                                quantidade_minima: valor >= 0 ? valor : 0
+                                                quantidade_minima: valor
                                               };
                                               setProdutoInsumos(novosInsumos);
                                             }}
                                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
-                                            placeholder="0.00"
-                                            step="0.01"
-                                            min="0"
+                                            placeholder={insumo.quantidade.toString()}
+                                            step="0.001"
+                                            min={insumo.quantidade}
+                                            title={`Mínimo permitido: ${insumo.quantidade} ${insumo.unidade_medida}`}
                                           />
                                         </div>
                                         <div>
-                                          <label className="block text-xs font-medium text-gray-400 mb-1">
+                                          <label className="block text-xs font-medium text-gray-400 mb-1 flex items-center gap-1">
                                             Quantidade Máxima
+                                            <div className="relative group">
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 cursor-help">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                                <path d="M12 17h.01"/>
+                                              </svg>
+                                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 border border-gray-700">
+                                                0 = ilimitado
+                                              </div>
+                                            </div>
                                           </label>
                                           <input
                                             type="number"
                                             value={insumo.quantidade_maxima || 0}
                                             onChange={(e) => {
                                               const valor = parseFloat(e.target.value) || 0;
+
+                                              // ✅ NOVO: Validar se a quantidade máxima não é menor que a mínima (se não for 0)
+                                              if (valor > 0) {
+                                                const quantidadeMinima = insumo.quantidade_minima !== undefined ? insumo.quantidade_minima : insumo.quantidade;
+                                                if (valor < quantidadeMinima) {
+                                                  showMessage('error', `Quantidade máxima não pode ser menor que a mínima: ${quantidadeMinima} ${insumo.unidade_medida}`);
+                                                  return;
+                                                }
+                                              }
+
                                               const novosInsumos = [...produtoInsumos];
                                               novosInsumos[index] = {
                                                 ...novosInsumos[index],
-                                                quantidade_maxima: valor >= 0 ? valor : 0
+                                                quantidade_maxima: valor
                                               };
                                               setProdutoInsumos(novosInsumos);
                                             }}
                                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
-                                            placeholder="0.00"
-                                            step="0.01"
+                                            placeholder="0 (ilimitado)"
+                                            step="0.001"
                                             min="0"
                                           />
                                         </div>

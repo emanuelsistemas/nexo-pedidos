@@ -83,17 +83,12 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
     if (!insumo) return;
 
     const incremento = getIncremento(insumo.unidade_medida);
-    const novaQuantidade = Math.max(0, quantidade - incremento);
+    const quantidadeMinima = insumo.quantidade_minima || insumo.quantidade;
+    const novaQuantidade = Math.max(quantidadeMinima, quantidade - incremento);
 
-    // ✅ NOVO: Verificar se a nova quantidade não é menor que a quantidade padrão do insumo
-    if (novaQuantidade < insumo.quantidade) {
-      showMessage('error', `Quantidade não pode ser menor que a quantidade padrão: ${formatarQuantidade(insumo.quantidade, insumo.unidade_medida)} ${insumo.unidade_medida}`);
-      return;
-    }
-
-    // Verificar quantidade mínima se definida
-    if (insumo.quantidade_minima && novaQuantidade < insumo.quantidade_minima) {
-      showMessage('error', `Quantidade mínima: ${formatarQuantidade(insumo.quantidade_minima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
+    // Verificar quantidade mínima
+    if (novaQuantidade < quantidadeMinima) {
+      showMessage('error', `Quantidade mínima: ${formatarQuantidade(quantidadeMinima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
       return;
     }
 
@@ -112,20 +107,16 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
     if (!insumo) return;
 
     const novaQuantidade = parseFloat(quantidadeTemp) || 0;
+    const quantidadeMinima = insumo.quantidade_minima || insumo.quantidade;
 
-    // ✅ NOVO: Validar se a nova quantidade não é menor que a quantidade padrão do insumo
-    if (novaQuantidade < insumo.quantidade) {
-      showMessage('error', `Quantidade não pode ser menor que a quantidade padrão: ${formatarQuantidade(insumo.quantidade, insumo.unidade_medida)} ${insumo.unidade_medida}`);
+    // Validar quantidade mínima
+    if (novaQuantidade < quantidadeMinima) {
+      showMessage('error', `Quantidade mínima: ${formatarQuantidade(quantidadeMinima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
       return;
     }
 
-    // Validar limites
-    if (insumo.quantidade_minima && novaQuantidade < insumo.quantidade_minima) {
-      showMessage('error', `Quantidade mínima: ${formatarQuantidade(insumo.quantidade_minima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
-      return;
-    }
-
-    if (insumo.quantidade_maxima && novaQuantidade > insumo.quantidade_maxima) {
+    // Validar quantidade máxima (se definida e não for 0)
+    if (insumo.quantidade_maxima && insumo.quantidade_maxima > 0 && novaQuantidade > insumo.quantidade_maxima) {
       showMessage('error', `Quantidade máxima: ${formatarQuantidade(insumo.quantidade_maxima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
       return;
     }
@@ -170,16 +161,18 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
               Quantidade padrão: {formatarQuantidade(insumo.quantidade, insumo.unidade_medida)} {insumo.unidade_medida}
             </p>
             <p className="text-orange-400 text-xs mt-1">
-              <strong>Mínimo permitido:</strong> {formatarQuantidade(insumo.quantidade, insumo.unidade_medida)} {insumo.unidade_medida}
+              <strong>Mínimo:</strong> {formatarQuantidade(insumo.quantidade_minima || insumo.quantidade, insumo.unidade_medida)} {insumo.unidade_medida}
+              {insumo.quantidade_maxima && insumo.quantidade_maxima > 0 && (
+                <span className="ml-2">
+                  <strong>Máximo:</strong> {formatarQuantidade(insumo.quantidade_maxima, insumo.unidade_medida)} {insumo.unidade_medida}
+                </span>
+              )}
+              {(!insumo.quantidade_maxima || insumo.quantidade_maxima === 0) && (
+                <span className="ml-2 text-gray-500">
+                  <strong>Máximo:</strong> ilimitado
+                </span>
+              )}
             </p>
-            {(insumo.quantidade_minima || insumo.quantidade_maxima) && (
-              <p className="text-gray-500 text-xs mt-1">
-                {insumo.quantidade_minima && `Limite mín: ${formatarQuantidade(insumo.quantidade_minima, insumo.unidade_medida)}`}
-                {insumo.quantidade_minima && insumo.quantidade_maxima && ' • '}
-                {insumo.quantidade_maxima && `Limite máx: ${formatarQuantidade(insumo.quantidade_maxima, insumo.unidade_medida)}`}
-                {(insumo.quantidade_minima || insumo.quantidade_maxima) && ` ${insumo.unidade_medida}`}
-              </p>
-            )}
           </div>
 
           {/* Controles de quantidade */}
@@ -208,7 +201,7 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
                   }}
                   className="w-24 px-3 py-2 text-center text-lg bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary-500"
                   step={getIncremento(insumo.unidade_medida)}
-                  min={insumo.quantidade}
+                  min={insumo.quantidade_minima || insumo.quantidade}
                   autoFocus
                 />
                 <span className="text-gray-400 text-sm">{insumo.unidade_medida}</span>

@@ -510,6 +510,11 @@ const PDVPage: React.FC = () => {
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
   const [observacaoFechamento, setObservacaoFechamento] = useState('');
 
+  // ✅ NOVO: Estados para modal de confirmação de diferença
+  const [showConfirmarDiferencaModal, setShowConfirmarDiferencaModal] = useState(false);
+  const [textoConfirmacao, setTextoConfirmacao] = useState('');
+  const [diferencaTotalCaixa, setDiferencaTotalCaixa] = useState(0);
+
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
   const [observacaoSangria, setObservacaoSangria] = useState('');
@@ -1911,6 +1916,37 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função para verificar diferenças antes de fechar
+  const verificarDiferencasEFechar = async () => {
+    // Calcular diferença total
+    let totalContabilizado = 0;
+    let totalInformado = 0;
+
+    formasPagamentoCaixa.forEach(forma => {
+      const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
+      const valorFiado = valoresFiadoPorForma[forma.id] || 0;
+      const valorContabilizado = valorAtual + valorFiado;
+
+      const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
+      const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
+
+      totalContabilizado += valorContabilizado;
+      totalInformado += valorInformadoUsuario;
+    });
+
+    const diferencaTotal = totalInformado - totalContabilizado;
+    setDiferencaTotalCaixa(diferencaTotal);
+
+    // Se há diferença, mostrar modal de confirmação
+    if (diferencaTotal !== 0) {
+      setShowConfirmarDiferencaModal(true);
+      return;
+    }
+
+    // Se não há diferença, fechar diretamente
+    await fecharCaixa();
+  };
+
   // ✅ NOVO: Função para fechar o caixa
   const fecharCaixa = async () => {
     try {
@@ -2079,6 +2115,29 @@ const PDVPage: React.FC = () => {
     } finally {
       setLoadingFecharCaixa(false);
     }
+  };
+
+  // ✅ NOVO: Função para confirmar fechamento com diferença
+  const confirmarFechamentoComDiferenca = async () => {
+    if (textoConfirmacao.toLowerCase() !== 'confirmo') {
+      toast.error('Digite "CONFIRMO" para confirmar o fechamento com diferença');
+      return;
+    }
+
+    // Fechar modal de confirmação de diferença
+    setShowConfirmarDiferencaModal(false);
+    setTextoConfirmacao('');
+
+    // Executar fechamento do caixa
+    await fecharCaixa();
+  };
+
+  // ✅ NOVO: Função para cancelar fechamento com diferença
+  const cancelarFechamentoComDiferenca = () => {
+    setShowConfirmarDiferencaModal(false);
+    setTextoConfirmacao('');
+    setDiferencaTotalCaixa(0);
+    // Modal principal permanece aberto para ajustes
   };
 
   // ✅ NOVO: Função para carregar dados do caixa aberto
@@ -34237,27 +34296,45 @@ const PDVPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 9999999
+          zIndex: 9999999,
+          padding: '20px'
         }}>
           <div style={{
             backgroundColor: '#1f2937',
             borderRadius: '12px',
-            padding: '24px',
-            maxWidth: '500px',
-            width: '90%',
-            border: '1px solid #374151'
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '90vh',
+            border: '1px solid #374151',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
           }}>
-            <h3 style={{
-              fontSize: '20px',
-              fontWeight: 'bold',
-              marginBottom: '16px',
-              color: '#f59e0b',
-              textAlign: 'center'
+            {/* Cabeçalho fixo */}
+            <div style={{
+              padding: '24px 24px 16px 24px',
+              borderBottom: '1px solid #374151',
+              flexShrink: 0
             }}>
-              ⚠️ Confirmar Fechamento de Caixa
-            </h3>
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: 'bold',
+                margin: 0,
+                color: '#f59e0b',
+                textAlign: 'center'
+              }}>
+                ⚠️ Confirmar Fechamento de Caixa
+              </h3>
+            </div>
 
-            <div style={{ marginBottom: '24px', color: '#e5e7eb', lineHeight: '1.6' }}>
+            {/* Conteúdo com scroll */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '16px 24px',
+              minHeight: 0
+            }}>
+              <div style={{ marginBottom: '24px', color: '#e5e7eb', lineHeight: '1.6' }}>
               <p style={{ marginBottom: '12px' }}>
                 Tem certeza que deseja fechar o caixa?
               </p>
@@ -34456,15 +34533,221 @@ const PDVPage: React.FC = () => {
                 }}
               />
             </div>
+            </div>
 
-            {/* Botões */}
-            <div style={{ display: 'flex', gap: '12px' }}>
+            {/* Rodapé fixo com botões */}
+            <div style={{
+              padding: '16px 24px 24px 24px',
+              borderTop: '1px solid #374151',
+              flexShrink: 0,
+              backgroundColor: '#1f2937'
+            }}>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => {
+                    setShowFecharCaixaModal(false);
+                    setObservacaoFechamento(''); // ✅ Limpar observação ao cancelar
+                  }}
+                  disabled={loadingFecharCaixa}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
+                    opacity: loadingFecharCaixa ? 0.6 : 1
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={verificarDiferencasEFechar}
+                  disabled={loadingFecharCaixa}
+                  style={{
+                    flex: 1,
+                    backgroundColor: (() => {
+                      // Calcular diferença total para cor do botão
+                      let totalContabilizado = 0;
+                      let totalInformado = 0;
+
+                      formasPagamentoCaixa.forEach(forma => {
+                        const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
+                        const valorFiado = valoresFiadoPorForma[forma.id] || 0;
+                        const valorContabilizado = valorAtual + valorFiado;
+
+                        const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
+                        const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
+
+                        totalContabilizado += valorContabilizado;
+                        totalInformado += valorInformadoUsuario;
+                      });
+
+                      const diferenca = totalInformado - totalContabilizado;
+
+                      if (diferenca === 0) return '#10b981'; // Verde - Bateu
+                      if (diferenca > 0) return '#f59e0b';   // Amarelo - Sobrou
+                      return '#dc2626';                      // Vermelho - Faltou
+                    })(),
+                    color: 'white',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
+                    opacity: loadingFecharCaixa ? 0.6 : 1
+                  }}
+                >
+                  {loadingFecharCaixa ? 'Fechando...' : 'Confirmar Fechamento'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NOVO: Modal de confirmação de diferença no caixa */}
+      {showConfirmarDiferencaModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.98)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999999,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#1f2937',
+            borderRadius: '12px',
+            maxWidth: '500px',
+            width: '100%',
+            border: '2px solid #ef4444',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)'
+          }}>
+            {/* Cabeçalho */}
+            <div style={{
+              padding: '24px 24px 16px 24px',
+              borderBottom: '1px solid #374151',
+              textAlign: 'center'
+            }}>
+              <h3 style={{
+                fontSize: '22px',
+                fontWeight: 'bold',
+                margin: 0,
+                color: '#ef4444'
+              }}>
+                ⚠️ DIFERENÇA DETECTADA NO CAIXA
+              </h3>
+            </div>
+
+            {/* Conteúdo */}
+            <div style={{
+              padding: '20px 24px'
+            }}>
+              <div style={{
+                backgroundColor: diferencaTotalCaixa > 0 ? '#451a03' : '#7f1d1d',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px',
+                border: `2px solid ${diferencaTotalCaixa > 0 ? '#f59e0b' : '#ef4444'}`,
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  color: '#ffffff',
+                  marginBottom: '8px'
+                }}>
+                  {diferencaTotalCaixa > 0 ? '📈 SOBROU NO CAIXA' : '📉 FALTOU NO CAIXA'}
+                </div>
+                <div style={{
+                  fontSize: '24px',
+                  fontWeight: 'bold',
+                  color: diferencaTotalCaixa > 0 ? '#f59e0b' : '#ef4444'
+                }}>
+                  R$ {Math.abs(diferencaTotalCaixa).toFixed(2)}
+                </div>
+              </div>
+
+              <div style={{
+                color: '#e5e7eb',
+                lineHeight: '1.6',
+                marginBottom: '20px',
+                textAlign: 'center'
+              }}>
+                <p style={{ marginBottom: '12px', fontSize: '16px' }}>
+                  Há uma diferença entre os valores contabilizados e os valores informados.
+                </p>
+                <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+                  Você pode:
+                </p>
+                <ul style={{
+                  fontSize: '14px',
+                  color: '#9ca3af',
+                  textAlign: 'left',
+                  paddingLeft: '20px',
+                  marginTop: '8px'
+                }}>
+                  <li>• <strong>Reanalisar</strong>: Voltar e ajustar os valores informados</li>
+                  <li>• <strong>Confirmar</strong>: Fechar o caixa mesmo com a diferença</li>
+                </ul>
+              </div>
+
+              {/* Campo de confirmação */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  color: '#ef4444',
+                  marginBottom: '8px',
+                  textAlign: 'center'
+                }}>
+                  Para confirmar o fechamento com diferença, digite "CONFIRMO":
+                </label>
+                <input
+                  type="text"
+                  value={textoConfirmacao}
+                  onChange={(e) => setTextoConfirmacao(e.target.value)}
+                  placeholder="Digite CONFIRMO para confirmar"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    backgroundColor: '#374151',
+                    border: '2px solid #ef4444',
+                    borderRadius: '8px',
+                    color: '#e5e7eb',
+                    fontSize: '16px',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#f59e0b';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#ef4444';
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Rodapé com botões */}
+            <div style={{
+              padding: '16px 24px 24px 24px',
+              borderTop: '1px solid #374151',
+              display: 'flex',
+              gap: '12px'
+            }}>
               <button
-                onClick={() => {
-                  setShowFecharCaixaModal(false);
-                  setObservacaoFechamento(''); // ✅ Limpar observação ao cancelar
-                }}
-                disabled={loadingFecharCaixa}
+                onClick={cancelarFechamentoComDiferenca}
                 style={{
                   flex: 1,
                   backgroundColor: '#6b7280',
@@ -34473,28 +34756,29 @@ const PDVPage: React.FC = () => {
                   borderRadius: '8px',
                   border: 'none',
                   fontWeight: 'bold',
-                  cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
-                  opacity: loadingFecharCaixa ? 0.6 : 1
+                  cursor: 'pointer',
+                  fontSize: '14px'
                 }}
               >
-                Cancelar
+                Reanalisar Valores
               </button>
               <button
-                onClick={fecharCaixa}
-                disabled={loadingFecharCaixa}
+                onClick={confirmarFechamentoComDiferenca}
+                disabled={textoConfirmacao.toLowerCase() !== 'confirmo'}
                 style={{
                   flex: 1,
-                  backgroundColor: '#dc2626',
+                  backgroundColor: textoConfirmacao.toLowerCase() === 'confirmo' ? '#dc2626' : '#4b5563',
                   color: 'white',
                   padding: '12px 16px',
                   borderRadius: '8px',
                   border: 'none',
                   fontWeight: 'bold',
-                  cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
-                  opacity: loadingFecharCaixa ? 0.6 : 1
+                  cursor: textoConfirmacao.toLowerCase() === 'confirmo' ? 'pointer' : 'not-allowed',
+                  opacity: textoConfirmacao.toLowerCase() === 'confirmo' ? 1 : 0.5,
+                  fontSize: '14px'
                 }}
               >
-                {loadingFecharCaixa ? 'Fechando...' : 'Confirmar Fechamento'}
+                Confirmar Fechamento
               </button>
             </div>
           </div>
