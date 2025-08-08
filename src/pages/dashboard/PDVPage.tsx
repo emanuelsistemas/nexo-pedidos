@@ -70,6 +70,7 @@ import SeletorInsumosModal from '../../components/pdv/SeletorInsumosModal';
 import EdicaoInsumosModal from '../../components/pdv/EdicaoInsumosModal';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { salvarAdicionaisItem } from '../../utils/pdvAdicionaisUtils'; // ✅ NOVO: Import da função utilitária
+import { salvarInsumosItem, salvarTodosInsumosItem } from '../../utils/pdvInsumosUtils'; // ✅ NOVO: Import das funções de insumos
 import LoadingScreen from '../../components/dashboard/LoadingScreen';
 
 // ✅ NOVO: Declaração de tipo para timeout de validação
@@ -13923,6 +13924,39 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: Salvar insumos selecionados se existirem
+      if (item.produto.insumos && item.produto.insumos.length > 0) {
+        let sucessoInsumos = false;
+
+        // Verificar se o produto tem flag selecionar_insumos_venda ativa
+        if (item.produto.selecionar_insumos_venda && item.insumosSelecionados && item.insumosSelecionados.length > 0) {
+          // Salvar apenas os insumos selecionados pelo usuário
+          sucessoInsumos = await salvarInsumosItem(
+            itemInserido.id, // ID do item recém-criado
+            item.insumosSelecionados, // Insumos selecionados
+            usuarioData.empresa_id,
+            userData.user.id
+          );
+        } else if (!item.produto.selecionar_insumos_venda) {
+          // Salvar todos os insumos do produto (flag desativada)
+          sucessoInsumos = await salvarTodosInsumosItem(
+            itemInserido.id, // ID do item recém-criado
+            item.produto, // Produto com todos os insumos
+            item.quantidade, // Quantidade do item para calcular proporção
+            usuarioData.empresa_id,
+            userData.user.id
+          );
+        } else {
+          // Flag ativa mas nenhum insumo selecionado - não salvar nada
+          sucessoInsumos = true;
+        }
+
+        if (!sucessoInsumos) {
+          // Não falhar a operação inteira por causa dos insumos, mas registrar o erro
+          toast.error(`Aviso: Insumos do item ${itemData.nome_produto} não foram salvos`);
+        }
+      }
+
       // ✅ NOVO: Toast de confirmação para debug (removido para não poluir a interface)
       // toast.success(`Item ${itemData.nome_produto} salvo com sucesso!`);
       return itemInserido; // Retornar o item inserido com o ID
@@ -14037,6 +14071,51 @@ const PDVPage: React.FC = () => {
             toast.error(`Aviso: Adicionais do item ${item.produto.nome} não foram atualizados`);
           } else {
             console.log('✅ SUCESSO: Adicionais atualizados para o item:', item.produto.nome);
+          }
+        }
+
+        // ✅ NOVO: Atualizar insumos do item se existirem
+        if (item.produto.insumos && item.produto.insumos.length > 0) {
+          let sucessoInsumos = false;
+
+          // Verificar se o produto tem flag selecionar_insumos_venda ativa
+          if (item.produto.selecionar_insumos_venda && item.insumosSelecionados && item.insumosSelecionados.length > 0) {
+            // Importar função de atualização de insumos
+            const { atualizarInsumosItem } = await import('../../utils/pdvInsumosUtils');
+
+            // Atualizar apenas os insumos selecionados pelo usuário
+            sucessoInsumos = await atualizarInsumosItem(
+              item.pdv_item_id!, // ID do item existente
+              item.insumosSelecionados, // Insumos selecionados
+              usuarioData.empresa_id,
+              userData.user.id
+            );
+          } else if (!item.produto.selecionar_insumos_venda) {
+            // Importar funções de insumos
+            const { removerInsumosItem, salvarTodosInsumosItem } = await import('../../utils/pdvInsumosUtils');
+
+            // Remover insumos antigos e salvar todos os insumos do produto (flag desativada)
+            const removeuAntigos = await removerInsumosItem(item.pdv_item_id!, userData.user.id);
+            if (removeuAntigos) {
+              sucessoInsumos = await salvarTodosInsumosItem(
+                item.pdv_item_id!, // ID do item existente
+                item.produto, // Produto com todos os insumos
+                item.quantidade, // Quantidade do item para calcular proporção
+                usuarioData.empresa_id,
+                userData.user.id
+              );
+            }
+          } else {
+            // Flag ativa mas nenhum insumo selecionado - remover insumos existentes
+            const { removerInsumosItem } = await import('../../utils/pdvInsumosUtils');
+            sucessoInsumos = await removerInsumosItem(item.pdv_item_id!, userData.user.id);
+          }
+
+          if (!sucessoInsumos) {
+            console.error('❌ ERRO: Falha ao atualizar insumos do item:', item.produto.nome);
+            toast.error(`Aviso: Insumos do item ${item.produto.nome} não foram atualizados`);
+          } else {
+            console.log('✅ SUCESSO: Insumos atualizados para o item:', item.produto.nome);
           }
         }
 
