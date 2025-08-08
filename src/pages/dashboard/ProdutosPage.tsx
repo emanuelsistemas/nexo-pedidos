@@ -3380,8 +3380,9 @@ const ProdutosPage: React.FC = () => {
         observacao: ''
       });
 
-      // Resetar o estado de campo vazio
+      // Resetar os estados de quantidade
       setQuantidadeMovimentoVazia(false);
+      setQuantidadeMovimentoTexto('');
 
       showMessage('success', `${novoMovimento.tipo === 'entrada' ? 'Entrada' : 'Saída'} de estoque registrada com sucesso!`);
     } catch (error: any) {
@@ -8603,18 +8604,20 @@ const ProdutosPage: React.FC = () => {
                                             inputMode={isFracionado ? 'decimal' : 'numeric'}
                                             value={quantidadeMovimentoTexto !== '' ? quantidadeMovimentoTexto : (novoMovimento.quantidade === 0 && quantidadeMovimentoVazia ? '' : String(novoMovimento.quantidade))}
                                             onChange={(e) => {
-                                              // 🔍 LOG: Debug do campo quantidade
-                                              console.log('🔍 CAMPO QUANTIDADE - DEBUG:', {
-                                                valorDigitado: e.target.value,
+                                              const valorDigitado = e.target.value;
+
+                                              console.log('🔍 CAMPO QUANTIDADE - NOVO DEBUG:', {
+                                                valorDigitado: valorDigitado,
                                                 isFracionado: isFracionado,
-                                                unidadeSelecionada: unidadesMedida.find(u => u.id === editingProduto?.unidade_medida_id),
-                                                quantidadeAtual: novoMovimento.quantidade,
-                                                quantidadeVazia: quantidadeMovimentoVazia
+                                                quantidadeTextoAtual: quantidadeMovimentoTexto
                                               });
 
+                                              // ✅ SEMPRE atualizar o estado do texto primeiro (isso permite vírgula aparecer)
+                                              setQuantidadeMovimentoTexto(valorDigitado);
+
                                               // Se o campo estiver vazio
-                                              if (e.target.value === '') {
-                                                console.log('🔍 Campo vazio - limpando quantidade');
+                                              if (valorDigitado === '') {
+                                                console.log('🔍 Campo vazio - limpando');
                                                 setQuantidadeMovimentoVazia(true);
                                                 setNovoMovimento({
                                                   ...novoMovimento,
@@ -8625,25 +8628,16 @@ const ProdutosPage: React.FC = () => {
 
                                               setQuantidadeMovimentoVazia(false);
 
-                                              // ✅ CORREÇÃO: Permitir digitação de vírgula/ponto sem bloquear
-                                              const valorDigitado = e.target.value;
-
-                                              // Permitir vírgula ou ponto no final (usuário ainda digitando)
+                                              // Se termina com vírgula ou ponto, não processar ainda (mas texto já foi atualizado)
                                               if (valorDigitado.endsWith(',') || valorDigitado.endsWith('.')) {
-                                                console.log('🔍 Usuário ainda digitando (vírgula/ponto no final) - permitindo');
-                                                // Não processar ainda, apenas permitir a digitação
+                                                console.log('🔍 Vírgula/ponto no final - texto atualizado, aguardando mais dígitos');
                                                 return;
                                               }
 
+                                              // Processar o valor para número
                                               const valorSanitizado = sanitizeQuantidadeInput(valorDigitado, isFracionado);
-                                              console.log('🔍 Após sanitização:', {
-                                                valorOriginal: valorDigitado,
-                                                valorSanitizado: valorSanitizado,
-                                                isFracionado: isFracionado
-                                              });
 
                                               if (valorSanitizado === '') {
-                                                console.log('🔍 Valor sanitizado vazio - limpando quantidade');
                                                 setNovoMovimento({
                                                   ...novoMovimento,
                                                   quantidade: 0
@@ -8651,14 +8645,7 @@ const ProdutosPage: React.FC = () => {
                                                 return;
                                               }
 
-                                              // Converter para número
                                               const valor = parseFloat(valorSanitizado.replace(',', '.'));
-                                              console.log('🔍 Conversão para número:', {
-                                                valorSanitizado: valorSanitizado,
-                                                valorConvertido: valor,
-                                                isNaN: isNaN(valor),
-                                                isValid: !isNaN(valor) && valor >= 0
-                                              });
 
                                               if (!isNaN(valor) && valor >= 0) {
                                                 console.log('🔍 Atualizando quantidade para:', valor);
@@ -8666,8 +8653,6 @@ const ProdutosPage: React.FC = () => {
                                                   ...novoMovimento,
                                                   quantidade: valor
                                                 });
-                                              } else {
-                                                console.log('🔍 Valor inválido - não atualizando');
                                               }
                                             }}
                                             onFocus={() => {

@@ -7643,6 +7643,7 @@ const PDVPage: React.FC = () => {
             codigo,
             codigo_barras,
             nome,
+            selecionar_insumos_venda,
             unidade_medida_id,
             unidade_medida:unidade_medida(
               id,
@@ -7664,6 +7665,36 @@ const PDVPage: React.FC = () => {
       if (itensError) {
         console.error('🔍 [DEVOLUÇÃO DEBUG] Erro ao carregar itens:', itensError);
         throw itensError;
+      }
+
+      // ✅ NOVO: Buscar insumos dos itens da venda
+      let insumosData: any[] = [];
+      if (itensData && itensData.length > 0) {
+        const itensIds = itensData.map(item => item.id);
+
+        const { data: insumosResult, error: insumosError } = await supabase
+          .from('pdv_itens_insumos')
+          .select(`
+            id,
+            pdv_item_id,
+            insumo_produto_id,
+            nome_insumo,
+            quantidade,
+            unidade_medida,
+            custo_unitario,
+            custo_total,
+            origem_insumo
+          `)
+          .in('pdv_item_id', itensIds)
+          .eq('deletado', false)
+          .order('nome_insumo');
+
+        if (!insumosError && insumosResult) {
+          insumosData = insumosResult;
+          console.log('✅ Insumos carregados:', insumosData.length);
+        } else if (insumosError) {
+          console.error('❌ Erro ao carregar insumos:', insumosError);
+        }
       }
 
 
@@ -7708,7 +7739,8 @@ const PDVPage: React.FC = () => {
         const isDevolucao = item.origem_item === 'devolucao' ||
                            (item.valor_unitario < 0 && item.valor_total_item < 0);
 
-
+        // ✅ NOVO: Buscar insumos deste item
+        const insumosDoItem = insumosData.filter(insumo => insumo.pdv_item_id === item.id);
 
         return {
           ...item,
@@ -7728,7 +7760,9 @@ const PDVPage: React.FC = () => {
           editando_cest: false,
           editando_margem_st: false,
           editando_aliquota_icms: false,
-          isDevolucao
+          isDevolucao,
+          // ✅ NOVO: Incluir insumos do item
+          insumos: insumosDoItem
         };
       });
 
@@ -27135,25 +27169,26 @@ const PDVPage: React.FC = () => {
                           </thead>
                             <tbody>
                               {itensVenda.filter(item => !item.isDevolucao).map((item, index) => (
-                                <tr key={item.id} className={`border-b border-gray-800/50 ${
-                                  item.isDevolucao ? 'bg-red-900/20 border-red-600/30' : ''
-                                }`}>
-                                  <td className="py-3 px-2 text-white font-medium">{index + 1}</td>
-                                  <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
-                                  <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
-                                  <td className="py-3 px-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-white">{item.nome_produto}</span>
-                                      {item.isDevolucao && (
-                                        <span className="px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded border border-red-500/30">
-                                          DEVOLUÇÃO
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-2 text-gray-300">{item.quantidade}</td>
-                                  <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
-                                  <td className="py-3 px-2 text-primary-400 font-medium">{formatCurrency(item.valor_total_item)}</td>
+                                <React.Fragment key={item.id}>
+                                  <tr className={`border-b border-gray-800/50 ${
+                                    item.isDevolucao ? 'bg-red-900/20 border-red-600/30' : ''
+                                  }`}>
+                                    <td className="py-3 px-2 text-white font-medium">{index + 1}</td>
+                                    <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
+                                    <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
+                                    <td className="py-3 px-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-white">{item.nome_produto}</span>
+                                        {item.isDevolucao && (
+                                          <span className="px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded border border-red-500/30">
+                                            DEVOLUÇÃO
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-2 text-gray-300">{item.quantidade}</td>
+                                    <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
+                                    <td className="py-3 px-2 text-primary-400 font-medium">{formatCurrency(item.valor_total_item)}</td>
 
                                   {/* ✅ Campos fiscais apenas para vendas editáveis */}
                                   {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
@@ -27513,6 +27548,45 @@ const PDVPage: React.FC = () => {
                                     {item.vendedor_nome || '-'}
                                   </td>
                                 </tr>
+
+                                  {/* ✅ NOVO: Exibir insumos do item se existirem e flag estiver ativa */}
+                                  {item.insumos && item.insumos.length > 0 && item.produto?.selecionar_insumos_venda && (
+                                    <tr className="bg-blue-900/10 border-b border-blue-600/20">
+                                      <td colSpan={!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' ? 14 : 8} className="py-2 px-2">
+                                        <div className="ml-4">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-4 h-4 bg-blue-500/20 rounded-full flex items-center justify-center">
+                                              <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                              </svg>
+                                            </div>
+                                            <span className="text-blue-400 font-medium text-sm">Insumos Selecionados:</span>
+                                          </div>
+                                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                            {item.insumos.map((insumo: any, insumoIndex: number) => (
+                                              <div key={insumoIndex} className="flex items-center justify-between p-2 bg-blue-800/10 rounded border border-blue-600/20">
+                                                <div className="flex-1">
+                                                  <div className="text-blue-300 font-medium text-sm">{insumo.nome_insumo}</div>
+                                                  <div className="text-blue-400/70 text-xs">
+                                                    {insumo.quantidade} {insumo.unidade_medida}
+                                                    {insumo.origem_insumo === 'manual' && (
+                                                      <span className="ml-1 text-blue-500/60">(selecionado)</span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                                {insumo.custo_total > 0 && (
+                                                  <div className="text-blue-400 text-xs font-medium">
+                                                    {formatCurrency(insumo.custo_total)}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               ))}
                             </tbody>
                           </table>
