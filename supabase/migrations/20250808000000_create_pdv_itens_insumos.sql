@@ -174,52 +174,12 @@ CREATE TRIGGER trigger_pdv_itens_insumos_updated_at
   EXECUTE FUNCTION update_pdv_itens_insumos_updated_at();
 
 -- =====================================================
--- 7. POLÍTICAS RLS (ROW LEVEL SECURITY)
+-- 7. TABELA DESPROTEGIDA (SEM RLS)
 -- =====================================================
 
--- Habilitar RLS na tabela
-ALTER TABLE pdv_itens_insumos ENABLE ROW LEVEL SECURITY;
+-- NOTA: Esta tabela foi deixada SEM proteção RLS por solicitação
+-- A segurança multi-tenant deve ser implementada na aplicação
+-- através do filtro por empresa_id nas consultas
 
--- Política para SELECT: usuários podem ver apenas dados da sua empresa
-CREATE POLICY pdv_itens_insumos_select_policy ON pdv_itens_insumos
-  FOR SELECT
-  USING (
-    empresa_id IN (
-      SELECT empresa_id
-      FROM usuarios
-      WHERE id = auth.uid()
-    )
-  );
-
--- Política para INSERT: usuários podem inserir apenas na sua empresa
-CREATE POLICY pdv_itens_insumos_insert_policy ON pdv_itens_insumos
-  FOR INSERT
-  WITH CHECK (
-    empresa_id IN (
-      SELECT empresa_id
-      FROM usuarios
-      WHERE id = auth.uid()
-    )
-  );
-
--- Política para UPDATE: usuários podem atualizar apenas dados da sua empresa
-CREATE POLICY pdv_itens_insumos_update_policy ON pdv_itens_insumos
-  FOR UPDATE
-  USING (
-    empresa_id IN (
-      SELECT empresa_id
-      FROM usuarios
-      WHERE id = auth.uid()
-    )
-  );
-
--- Política para DELETE: usuários podem deletar apenas dados da sua empresa
-CREATE POLICY pdv_itens_insumos_delete_policy ON pdv_itens_insumos
-  FOR DELETE
-  USING (
-    empresa_id IN (
-      SELECT empresa_id
-      FROM usuarios
-      WHERE id = auth.uid()
-    )
-  );
+-- RLS DESABILITADA - Tabela acessível sem restrições de políticas
+ALTER TABLE pdv_itens_insumos DISABLE ROW LEVEL SECURITY;

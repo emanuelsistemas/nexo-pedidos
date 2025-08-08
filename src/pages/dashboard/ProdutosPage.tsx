@@ -6916,6 +6916,23 @@ const ProdutosPage: React.FC = () => {
                   </form>
                 ) : (
                   <div>
+                    {/* ✅ NOVO: Área de visualização do nome do produto em tempo real */}
+                    {!isGrupoForm && (
+                      <div className="mb-6 p-4 bg-gray-800/30 border border-gray-700 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-400 mb-1">Nome do produto:</p>
+                            <p className="text-lg font-medium text-white min-h-[1.5rem]">
+                              {novoProduto.nome || (
+                                <span className="text-gray-500 italic">Digite o nome do produto...</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Abas */}
                     <div className="flex border-b border-gray-700 mb-6">
                       <button
