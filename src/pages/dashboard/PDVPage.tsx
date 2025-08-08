@@ -510,24 +510,6 @@ const PDVPage: React.FC = () => {
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
   const [observacaoFechamento, setObservacaoFechamento] = useState('');
 
-  // ✅ NOVO: Estados para modal de confirmação de diferença
-  const [showConfirmarDiferencaModal, setShowConfirmarDiferencaModal] = useState(false);
-  const [textoConfirmacao, setTextoConfirmacao] = useState('');
-  const [diferencaTotalCaixa, setDiferencaTotalCaixa] = useState(0);
-
-  // ✅ NOVO: Estados para loading dos botões do menu PDV
-  const [loadingBotaoCaixa, setLoadingBotaoCaixa] = useState(false);
-  const [loadingBotaoVendasAbertas, setLoadingBotaoVendasAbertas] = useState(false);
-  const [loadingBotaoProdutos, setLoadingBotaoProdutos] = useState(false);
-  const [loadingBotaoPedidos, setLoadingBotaoPedidos] = useState(false);
-  const [loadingBotaoMesas, setLoadingBotaoMesas] = useState(false);
-  const [loadingBotaoComandas, setLoadingBotaoComandas] = useState(false);
-  const [loadingBotaoDelivery, setLoadingBotaoDelivery] = useState(false);
-  const [loadingBotaoSangria, setLoadingBotaoSangria] = useState(false);
-  const [loadingBotaoSuprimento, setLoadingBotaoSuprimento] = useState(false);
-  const [loadingBotaoMovimentos, setLoadingBotaoMovimentos] = useState(false);
-  const [loadingBotaoDevolucoes, setLoadingBotaoDevolucoes] = useState(false);
-
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
   const [observacaoSangria, setObservacaoSangria] = useState('');
@@ -974,10 +956,6 @@ const PDVPage: React.FC = () => {
   // Estado para modal de produto não encontrado
   const [showProdutoNaoEncontrado, setShowProdutoNaoEncontrado] = useState(false);
   const [produtoNaoEncontradoTermo, setProdutoNaoEncontradoTermo] = useState('');
-
-  // ✅ NOVO: Estado para modal de produto oculto no PDV
-  const [showProdutoOcultoPDV, setShowProdutoOcultoPDV] = useState(false);
-  const [produtoOcultoPDV, setProdutoOcultoPDV] = useState<Produto | null>(null);
 
   // Estado para dados do usuário
   const [userData, setUserData] = useState<{ nome: string } | null>(null);
@@ -1933,37 +1911,6 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // ✅ NOVO: Função para verificar diferenças antes de fechar
-  const verificarDiferencasEFechar = async () => {
-    // Calcular diferença total
-    let totalContabilizado = 0;
-    let totalInformado = 0;
-
-    formasPagamentoCaixa.forEach(forma => {
-      const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
-      const valorFiado = valoresFiadoPorForma[forma.id] || 0;
-      const valorContabilizado = valorAtual + valorFiado;
-
-      const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
-      const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
-
-      totalContabilizado += valorContabilizado;
-      totalInformado += valorInformadoUsuario;
-    });
-
-    const diferencaTotal = totalInformado - totalContabilizado;
-    setDiferencaTotalCaixa(diferencaTotal);
-
-    // Se há diferença, mostrar modal de confirmação
-    if (diferencaTotal !== 0) {
-      setShowConfirmarDiferencaModal(true);
-      return;
-    }
-
-    // Se não há diferença, fechar diretamente
-    await fecharCaixa();
-  };
-
   // ✅ NOVO: Função para fechar o caixa
   const fecharCaixa = async () => {
     try {
@@ -2007,51 +1954,27 @@ const PDVPage: React.FC = () => {
       // 1. Salvar detalhes das formas de pagamento
       const formasPagamentoDetalhes = [];
 
-      console.log('💰 Processando formas de pagamento para fechamento...');
-      console.log('📊 Formas disponíveis:', formasPagamentoCaixa.length);
-      console.log('📊 Valores reais calculados:', valoresReaisCaixa);
-      console.log('📊 Valores informados pelo usuário:', valoresCaixa);
-
       for (const forma of formasPagamentoCaixa) {
-        // ✅ CORREÇÃO: Usar forma.id consistentemente (ID da empresa)
-        const valorAtualCalculado = valoresReaisCaixa[forma.id]?.atual || 0;
-        const valorFiadoCalculado = valoresFiadoPorForma[forma.id] || 0;
+        const valorAtual = valoresReaisCaixa[forma.forma_pagamento_opcao_id]?.atual || 0;
+        const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
+        const valorTotal = valorAtual + valorFiado;
 
-        // ✅ NOVO: Obter valor informado pelo usuário
-        const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
-        const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
-
-        // ✅ NOVO: Calcular diferença entre informado e calculado
-        const valorTotalCalculado = valorAtualCalculado + valorFiadoCalculado;
-        const diferenca = valorInformadoUsuario - valorTotalCalculado;
-
-        console.log(`💳 ${forma.forma_pagamento_opcoes?.nome}:`, {
-          valorAtualCalculado,
-          valorFiadoCalculado,
-          valorTotalCalculado,
-          valorInformadoUsuario,
-          diferenca
-        });
-
-        // ✅ CORREÇÃO: Incluir TODAS as formas de pagamento (mesmo com valor 0)
-        formasPagamentoDetalhes.push({
-          empresa_id: usuarioData.empresa_id,
-          usuario_id: authData.user.id,
-          caixa_controle_id: caixaAberto.id,
-          forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
-          forma_pagamento_nome: forma.forma_pagamento_opcoes?.nome || 'Forma não identificada',
-          valor_atual: valorAtualCalculado,
-          valor_fiado: valorFiadoCalculado,
-          valor_total: valorTotalCalculado,
-          observacoes: diferenca !== 0 ?
-            `Valor informado: R$ ${valorInformadoUsuario.toFixed(2)} | Diferença: R$ ${diferenca.toFixed(2)}` :
-            null
-        });
+        // Só salvar se houver algum valor
+        if (valorTotal > 0) {
+          formasPagamentoDetalhes.push({
+            empresa_id: usuarioData.empresa_id,
+            usuario_id: authData.user.id,
+            caixa_controle_id: caixaAberto.id,
+            forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
+            forma_pagamento_nome: forma.forma_pagamento_opcoes?.nome || 'Forma não identificada', // ✅ CORREÇÃO: Usar estrutura correta
+            valor_atual: valorAtual,
+            valor_fiado: valorFiado,
+            valor_total: valorTotal
+          });
+        }
       }
 
       // Inserir detalhes das formas de pagamento
-      console.log('💾 Salvando formas de pagamento no fechamento:', formasPagamentoDetalhes.length);
-
       if (formasPagamentoDetalhes.length > 0) {
         const { error: formasError } = await supabase
           .from('formas_pagamento_fechamento_caixa')
@@ -2062,10 +1985,6 @@ const PDVPage: React.FC = () => {
           toast.error('Erro ao salvar detalhes das formas de pagamento');
           return;
         }
-
-        console.log('✅ Formas de pagamento salvas com sucesso no fechamento');
-      } else {
-        console.log('⚠️ Nenhuma forma de pagamento encontrada para salvar');
       }
 
       // 2. Atualizar status do caixa
@@ -2132,29 +2051,6 @@ const PDVPage: React.FC = () => {
     } finally {
       setLoadingFecharCaixa(false);
     }
-  };
-
-  // ✅ NOVO: Função para confirmar fechamento com diferença
-  const confirmarFechamentoComDiferenca = async () => {
-    if (textoConfirmacao.toLowerCase() !== 'confirmo') {
-      toast.error('Digite "CONFIRMO" para confirmar o fechamento com diferença');
-      return;
-    }
-
-    // Fechar modal de confirmação de diferença
-    setShowConfirmarDiferencaModal(false);
-    setTextoConfirmacao('');
-
-    // Executar fechamento do caixa
-    await fecharCaixa();
-  };
-
-  // ✅ NOVO: Função para cancelar fechamento com diferença
-  const cancelarFechamentoComDiferenca = () => {
-    setShowConfirmarDiferencaModal(false);
-    setTextoConfirmacao('');
-    setDiferencaTotalCaixa(0);
-    // Modal principal permanece aberto para ajustes
   };
 
   // ✅ NOVO: Função para carregar dados do caixa aberto
@@ -3031,22 +2927,8 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoVendasAbertas) {
-          return;
-        }
-
-        try {
-          setLoadingBotaoVendasAbertas(true);
-          await carregarVendasAbertas();
-          setShowVendasAbertasModal(true);
-        } catch (error) {
-          console.error('❌ Erro ao carregar vendas abertas:', error);
-          toast.error('Erro ao carregar vendas abertas');
-        } finally {
-          setLoadingBotaoVendasAbertas(false);
-        }
+        await carregarVendasAbertas();
+        setShowVendasAbertasModal(true);
       }
     },
     {
@@ -3089,25 +2971,12 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoProdutos) {
-          return;
-        }
-
         if (showAreaProdutos) {
           // Se já está aberto, apenas fechar
           setShowAreaProdutos(false);
         } else {
           // Se está fechado, ativar fullscreen e abrir
-          try {
-            setLoadingBotaoProdutos(true);
-            await abrirModalProdutos();
-          } catch (error) {
-            console.error('❌ Erro ao abrir modal de produtos:', error);
-            toast.error('Erro ao abrir produtos');
-          } finally {
-            setLoadingBotaoProdutos(false);
-          }
+          await abrirModalProdutos();
         }
       }
     },
@@ -3123,33 +2992,23 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoPedidos) {
-          return;
-        }
-
         try {
-          setLoadingBotaoPedidos(true);
-
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
-
-          // Abrir modal IMEDIATAMENTE sem loading
-          setShowPedidosModal(true);
-          setSearchPedidos('');
-
-          // ✅ SEMPRE CARREGAR PEDIDOS QUANDO MODAL ABRIR (para garantir dados atualizados)
-          setTimeout(() => {
-            loadPedidos();
-          }, 100);
         } catch (error) {
-          console.error('❌ Erro ao abrir modal de pedidos:', error);
-          toast.error('Erro ao abrir pedidos');
-        } finally {
-          setLoadingBotaoPedidos(false);
+          // Erro silencioso ao ativar fullscreen
         }
+
+        // Abrir modal IMEDIATAMENTE sem loading
+        setShowPedidosModal(true);
+        setSearchPedidos('');
+
+        // ✅ SEMPRE CARREGAR PEDIDOS QUANDO MODAL ABRIR (para garantir dados atualizados)
+        setTimeout(() => {
+          loadPedidos();
+        }, 100);
       }
     },
     {
@@ -3190,22 +3049,8 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoMesas) {
-          return;
-        }
-
-        try {
-          setLoadingBotaoMesas(true);
-          await carregarVendasMesas();
-          setShowMesasModal(true);
-        } catch (error) {
-          console.error('❌ Erro ao carregar vendas de mesas:', error);
-          toast.error('Erro ao carregar mesas');
-        } finally {
-          setLoadingBotaoMesas(false);
-        }
+        await carregarVendasMesas();
+        setShowMesasModal(true);
       }
     },
     {
@@ -3219,22 +3064,8 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoComandas) {
-          return;
-        }
-
-        try {
-          setLoadingBotaoComandas(true);
-          await carregarVendasComandas();
-          setShowComandasModal(true);
-        } catch (error) {
-          console.error('❌ Erro ao carregar vendas de comandas:', error);
-          toast.error('Erro ao carregar comandas');
-        } finally {
-          setLoadingBotaoComandas(false);
-        }
+        await carregarVendasComandas();
+        setShowComandasModal(true);
       }
     },
     {
@@ -3248,14 +3079,7 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoDelivery) {
-          return;
-        }
-
         try {
-          setLoadingBotaoDelivery(true);
           console.log('🚚 [BOTÃO] Clicado no botão Delivery Local');
           await carregarVendasDelivery();
           console.log('✅ [BOTÃO] Vendas carregadas, abrindo modal...');
@@ -3264,8 +3088,6 @@ const PDVPage: React.FC = () => {
         } catch (error) {
           console.error('❌ [BOTÃO] Erro ao abrir modal de delivery:', error);
           toast.error('Erro ao carregar deliveries. Tente novamente.');
-        } finally {
-          setLoadingBotaoDelivery(false);
         }
       }
     },
@@ -3279,23 +3101,9 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoSangria) {
-          return;
-        }
-
-        try {
-          setLoadingBotaoSangria(true);
-          // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
-          await carregarDadosCaixa();
-          setShowSangriaModal(true);
-        } catch (error) {
-          console.error('❌ Erro ao carregar dados para sangria:', error);
-          toast.error('Erro ao carregar dados do caixa');
-        } finally {
-          setLoadingBotaoSangria(false);
-        }
+        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+        await carregarDadosCaixa();
+        setShowSangriaModal(true);
       }
     },
     {
@@ -3308,23 +3116,9 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoSuprimento) {
-          return;
-        }
-
-        try {
-          setLoadingBotaoSuprimento(true);
-          // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
-          await carregarDadosCaixa();
-          setShowSuprimentoModal(true);
-        } catch (error) {
-          console.error('❌ Erro ao carregar dados para suprimento:', error);
-          toast.error('Erro ao carregar dados do caixa');
-        } finally {
-          setLoadingBotaoSuprimento(false);
-        }
+        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+        await carregarDadosCaixa();
+        setShowSuprimentoModal(true);
       }
     },
     {
@@ -3390,30 +3184,20 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoMovimentos) {
-          return;
-        }
-
         try {
-          setLoadingBotaoMovimentos(true);
-
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
-
-          setShowMovimentosModal(true);
-          // Carregar vendas apenas uma vez quando abrir o modal
-          loadVendas();
-          // Atualizar contador de NFC-e pendentes
-          loadContadorNfcePendentes();
         } catch (error) {
-          console.error('❌ Erro ao abrir modal de movimentos:', error);
-          toast.error('Erro ao abrir movimentos');
-        } finally {
-          setLoadingBotaoMovimentos(false);
+          // Erro silencioso ao ativar fullscreen
         }
+
+        setShowMovimentosModal(true);
+        // Carregar vendas apenas uma vez quando abrir o modal
+        loadVendas();
+        // Atualizar contador de NFC-e pendentes
+        loadContadorNfcePendentes();
       }
     },
     {
@@ -3427,28 +3211,18 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoDevolucoes) {
-          return;
-        }
-
         try {
-          setLoadingBotaoDevolucoes(true);
-
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
-
-          setShowDevolucoesModal(true);
-          // Carregar devoluções pendentes quando abrir o modal
-          loadDevolucoesPendentes();
         } catch (error) {
-          console.error('❌ Erro ao abrir modal de devoluções:', error);
-          toast.error('Erro ao abrir devoluções');
-        } finally {
-          setLoadingBotaoDevolucoes(false);
+          // Erro silencioso ao ativar fullscreen
         }
+
+        setShowDevolucoesModal(true);
+        // Carregar devoluções pendentes quando abrir o modal
+        loadDevolucoesPendentes();
       }
     },
     // ✅ NOVO: Botão Caixa - só aparece quando caixa está aberto
@@ -3463,15 +3237,7 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoCaixa) {
-          return;
-        }
-
         try {
-          // ✅ NOVO: Ativar loading
-          setLoadingBotaoCaixa(true);
-
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
@@ -3480,41 +3246,15 @@ const PDVPage: React.FC = () => {
           // Erro silencioso ao ativar fullscreen
         }
 
-        try {
-          // Carregar dados do caixa e formas de pagamento
-          await carregarDadosCaixa();
+        // Carregar dados do caixa e formas de pagamento
+        await carregarDadosCaixa();
 
-          console.log('🎭 Definindo showCaixaModal = true');
-          setShowCaixaModal(true);
-          console.log('🎭 showCaixaModal definido como true');
-        } catch (error) {
-          console.error('❌ Erro ao carregar dados do caixa:', error);
-          toast.error('Erro ao carregar dados do caixa');
-        } finally {
-          // ✅ NOVO: Desativar loading
-          setLoadingBotaoCaixa(false);
-        }
+        console.log('🎭 Definindo showCaixaModal = true');
+        setShowCaixaModal(true);
+        console.log('🎭 showCaixaModal definido como true');
       }
     }
   ];
-
-  // ✅ NOVO: Função para obter estado de loading de cada botão
-  const getBotaoLoadingState = (itemId: string) => {
-    switch (itemId) {
-      case 'caixa': return loadingBotaoCaixa;
-      case 'vendas-abertas': return loadingBotaoVendasAbertas;
-      case 'produtos': return loadingBotaoProdutos;
-      case 'pedidos': return loadingBotaoPedidos;
-      case 'mesas': return loadingBotaoMesas;
-      case 'comandas': return loadingBotaoComandas;
-      case 'delivery-local': return loadingBotaoDelivery;
-      case 'sangria': return loadingBotaoSangria;
-      case 'suprimento': return loadingBotaoSuprimento;
-      case 'movimentos': return loadingBotaoMovimentos;
-      case 'devolucoes': return loadingBotaoDevolucoes;
-      default: return false;
-    }
-  };
 
   // Função para filtrar itens do menu baseado nas configurações do PDV
   const getFilteredMenuItems = () => {
@@ -3982,21 +3722,13 @@ const PDVPage: React.FC = () => {
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
-  // ✅ NOVO: Monitor do buffer para debug
-  useEffect(() => {
-    console.log('🔄 Buffer de código de barras mudou:', codigoBarrasBuffer);
-  }, [codigoBarrasBuffer]);
-
   // Listener global para captura de código de barras, F1-F9 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      console.log('🎹 Tecla pressionada:', event.key, 'Código:', event.code);
-
-      // ✅ CORRIGIDO: Capturar apenas teclas F reais (F1, F2, etc.) para atalhos do menu PDV
-      if (event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3) {
+      // Capturar teclas F0-F9 para atalhos do menu PDV
+      if (event.key.startsWith('F') && event.key.length <= 3) {
         const fNumber = parseInt(event.key.substring(1));
-        if (!isNaN(fNumber) && fNumber >= 0 && fNumber <= 9) {
-          console.log('🔧 Atalho F detectado:', fNumber);
+        if (fNumber >= 0 && fNumber <= 9) {
           event.preventDefault();
           let menuIndex;
           if (fNumber === 0) {
@@ -4021,11 +3753,7 @@ const PDVPage: React.FC = () => {
       }
 
       // Só funciona se a configuração estiver habilitada
-      if (!pdvConfig?.venda_codigo_barras) {
-        console.log('⚠️ Captura de código de barras desabilitada na configuração');
-        return;
-      }
-      console.log('✅ Captura de código de barras habilitada');
+      if (!pdvConfig?.venda_codigo_barras) return;
 
       // Ignorar se estiver digitando em um input, textarea ou elemento editável
       const target = event.target as HTMLElement;
@@ -4039,36 +3767,21 @@ const PDVPage: React.FC = () => {
       }
 
       // Só capturar números
-      console.log('🔍 Testando se é número:', event.key, '| Teste regex:', /^\d$/.test(event.key));
       if (!/^\d$/.test(event.key)) {
         // Se pressionar Enter e tiver código no buffer, processar
         if (event.key === 'Enter' && codigoBarrasBuffer.length > 0) {
-          console.log('🚀 Enter pressionado com buffer:', codigoBarrasBuffer);
           processarCodigoBarras(codigoBarrasBuffer);
           setCodigoBarrasBuffer('');
           if (timeoutId) {
             clearTimeout(timeoutId);
             setTimeoutId(null);
           }
-        } else if (event.key === 'Enter') {
-          console.log('⚠️ Enter pressionado mas buffer vazio. Buffer atual:', codigoBarrasBuffer);
-          // ✅ NOVO: Teste direto da função para debug
-          console.log('🧪 Testando função diretamente com código "49"');
-          processarCodigoBarras('49');
-        } else if (event.key === 'F12') {
-          // ✅ NOVO: Teste com F12 para debug
-          console.log('🧪 F12 pressionado - testando busca de produto oculto');
-          processarCodigoBarras('49');
         }
-        console.log('🔍 Tecla não numérica ignorada:', event.key);
         return;
       }
 
       // Adicionar número ao buffer
       const novoBuffer = codigoBarrasBuffer + event.key;
-      console.log('📝 Adicionando dígito:', event.key, '→ Buffer anterior:', codigoBarrasBuffer, '→ Novo buffer:', novoBuffer);
-      console.log('🔍 Estado React do buffer antes:', codigoBarrasBuffer);
-      console.log('🔍 Novo valor calculado:', novoBuffer);
       setCodigoBarrasBuffer(novoBuffer);
 
       // Limpar timeout anterior
@@ -4099,140 +3812,23 @@ const PDVPage: React.FC = () => {
     };
   }, [pdvConfig?.venda_codigo_barras, codigoBarrasBuffer, timeoutId, showAreaProdutos, menuPDVItems]);
 
-  // ✅ NOVO: Função para buscar produto incluindo ocultos (para validação)
-  const buscarProdutoComOcultos = async (codigo: string): Promise<Produto | null> => {
-    console.log('🔍 Buscando produto com código:', codigo);
-
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      console.log('❌ Usuário não autenticado');
-      return null;
-    }
-
-    const { data: usuarioData } = await supabase
-      .from('usuarios')
-      .select('empresa_id')
-      .eq('id', userData.user.id)
-      .single();
-
-    if (!usuarioData?.empresa_id) {
-      console.log('❌ Empresa não encontrada para o usuário');
-      return null;
-    }
-
-    console.log('🏢 Empresa ID:', usuarioData.empresa_id);
-
-    const { data, error } = await supabase
-      .from('produtos')
-      .select(`
-        id,
-        nome,
-        preco,
-        codigo,
-        codigo_barras,
-        descricao,
-        promocao,
-        producao,
-        tipo_desconto,
-        valor_desconto,
-        desconto_quantidade,
-        quantidade_minima,
-        tipo_desconto_quantidade,
-        valor_desconto_quantidade,
-        percentual_desconto_quantidade,
-        unidade_medida_id,
-        grupo_id,
-        estoque_inicial,
-        ncm,
-        cfop,
-        origem_produto,
-        situacao_tributaria,
-        cst_icms,
-        csosn_icms,
-        cst_pis,
-        cst_cofins,
-        cst_ipi,
-        aliquota_icms,
-        aliquota_pis,
-        aliquota_cofins,
-        aliquota_ipi,
-        cest,
-        margem_st,
-        peso_liquido,
-        promocao_data_habilitada,
-        promocao_data_inicio,
-        promocao_data_fim,
-        promocao_data_cardapio,
-        insumos,
-        selecionar_insumos_venda,
-        controlar_quantidades_insumo,
-        materia_prima,
-        ocultar_visualizacao_pdv,
-        grupo_id,
-        unidade_medida_id
-      `)
-      .eq('empresa_id', usuarioData.empresa_id)
-      .eq('ativo', true)
-      .eq('deletado', false)
-      .or(`codigo.eq.${codigo},codigo_barras.eq.${codigo}`)
-      .limit(1);
-
-    if (error) {
-      console.log('❌ Erro na consulta:', error);
-      return null;
-    }
-
-    if (!data || data.length === 0) {
-      console.log('❌ Nenhum produto encontrado com código:', codigo);
-      return null;
-    }
-
-    const produto = data[0] as Produto;
-    console.log('✅ Produto encontrado:', {
-      id: produto.id,
-      nome: produto.nome,
-      codigo: produto.codigo,
-      materia_prima: produto.materia_prima,
-      ocultar_visualizacao_pdv: produto.ocultar_visualizacao_pdv
-    });
-
-    return produto;
-  };
-
   // Função para processar código de barras capturado
-  const processarCodigoBarras = async (codigo: string) => {
-    console.log('🚀 Processando código de barras:', codigo);
+  const processarCodigoBarras = (codigo: string) => {
+    // Buscar produto pelo código de barras
+    const produto = produtos.find(p => p.codigo_barras === codigo);
 
-    // Primeiro, buscar produto incluindo ocultos para validação
-    const produtoCompleto = await buscarProdutoComOcultos(codigo);
-
-    if (produtoCompleto) {
-      console.log('📦 Produto encontrado na busca completa');
-
-      // ✅ NOVO: Verificar se produto está oculto no PDV
-      if (produtoCompleto.ocultar_visualizacao_pdv) {
-        console.log('🚫 Produto está oculto no PDV - mostrando modal específico');
-        setProdutoOcultoPDV(produtoCompleto);
-        setShowProdutoOcultoPDV(true);
-        return;
-      }
-
-      console.log('✅ Produto não está oculto - buscando na lista normal');
-      // Se não está oculto, buscar na lista normal (que já exclui ocultos) - BUSCA EXATA
-      const produto = produtos.find(p =>
-        (p.codigo_barras && p.codigo_barras === codigo) ||
-        (p.codigo && p.codigo === codigo)
-      );
-      if (produto) {
-        console.log('✅ Produto encontrado na lista normal - adicionando ao carrinho');
-        adicionarAoCarrinho(produto);
-      } else {
-        console.log('❌ Produto não encontrado na lista normal (pode estar oculto)');
-      }
+    if (produto) {
+      adicionarAoCarrinho(produto);
+      // ✅ REMOVIDO: Toast removido para não confundir com outros processos
     } else {
-      console.log('❌ Produto não encontrado - mostrando modal não encontrado');
-      // Produto realmente não encontrado
-      mostrarProdutoNaoEncontrado(codigo);
+      // Se não encontrou por código de barras, tentar por código normal
+      const produtoPorCodigo = produtos.find(p => p.codigo === codigo);
+      if (produtoPorCodigo) {
+        adicionarAoCarrinho(produtoPorCodigo);
+        // ✅ REMOVIDO: Toast removido para não confundir com outros processos
+      } else {
+        toast.error(`Produto não encontrado para o código: ${codigo}`);
+      }
     }
   };
 
@@ -4625,8 +4221,6 @@ const PDVPage: React.FC = () => {
         insumos,
         selecionar_insumos_venda,
         controlar_quantidades_insumo,
-        materia_prima,
-        ocultar_visualizacao_pdv,
         grupo:grupos(nome),
         unidade_medida:unidade_medida_id (
           id,
@@ -4639,7 +4233,6 @@ const PDVPage: React.FC = () => {
       .eq('empresa_id', usuarioData.empresa_id)
       .eq('ativo', true)
       .eq('deletado', false)
-      .eq('ocultar_visualizacao_pdv', false) // ✅ NOVO: Excluir produtos ocultos no PDV
       .order('nome');
 
     if (error) throw error;
@@ -9835,31 +9428,9 @@ const PDVPage: React.FC = () => {
       }
     }
 
-    // ✅ NOVO: Busca inteligente - priorizar correspondências exatas
-    const termoLower = termoBusca.toLowerCase();
-    const nomeMatch = produto.nome && produto.nome.toLowerCase().includes(termoLower);
-    const codigoExato = produto.codigo && produto.codigo.toLowerCase() === termoLower;
-    const codigoBarrasExato = produto.codigo_barras && produto.codigo_barras.toLowerCase() === termoLower;
-    const codigoContains = produto.codigo && produto.codigo.toLowerCase().includes(termoLower);
-    const codigoBarrasContains = produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(termoLower);
-
-    // Se o termo é numérico e tem 13 dígitos ou menos, priorizar busca exata
-    const isNumerico = /^\d+$/.test(termoBusca);
-    const isCodigoBarras = isNumerico && termoBusca.length >= 8; // Códigos de barras geralmente têm 8+ dígitos
-    const isCodigoProduto = isNumerico && termoBusca.length <= 6; // Códigos de produto geralmente têm até 6 dígitos
-
-    let matchesSearch = false;
-
-    if (isCodigoBarras) {
-      // Para códigos de barras (8+ dígitos), buscar apenas correspondência exata
-      matchesSearch = codigoBarrasExato;
-    } else if (isCodigoProduto) {
-      // Para códigos de produto (até 6 dígitos), buscar apenas correspondência exata
-      matchesSearch = codigoExato;
-    } else {
-      // Para texto ou números mistos, usar busca normal (includes)
-      matchesSearch = nomeMatch || codigoContains || codigoBarrasContains;
-    }
+    const matchesSearch = (produto.nome && produto.nome.toLowerCase().includes(termoBusca.toLowerCase())) ||
+                         (produto.codigo && produto.codigo.toLowerCase().includes(termoBusca.toLowerCase())) ||
+                         (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(termoBusca.toLowerCase()));
     const matchesGrupo = grupoSelecionado === 'todos' || produto.grupo_id === grupoSelecionado;
     return matchesSearch && matchesGrupo;
   }).sort((a, b) => {
@@ -15261,74 +14832,6 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // ✅ NOVA: Função para confirmar consumo interno
-  const confirmarConsumoInterno = async () => {
-    if (carrinho.length === 0) {
-      toast.error('Carrinho vazio');
-      return;
-    }
-
-    try {
-      setLoadingBotaoConsumoInterno(true);
-
-      // Obter dados do usuário
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        toast.error('Usuário não autenticado');
-        return;
-      }
-
-      const { data: usuarioData } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('id', userData.user.id)
-        .single();
-
-      if (!usuarioData?.empresa_id) {
-        toast.error('Empresa não encontrada');
-        return;
-      }
-
-      // Processar cada item do carrinho
-      for (const item of carrinho) {
-        try {
-          // Chamar a função de atualização de estoque
-          const { error } = await supabase.rpc('atualizar_estoque_produto', {
-            p_produto_id: item.produto.id,
-            p_empresa_id: usuarioData.empresa_id,
-            p_quantidade: -item.quantidade, // Quantidade negativa para dar baixa
-            p_tipo_movimentacao: 'consumo_interno',
-            p_observacao: 'Consumo interno da empresa'
-          });
-
-          if (error) {
-            console.error(`❌ Erro ao dar baixa no produto ${item.produto.nome}:`, error);
-            toast.error(`Erro ao dar baixa no produto: ${item.produto.nome}`);
-            return;
-          }
-        } catch (error) {
-          console.error(`❌ Erro ao processar produto ${item.produto.nome}:`, error);
-          toast.error(`Erro ao processar produto: ${item.produto.nome}`);
-          return;
-        }
-      }
-
-      // Sucesso - limpar carrinho e fechar modal
-      setCarrinho([]);
-      setShowConsumoInternoModal(false);
-      toast.success('Consumo interno registrado com sucesso!');
-
-      // Recarregar estoque para atualizar as informações
-      await loadEstoque();
-
-    } catch (error) {
-      console.error('❌ Erro ao confirmar consumo interno:', error);
-      toast.error('Erro ao confirmar consumo interno');
-    } finally {
-      setLoadingBotaoConsumoInterno(false);
-    }
-  };
-
   // ✅ NOVA: Função para carregar vendas de comandas
   const carregarVendasComandas = async (): Promise<void> => {
     try {
@@ -17221,7 +16724,6 @@ const PDVPage: React.FC = () => {
               vendedor_id: item.vendedor_id || null,
               vendedor_nome: item.vendedor_nome || null,
               adicionais: item.adicionais || [], // ✅ NOVO: Incluir adicionais
-              insumos_selecionados: item.insumosSelecionados || [], // ✅ NOVO: Incluir insumos selecionados
               sabores: item.sabores || null // ✅ NOVO: Incluir sabores para referência
             })),
             pagamento: pagamentoData,
@@ -17335,7 +16837,6 @@ const PDVPage: React.FC = () => {
               vendedor_id: item.vendedor_id || null,
               vendedor_nome: item.vendedor_nome || null,
               adicionais: item.adicionais || [], // ✅ NOVO: Incluir adicionais
-              insumos_selecionados: item.insumosSelecionados || [], // ✅ NOVO: Incluir insumos selecionados
               sabores: item.sabores || null // ✅ NOVO: Incluir sabores para referência
             })),
             pagamento: pagamentoData,
@@ -17825,41 +17326,6 @@ const PDVPage: React.FC = () => {
 
       console.log('📦 FRONTEND: Itens carregados:', itensData.length);
 
-      // ✅ NOVO: Buscar adicionais dos itens para reimpressão
-      const { data: adicionaisData } = await supabase
-        .from('pdv_itens_adicionais')
-        .select(`
-          id,
-          pdv_item_id,
-          nome_adicional,
-          quantidade,
-          valor_unitario,
-          valor_total
-        `)
-        .in('pdv_item_id', itensData.map(item => item.id))
-        .eq('deletado', false);
-
-      // ✅ NOVO: Buscar insumos dos itens para reimpressão (se existir tabela)
-      let insumosData = [];
-      try {
-        const { data: insumosResult } = await supabase
-          .from('pdv_itens_insumos')
-          .select(`
-            id,
-            pdv_item_id,
-            nome_insumo,
-            quantidade
-          `)
-          .in('pdv_item_id', itensData.map(item => item.id))
-          .eq('deletado', false);
-
-        if (insumosResult) {
-          insumosData = insumosResult;
-        }
-      } catch (error) {
-        console.log('ℹ️ FRONTEND: Tabela de insumos não encontrada ou sem dados');
-      }
-
       // Buscar dados do vendedor principal se existir
       let vendedorData = null;
       if (venda.usuario_id) {
@@ -17980,36 +17446,19 @@ const PDVPage: React.FC = () => {
         },
         vendedor: vendedorData, // Incluir dados do vendedor principal
         vendedores: vendedoresDataCupom, // ✅ NOVO: Incluir todos os vendedores da venda
-        itens: itensData.map(item => {
-          // Buscar adicionais deste item
-          const adicionaisDoItem = adicionaisData?.filter(adicional => adicional.pdv_item_id === item.id) || [];
-
-          // Buscar insumos deste item
-          const insumosDoItem = insumosData?.filter(insumo => insumo.pdv_item_id === item.id) || [];
-
-          return {
-            codigo: item.codigo_produto || 'N/A',
-            nome: item.descricao_sabores ?
-              `${item.nome_produto}\n${item.descricao_sabores}` :
-              item.nome_produto, // ✅ NOVO: Incluir sabores salvos no banco para reimpressão
-            quantidade: item.quantidade,
-            valor_unitario: item.valor_unitario,
-            valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
-            unidade: item.unidade || 'UN', // ✅ NOVO: Incluir unidade de medida para impressão
-            vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
-            vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null, // ✅ NOVO: Nome do vendedor do item
-            adicionais: adicionaisDoItem.map(adicional => ({
-              nome: adicional.nome_adicional,
-              quantidade: adicional.quantidade,
-              preco: adicional.valor_unitario
-            })), // ✅ NOVO: Incluir adicionais para reimpressão
-            insumos_selecionados: insumosDoItem.map(insumo => ({
-              insumo: { nome: insumo.nome_insumo },
-              quantidade: insumo.quantidade
-            })), // ✅ NOVO: Incluir insumos para reimpressão
-            sabores: item.sabores_json ? JSON.parse(item.sabores_json) : null // ✅ NOVO: Incluir sabores para referência
-          };
-        }),
+        itens: itensData.map(item => ({
+          codigo: item.codigo_produto || 'N/A',
+          nome: item.descricao_sabores ?
+            `${item.nome_produto}\n${item.descricao_sabores}` :
+            item.nome_produto, // ✅ NOVO: Incluir sabores salvos no banco para reimpressão
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
+          unidade: item.unidade || 'UN', // ✅ NOVO: Incluir unidade de medida para impressão
+          vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
+          vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null, // ✅ NOVO: Nome do vendedor do item
+          sabores: item.sabores_json ? JSON.parse(item.sabores_json) : null // ✅ NOVO: Incluir sabores para referência
+        })),
         pagamento: dadosPagamentoCupom, // ✅ NOVO: Incluir dados de pagamento
         timestamp: new Date().toISOString()
       };
@@ -18338,23 +17787,13 @@ const PDVPage: React.FC = () => {
                   `).join('');
                 }
 
-                // ✅ NOVO: Mostrar insumos identados abaixo do produto principal (mesma lógica dos adicionais)
-                let insumosHtml = '';
-                if (item.insumos_selecionados && Array.isArray(item.insumos_selecionados) && item.insumos_selecionados.length > 0) {
-                  insumosHtml = item.insumos_selecionados.map(insumoSelecionado => `
-                    <div style="margin-left: 15px; font-size: 10px; color: #666; margin-top: 1px; font-weight: bold;">
-                      • ${(insumoSelecionado.quantidade * (item.quantidade || 1)).toFixed(3).replace(/\.?0+$/, '')}x ${insumoSelecionado.insumo.nome}
-                    </div>
-                  `).join('');
-                }
-
                 // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
                 let vendedorHtml = '';
                 if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
                   vendedorHtml = `<div style="font-size: 10px; color: #000; margin-top: 2px; font-weight: 900;"><strong>Vendedor: ${item.vendedor_nome}</strong></div>`;
                 }
 
-                return adicionaisHtml + insumosHtml + vendedorHtml;
+                return adicionaisHtml + vendedorHtml;
               })()}
             </div>`;
           }).join('')}
@@ -18866,23 +18305,13 @@ const PDVPage: React.FC = () => {
                   `).join('');
                 }
 
-                // ✅ NOVO: Mostrar insumos identados abaixo do produto principal (mesma lógica dos adicionais)
-                let insumosHtml = '';
-                if (item.insumos_selecionados && Array.isArray(item.insumos_selecionados) && item.insumos_selecionados.length > 0) {
-                  insumosHtml = item.insumos_selecionados.map(insumoSelecionado => `
-                    <div style="margin-left: 15px; font-size: 10px; color: #666; margin-top: 1px; font-weight: bold;">
-                      • ${(insumoSelecionado.quantidade * (item.quantidade || 1)).toFixed(3).replace(/\.?0+$/, '')}x ${insumoSelecionado.insumo.nome}
-                    </div>
-                  `).join('');
-                }
-
                 // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
                 let vendedorHtml = '';
                 if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
                   vendedorHtml = `<div style="font-size: 10px; color: #000; margin-top: 2px; font-weight: 900;"><strong>Vendedor: ${item.vendedor_nome}</strong></div>`;
                 }
 
-                return adicionaisHtml + insumosHtml + vendedorHtml;
+                return adicionaisHtml + vendedorHtml;
               })()}
             </div>`;
           }).join('')}
@@ -19525,9 +18954,8 @@ const PDVPage: React.FC = () => {
           }
         }
 
-        // ✅ NOVO: Verificar se é produto oculto antes de mostrar "não encontrado"
-        console.log('🔍 Produto não encontrado no campo de busca, verificando se está oculto:', termoBusca);
-        processarCodigoBarras(termoBusca);
+        // Mostrar modal de produto não encontrado
+        mostrarProdutoNaoEncontrado(termoBusca);
 
         // Manter o foco
         setTimeout(() => {
@@ -21294,33 +20722,16 @@ const PDVPage: React.FC = () => {
                         <button
                           key={item.id}
                           onClick={(e) => item.onClick(e)}
-                          disabled={getBotaoLoadingState(item.id)}
                           className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative ${
                             item.id === 'cardapio-digital' && contadorCardapio > 0
                               ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
-                              : ''
-                          } ${
-                            getBotaoLoadingState(item.id)
-                              ? 'opacity-75 cursor-not-allowed bg-gray-500/10'
                               : ''
                           }`}
                           style={{ flex: '1 1 100px', minWidth: '100px' }}
                         >
                           {/* Wrapper do ícone com contador - Compacto */}
                           <div className="relative">
-                            {/* ✅ NOVO: Mostrar loading em todos os botões que fazem operações assíncronas */}
-                            {getBotaoLoadingState(item.id) ? (
-                              <div className="animate-spin">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="31.416" strokeDashoffset="31.416">
-                                    <animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
-                                    <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/>
-                                  </circle>
-                                </svg>
-                              </div>
-                            ) : (
-                              <IconComponent size={18} />
-                            )}
+                            <IconComponent size={18} />
                             {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
                             {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
                               <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
@@ -28691,9 +28102,8 @@ const PDVPage: React.FC = () => {
                               }
                             }
 
-                            // ✅ NOVO: Verificar se é produto oculto antes de mostrar "não encontrado"
-                            console.log('🔍 Produto não encontrado no campo de busca (2), verificando se está oculto:', termoBusca);
-                            processarCodigoBarras(termoBusca);
+                            // Mostrar modal de produto não encontrado
+                            mostrarProdutoNaoEncontrado(termoBusca);
 
                             // Manter o foco
                             setTimeout(() => {
@@ -29493,90 +28903,6 @@ const PDVPage: React.FC = () => {
                 className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors"
               >
                 Ver Produtos
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ NOVO: Modal de Produto Oculto no PDV */}
-      {showProdutoOcultoPDV && produtoOcultoPDV && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background-card border border-red-800 rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
-                <Package size={20} className="text-red-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Produto Não Pode Ser Vendido</h3>
-                <p className="text-sm text-gray-400">Este item está marcado para não ser utilizado no PDV</p>
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <div className="bg-red-900/20 border border-red-600/30 rounded-lg p-4 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
-                    {produtoOcultoPDV.produto_fotos && produtoOcultoPDV.produto_fotos.length > 0 ? (
-                      <img
-                        src={produtoOcultoPDV.produto_fotos[0].url}
-                        alt={produtoOcultoPDV.nome}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                        }}
-                      />
-                    ) : null}
-                    <div className={`w-full h-full flex items-center justify-center ${produtoOcultoPDV.produto_fotos && produtoOcultoPDV.produto_fotos.length > 0 ? 'hidden' : ''}`}>
-                      <Package size={16} className="text-gray-500" />
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-white">{produtoOcultoPDV.nome}</h4>
-                    <p className="text-sm text-gray-400">Código: {produtoOcultoPDV.codigo}</p>
-                    {produtoOcultoPDV.codigo_barras && (
-                      <p className="text-sm text-gray-400">Barras: {produtoOcultoPDV.codigo_barras}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-gray-300 font-medium">🚫 Este produto não pode ser vendido porque:</p>
-                <ul className="text-gray-400 text-sm space-y-1 ml-4">
-                  <li>• Está marcado como "Matéria Prima"</li>
-                  <li>• Tem a opção "Ocultar visualização no PDV" ativada</li>
-                  <li>• É usado apenas como insumo para outros produtos</li>
-                </ul>
-              </div>
-
-              <div className="mt-4 p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg">
-                <p className="text-blue-300 text-sm">
-                  💡 <strong>Dica:</strong> Para vender este produto, vá em <strong>Produtos → Editar</strong> e desmarque a opção "Ocultar visualização no PDV".
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowProdutoOcultoPDV(false);
-                  setProdutoOcultoPDV(null);
-                }}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
-              >
-                Entendi
-              </button>
-              <button
-                onClick={() => {
-                  setShowProdutoOcultoPDV(false);
-                  setProdutoOcultoPDV(null);
-                  setShowAreaProdutos(true);
-                }}
-                className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors"
-              >
-                Ver Outros Produtos
               </button>
             </div>
           </div>
@@ -34809,45 +34135,27 @@ const PDVPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 9999999,
-          padding: '20px'
+          zIndex: 9999999
         }}>
           <div style={{
             backgroundColor: '#1f2937',
             borderRadius: '12px',
-            maxWidth: '800px',
-            width: '100%',
-            maxHeight: '90vh',
-            border: '1px solid #374151',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            border: '1px solid #374151'
           }}>
-            {/* Cabeçalho fixo */}
-            <div style={{
-              padding: '24px 24px 16px 24px',
-              borderBottom: '1px solid #374151',
-              flexShrink: 0
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: 'bold',
+              marginBottom: '16px',
+              color: '#f59e0b',
+              textAlign: 'center'
             }}>
-              <h3 style={{
-                fontSize: '20px',
-                fontWeight: 'bold',
-                margin: 0,
-                color: '#f59e0b',
-                textAlign: 'center'
-              }}>
-                ⚠️ Confirmar Fechamento de Caixa
-              </h3>
-            </div>
+              ⚠️ Confirmar Fechamento de Caixa
+            </h3>
 
-            {/* Conteúdo com scroll */}
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '16px 24px',
-              minHeight: 0
-            }}>
-              <div style={{ marginBottom: '24px', color: '#e5e7eb', lineHeight: '1.6' }}>
+            <div style={{ marginBottom: '24px', color: '#e5e7eb', lineHeight: '1.6' }}>
               <p style={{ marginBottom: '12px' }}>
                 Tem certeza que deseja fechar o caixa?
               </p>
@@ -34871,180 +34179,39 @@ const PDVPage: React.FC = () => {
                 marginBottom: '24px',
                 border: '1px solid #4b5563'
               }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#e5e7eb' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: '#e5e7eb' }}>
                   📊 Resumo do Fechamento
                 </h4>
 
-                {/* Cabeçalho da tabela */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 2fr',
-                  gap: '12px',
-                  padding: '12px 16px',
-                  backgroundColor: '#4b5563',
-                  borderRadius: '6px',
-                  marginBottom: '12px',
-                  fontSize: '13px',
-                  fontWeight: 'bold',
-                  color: '#d1d5db'
-                }}>
-                  <div>Forma de Pagamento</div>
-                  <div style={{ textAlign: 'center' }}>Contabilizado</div>
-                  <div style={{ textAlign: 'center' }}>Informado</div>
-                  <div style={{ textAlign: 'center' }}>Status / Diferença</div>
-                </div>
+                {formasPagamentoCaixa.map(forma => {
+                  const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
+                  const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
+                  const valorTotal = valorAtual + valorFiado;
 
-                {/* Linhas das formas de pagamento */}
-                {(() => {
-                  let totalContabilizado = 0;
-                  let totalInformado = 0;
 
-                  const linhasFormas = formasPagamentoCaixa.map(forma => {
-                    // ✅ CORREÇÃO: Usar forma.id consistentemente
-                    const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
-                    const valorFiado = valoresFiadoPorForma[forma.id] || 0;
-                    const valorContabilizado = valorAtual + valorFiado;
 
-                    // ✅ NOVO: Obter valor informado pelo usuário
-                    const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
-                    const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
-                    const diferenca = valorInformadoUsuario - valorContabilizado;
-
-                    // Somar aos totais
-                    totalContabilizado += valorContabilizado;
-                    totalInformado += valorInformadoUsuario;
-
+                  if (valorTotal > 0) {
                     return (
                       <div key={forma.id} style={{
-                        display: 'grid',
-                        gridTemplateColumns: '2fr 1fr 1fr 2fr',
-                        gap: '12px',
-                        padding: '12px 16px',
-                        backgroundColor: diferenca !== 0 ? '#451a03' : '#1f2937',
-                        borderRadius: '6px',
-                        marginBottom: '6px',
-                        fontSize: '14px',
-                        border: diferenca !== 0 ? '2px solid #f59e0b' : '1px solid transparent',
-                        alignItems: 'center'
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginBottom: '8px',
+                        fontSize: '14px'
                       }}>
-                        <div style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                          {forma.forma_pagamento_opcoes?.nome || forma.nome || 'Forma não identificada'}
-                        </div>
-                        <div style={{
-                          textAlign: 'center',
-                          color: valorContabilizado > 0 ? '#10b981' : '#9ca3af',
-                          fontWeight: 'bold'
-                        }}>
-                          R$ {valorContabilizado.toFixed(2)}
-                        </div>
-                        <div style={{
-                          textAlign: 'center',
-                          color: valorInformadoUsuario > 0 ? '#3b82f6' : '#9ca3af',
-                          fontWeight: 'bold'
-                        }}>
-                          R$ {valorInformadoUsuario.toFixed(2)}
-                        </div>
-                        <div style={{
-                          textAlign: 'center',
-                          color: diferenca === 0 ? '#10b981' : diferenca > 0 ? '#f59e0b' : '#ef4444',
-                          fontWeight: 'bold',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px'
-                        }}>
-                          {diferenca === 0 ? (
-                            <>
-                              <span style={{ fontSize: '16px' }}>✅</span>
-                              <span>OK</span>
-                            </>
-                          ) : diferenca > 0 ? (
-                            <>
-                              <span style={{ fontSize: '16px' }}>💰</span>
-                              <span>+R$ {diferenca.toFixed(2)}</span>
-                            </>
-                          ) : (
-                            <>
-                              <span style={{ fontSize: '16px' }}>⚠️</span>
-                              <span>R$ {diferenca.toFixed(2)}</span>
-                            </>
-                          )}
-                        </div>
+                        <span style={{ color: '#e5e7eb' }}>
+                          {forma.forma_pagamento_opcoes?.nome || forma.nome || 'Forma não identificada'}:
+                        </span>
+                        <span style={{ color: '#10b981', fontWeight: 'bold' }}>
+                          R$ {valorTotal.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
                       </div>
                     );
-                  });
-
-                  // Calcular diferença total
-                  const diferencaTotal = totalInformado - totalContabilizado;
-
-                  return (
-                    <>
-                      {linhasFormas}
-
-                      {/* Linha de separação */}
-                      <div style={{
-                        height: '1px',
-                        backgroundColor: '#4b5563',
-                        margin: '12px 0'
-                      }}></div>
-
-                      {/* Linha do total */}
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: '2fr 1fr 1fr 2fr',
-                        gap: '12px',
-                        padding: '16px',
-                        backgroundColor: diferencaTotal === 0 ? '#065f46' : diferencaTotal > 0 ? '#92400e' : '#7f1d1d',
-                        borderRadius: '8px',
-                        fontSize: '15px',
-                        fontWeight: 'bold',
-                        border: `3px solid ${diferencaTotal === 0 ? '#10b981' : diferencaTotal > 0 ? '#f59e0b' : '#ef4444'}`,
-                        alignItems: 'center'
-                      }}>
-                        <div style={{ color: '#ffffff', fontSize: '16px' }}>
-                          TOTAL GERAL
-                        </div>
-                        <div style={{ textAlign: 'center', color: '#ffffff', fontSize: '16px' }}>
-                          R$ {totalContabilizado.toFixed(2)}
-                        </div>
-                        <div style={{ textAlign: 'center', color: '#ffffff', fontSize: '16px' }}>
-                          R$ {totalInformado.toFixed(2)}
-                        </div>
-                        <div style={{
-                          textAlign: 'center',
-                          color: '#ffffff',
-                          fontSize: '16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {diferencaTotal === 0 ? (
-                            <>
-                              <span style={{ fontSize: '20px' }}>🎉</span>
-                              <span style={{ color: '#10b981', fontWeight: 'bold' }}>CAIXA BATEU</span>
-                            </>
-                          ) : diferencaTotal > 0 ? (
-                            <>
-                              <span style={{ fontSize: '20px' }}>💰</span>
-                              <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>
-                                Sobrou R$ {diferencaTotal.toFixed(2)}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span style={{ fontSize: '20px' }}>⚠️</span>
-                              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-                                Faltou R$ {Math.abs(diferencaTotal).toFixed(2)}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
+                  }
+                  return null;
+                })}
               </div>
             )}
 
@@ -35085,221 +34252,15 @@ const PDVPage: React.FC = () => {
                 }}
               />
             </div>
-            </div>
 
-            {/* Rodapé fixo com botões */}
-            <div style={{
-              padding: '16px 24px 24px 24px',
-              borderTop: '1px solid #374151',
-              flexShrink: 0,
-              backgroundColor: '#1f2937'
-            }}>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  onClick={() => {
-                    setShowFecharCaixaModal(false);
-                    setObservacaoFechamento(''); // ✅ Limpar observação ao cancelar
-                  }}
-                  disabled={loadingFecharCaixa}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#6b7280',
-                    color: 'white',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
-                    opacity: loadingFecharCaixa ? 0.6 : 1
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={verificarDiferencasEFechar}
-                  disabled={loadingFecharCaixa}
-                  style={{
-                    flex: 1,
-                    backgroundColor: (() => {
-                      // Calcular diferença total para cor do botão
-                      let totalContabilizado = 0;
-                      let totalInformado = 0;
-
-                      formasPagamentoCaixa.forEach(forma => {
-                        const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
-                        const valorFiado = valoresFiadoPorForma[forma.id] || 0;
-                        const valorContabilizado = valorAtual + valorFiado;
-
-                        const valorInformadoStr = valoresCaixa[forma.id] || '0,00';
-                        const valorInformadoUsuario = parseFloat(valorInformadoStr.replace(',', '.')) || 0;
-
-                        totalContabilizado += valorContabilizado;
-                        totalInformado += valorInformadoUsuario;
-                      });
-
-                      const diferenca = totalInformado - totalContabilizado;
-
-                      if (diferenca === 0) return '#10b981'; // Verde - Bateu
-                      if (diferenca > 0) return '#f59e0b';   // Amarelo - Sobrou
-                      return '#dc2626';                      // Vermelho - Faltou
-                    })(),
-                    color: 'white',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
-                    opacity: loadingFecharCaixa ? 0.6 : 1
-                  }}
-                >
-                  {loadingFecharCaixa ? 'Fechando...' : 'Confirmar Fechamento'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ NOVO: Modal de confirmação de diferença no caixa */}
-      {showConfirmarDiferencaModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.98)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 99999999,
-          padding: '20px'
-        }}>
-          <div style={{
-            backgroundColor: '#1f2937',
-            borderRadius: '12px',
-            maxWidth: '500px',
-            width: '100%',
-            border: '2px solid #ef4444',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)'
-          }}>
-            {/* Cabeçalho */}
-            <div style={{
-              padding: '24px 24px 16px 24px',
-              borderBottom: '1px solid #374151',
-              textAlign: 'center'
-            }}>
-              <h3 style={{
-                fontSize: '22px',
-                fontWeight: 'bold',
-                margin: 0,
-                color: '#ef4444'
-              }}>
-                ⚠️ DIFERENÇA DETECTADA NO CAIXA
-              </h3>
-            </div>
-
-            {/* Conteúdo */}
-            <div style={{
-              padding: '20px 24px'
-            }}>
-              <div style={{
-                backgroundColor: diferencaTotalCaixa > 0 ? '#451a03' : '#7f1d1d',
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '20px',
-                border: `2px solid ${diferencaTotalCaixa > 0 ? '#f59e0b' : '#ef4444'}`,
-                textAlign: 'center'
-              }}>
-                <div style={{
-                  fontSize: '18px',
-                  fontWeight: 'bold',
-                  color: '#ffffff',
-                  marginBottom: '8px'
-                }}>
-                  {diferencaTotalCaixa > 0 ? '📈 SOBROU NO CAIXA' : '📉 FALTOU NO CAIXA'}
-                </div>
-                <div style={{
-                  fontSize: '24px',
-                  fontWeight: 'bold',
-                  color: diferencaTotalCaixa > 0 ? '#f59e0b' : '#ef4444'
-                }}>
-                  R$ {Math.abs(diferencaTotalCaixa).toFixed(2)}
-                </div>
-              </div>
-
-              <div style={{
-                color: '#e5e7eb',
-                lineHeight: '1.6',
-                marginBottom: '20px',
-                textAlign: 'center'
-              }}>
-                <p style={{ marginBottom: '12px', fontSize: '16px' }}>
-                  Há uma diferença entre os valores contabilizados e os valores informados.
-                </p>
-                <p style={{ fontSize: '14px', color: '#9ca3af' }}>
-                  Você pode:
-                </p>
-                <ul style={{
-                  fontSize: '14px',
-                  color: '#9ca3af',
-                  textAlign: 'left',
-                  paddingLeft: '20px',
-                  marginTop: '8px'
-                }}>
-                  <li>• <strong>Reanalisar</strong>: Voltar e ajustar os valores informados</li>
-                  <li>• <strong>Confirmar</strong>: Fechar o caixa mesmo com a diferença</li>
-                </ul>
-              </div>
-
-              {/* Campo de confirmação */}
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  color: '#ef4444',
-                  marginBottom: '8px',
-                  textAlign: 'center'
-                }}>
-                  Para confirmar o fechamento com diferença, digite "CONFIRMO":
-                </label>
-                <input
-                  type="text"
-                  value={textoConfirmacao}
-                  onChange={(e) => setTextoConfirmacao(e.target.value)}
-                  placeholder="Digite CONFIRMO para confirmar"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: '#374151',
-                    border: '2px solid #ef4444',
-                    borderRadius: '8px',
-                    color: '#e5e7eb',
-                    fontSize: '16px',
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    outline: 'none'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#f59e0b';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#ef4444';
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Rodapé com botões */}
-            <div style={{
-              padding: '16px 24px 24px 24px',
-              borderTop: '1px solid #374151',
-              display: 'flex',
-              gap: '12px'
-            }}>
+            {/* Botões */}
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button
-                onClick={cancelarFechamentoComDiferenca}
+                onClick={() => {
+                  setShowFecharCaixaModal(false);
+                  setObservacaoFechamento(''); // ✅ Limpar observação ao cancelar
+                }}
+                disabled={loadingFecharCaixa}
                 style={{
                   flex: 1,
                   backgroundColor: '#6b7280',
@@ -35308,29 +34269,28 @@ const PDVPage: React.FC = () => {
                   borderRadius: '8px',
                   border: 'none',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '14px'
+                  cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
+                  opacity: loadingFecharCaixa ? 0.6 : 1
                 }}
               >
-                Reanalisar Valores
+                Cancelar
               </button>
               <button
-                onClick={confirmarFechamentoComDiferenca}
-                disabled={textoConfirmacao.toLowerCase() !== 'confirmo'}
+                onClick={fecharCaixa}
+                disabled={loadingFecharCaixa}
                 style={{
                   flex: 1,
-                  backgroundColor: textoConfirmacao.toLowerCase() === 'confirmo' ? '#dc2626' : '#4b5563',
+                  backgroundColor: '#dc2626',
                   color: 'white',
                   padding: '12px 16px',
                   borderRadius: '8px',
                   border: 'none',
                   fontWeight: 'bold',
-                  cursor: textoConfirmacao.toLowerCase() === 'confirmo' ? 'pointer' : 'not-allowed',
-                  opacity: textoConfirmacao.toLowerCase() === 'confirmo' ? 1 : 0.5,
-                  fontSize: '14px'
+                  cursor: loadingFecharCaixa ? 'not-allowed' : 'pointer',
+                  opacity: loadingFecharCaixa ? 0.6 : 1
                 }}
               >
-                Confirmar Fechamento
+                {loadingFecharCaixa ? 'Fechando...' : 'Confirmar Fechamento'}
               </button>
             </div>
           </div>

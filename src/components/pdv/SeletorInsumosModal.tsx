@@ -305,8 +305,8 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {quantidade > 0 && (
-                        <>
+                      {/* ✅ CORREÇÃO: Sempre mostrar controles, pois insumos sempre têm quantidade padrão */}
+                      <>
                           <button
                             onClick={() => removerInsumo(insumo.produto_id)}
                             disabled={!podeDecrementarInsumo(insumo)}
@@ -350,7 +350,6 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                             </button>
                           )}
                         </>
-                      )}
                       <button
                         onClick={() => adicionarInsumo(insumo)}
                         disabled={!podeIncrementarInsumo(insumo)}
