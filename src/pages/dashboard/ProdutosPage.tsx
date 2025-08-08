@@ -5545,6 +5545,17 @@ const ProdutosPage: React.FC = () => {
     }
   }, [produtoInsumos]);
 
+  // Helpers para quantidades de insumos (fracionado vs inteiro)
+  const isUnidadeFracionada = (sigla?: string): boolean => {
+    const s = (sigla || '').toUpperCase();
+    return ['KG', 'G', 'MG', 'L', 'LT', 'ML', 'M', 'CM', 'MM'].includes(s);
+  };
+  const arredondaInsumo = (valor: number, fracionado: boolean): number => {
+    if (!isFinite(valor)) return 0;
+    return fracionado ? Math.round(valor * 1000) / 1000 : Math.round(valor);
+  };
+
+
   // ✅ LIMPAR CACHE QUANDO COMPONENTE FOR DESMONTADO
   useEffect(() => {
     return () => {
@@ -9402,13 +9413,29 @@ const ProdutosPage: React.FC = () => {
                                             Quantidade Mínima
                                           </label>
                                           <input
-                                            type="number"
-                                            value={insumo.quantidade_minima !== undefined ? insumo.quantidade_minima : insumo.quantidade}
+                                            type="text"
+                                            inputMode={isUnidadeFracionada(insumo.unidade_medida) ? 'decimal' : 'numeric'}
+                                            pattern={isUnidadeFracionada(insumo.unidade_medida) ? "\\d+(\\.\\d{1,3})?" : "\\d*"}
+                                            value={(insumo.quantidade_minima ?? insumo.quantidade).toString()}
                                             onChange={(e) => {
-                                              const valor = parseFloat(e.target.value) || 0;
+                                              const fracionado = isUnidadeFracionada(insumo.unidade_medida);
+                                              let raw = e.target.value || '';
+                                              const endsWithSep = /[.,]$/.test(raw);
+                                              let v = raw.replace(',', '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                                              if (fracionado) {
+                                                if (endsWithSep && !v.includes('.')) v = v + '.';
+                                                const parts = v.split('.');
+                                                if (parts.length > 1) {
+                                                  parts[1] = (parts[1] || '').slice(0, 3);
+                                                  v = parts[0] + (parts[1] !== '' ? '.' + parts[1] : (endsWithSep ? '.' : ''));
+                                                } else { v = parts[0]; }
+                                              } else {
+                                                v = v.split('.')[0];
+                                              }
+                                              const valor = parseFloat(v);
 
-                                              // ✅ NOVO: Validar se a quantidade mínima não é menor que a quantidade padrão
-                                              if (valor < insumo.quantidade) {
+                                              // Validar mínimo >= padrão
+                                              if (!isNaN(valor) && valor < insumo.quantidade) {
                                                 showMessage('error', `Quantidade mínima não pode ser menor que a quantidade padrão: ${insumo.quantidade} ${insumo.unidade_medida}`);
                                                 return;
                                               }
@@ -9416,14 +9443,12 @@ const ProdutosPage: React.FC = () => {
                                               const novosInsumos = [...produtoInsumos];
                                               novosInsumos[index] = {
                                                 ...novosInsumos[index],
-                                                quantidade_minima: valor
+                                                quantidade_minima: isNaN(valor) ? undefined : arredondaInsumo(valor, fracionado)
                                               };
                                               setProdutoInsumos(novosInsumos);
                                             }}
                                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
                                             placeholder={insumo.quantidade.toString()}
-                                            step="0.001"
-                                            min={insumo.quantidade}
                                             title={`Mínimo permitido: ${insumo.quantidade} ${insumo.unidade_medida}`}
                                           />
                                         </div>
@@ -9442,12 +9467,28 @@ const ProdutosPage: React.FC = () => {
                                             </div>
                                           </label>
                                           <input
-                                            type="number"
-                                            value={insumo.quantidade_maxima || 0}
+                                            type="text"
+                                            inputMode={isUnidadeFracionada(insumo.unidade_medida) ? 'decimal' : 'numeric'}
+                                            pattern={isUnidadeFracionada(insumo.unidade_medida) ? "\\d+(\\.\\d{1,3})?" : "\\d*"}
+                                            value={(insumo.quantidade_maxima ?? 0).toString()}
                                             onChange={(e) => {
-                                              const valor = parseFloat(e.target.value) || 0;
+                                              const fracionado = isUnidadeFracionada(insumo.unidade_medida);
+                                              let raw = e.target.value || '';
+                                              if (raw === '') raw = '0';
+                                              const endsWithSep = /[.,]$/.test(raw);
+                                              let v = raw.replace(',', '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                                              if (fracionado) {
+                                                if (endsWithSep && !v.includes('.')) v = v + '.';
+                                                const parts = v.split('.');
+                                                if (parts.length > 1) {
+                                                  parts[1] = (parts[1] || '').slice(0, 3);
+                                                  v = parts[0] + (parts[1] !== '' ? '.' + parts[1] : (endsWithSep ? '.' : ''));
+                                                } else { v = parts[0]; }
+                                              } else {
+                                                v = v.split('.')[0];
+                                              }
+                                              const valor = parseFloat(v);
 
-                                              // ✅ NOVO: Validar se a quantidade máxima não é menor que a mínima (se não for 0)
                                               if (valor > 0) {
                                                 const quantidadeMinima = insumo.quantidade_minima !== undefined ? insumo.quantidade_minima : insumo.quantidade;
                                                 if (valor < quantidadeMinima) {
@@ -9459,14 +9500,12 @@ const ProdutosPage: React.FC = () => {
                                               const novosInsumos = [...produtoInsumos];
                                               novosInsumos[index] = {
                                                 ...novosInsumos[index],
-                                                quantidade_maxima: valor
+                                                quantidade_maxima: isNaN(valor) ? 0 : arredondaInsumo(valor, fracionado)
                                               };
                                               setProdutoInsumos(novosInsumos);
                                             }}
                                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
                                             placeholder="0 (ilimitado)"
-                                            step="0.001"
-                                            min="0"
                                           />
                                         </div>
                                       </div>
@@ -10015,19 +10054,39 @@ const ProdutosPage: React.FC = () => {
                                     Quantidade por porção ({unidadeMedida?.sigla || 'UN'})
                                   </label>
                                   <input
-                                    type="number"
+                                    type="text"
+                                    inputMode={isFracionado ? 'decimal' : 'numeric'}
+                                    pattern={isFracionado ? "\\d+(\\.\\d{1,3})?" : "\\d*"}
                                     value={quantidade}
                                     onChange={(e) => {
+                                      let raw = e.target.value || '';
+                                      const endsWithSep = /[.,]$/.test(raw);
+                                      let v = raw.replace(',', '.');
+                                      v = v.replace(/[^0-9.]/g, '');
+                                      v = v.replace(/(\..*)\./g, '$1');
+                                      if (isFracionado) {
+                                        // Preserva ponto final enquanto o usuário digita
+                                        if (endsWithSep && !v.includes('.')) {
+                                          v = v + '.';
+                                        }
+                                        const parts = v.split('.');
+                                        if (parts.length > 1) {
+                                          parts[1] = (parts[1] || '').slice(0, 3);
+                                          v = parts[0] + (parts[1] !== '' ? '.' + parts[1] : (endsWithSep ? '.' : ''));
+                                        } else {
+                                          v = parts[0];
+                                        }
+                                      } else {
+                                        v = v.split('.')[0];
+                                      }
                                       setInsumosSelecionados(prev => ({
                                         ...prev,
                                         [produto.id]: {
                                           ...prev[produto.id],
-                                          quantidade: e.target.value
+                                          quantidade: v
                                         }
                                       }));
                                     }}
-                                    step={isFracionado ? "0.001" : "1"}
-                                    min="0"
                                     placeholder={`Ex: ${isFracionado ? '0.250' : '1'}`}
                                     className="w-full bg-gray-900/50 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   />

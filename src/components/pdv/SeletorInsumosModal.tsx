@@ -63,11 +63,11 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     return insumoSelecionado?.quantidade || 0;
   };
 
-  // ✅ NOVO: Determinar incremento baseado na unidade de medida
+  // ✅ Determinar incremento baseado na unidade de medida (3 casas decimais para fracionados)
   const getIncremento = (unidadeMedida: string): number => {
-    const unidadesFracionadas = ['KG', 'L', 'ML', 'G', 'M', 'CM', 'MM'];
-    const unidadeUpper = unidadeMedida.toUpperCase();
-    return unidadesFracionadas.includes(unidadeUpper) ? 0.1 : 1;
+    const unidadesFracionadas = ['KG', 'G', 'L', 'LT', 'ML', 'M', 'CM', 'MM'];
+    const unidadeUpper = (unidadeMedida || '').toUpperCase();
+    return unidadesFracionadas.includes(unidadeUpper) ? 0.001 : 1;
   };
 
   // ✅ NOVO: Formatar quantidade baseado na unidade
@@ -77,8 +77,8 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
       // Unidade inteira - mostrar sem decimais
       return `${Math.round(quantidade)} ${unidade}`;
     } else {
-      // Unidade fracionada - mostrar com até 3 decimais, removendo zeros desnecessários
-      return `${quantidade.toFixed(3).replace(/\.?0+$/, '')} ${unidade}`;
+      // Unidade fracionada - mostrar com até 3 decimais
+      return `${quantidade.toFixed(3)} ${unidade}`;
     }
   };
 
