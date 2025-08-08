@@ -16438,28 +16438,28 @@ const PDVPage: React.FC = () => {
               try {
                 // ✅ Calcular quantidade proporcional do insumo selecionado
                 const quantidadeInsumoTotal = insumoSelecionado.quantidade * item.quantidade;
-                // ✅ CORREÇÃO: A unidade_medida está diretamente no insumoSelecionado, não em insumo.unidade_medida
-                const unidadeInsumo = insumoSelecionado.unidade_medida;
+                // ✅ Usar estrutura correta: os dados do insumo vêm dentro de insumoSelecionado.insumo
+                const unidadeInsumo = insumoSelecionado.insumo.unidade_medida;
                 const quantidadeInsumoAjustada = isUnidadeFracionadaSigla(unidadeInsumo)
                   ? Math.round(quantidadeInsumoTotal * 1000) / 1000
                   : Math.round(quantidadeInsumoTotal);
 
-                console.log(`🔍 [INSUMOS] Baixando insumo selecionado: ${insumoSelecionado.nome} - Qtd: ${quantidadeInsumoAjustada} ${unidadeInsumo}`);
+                console.log(`🔍 [INSUMOS] Baixando insumo selecionado: ${insumoSelecionado.insumo.nome} - Qtd: ${quantidadeInsumoAjustada} ${unidadeInsumo}`);
 
                 // ✅ Dar baixa no estoque do insumo selecionado
                 const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
-                  p_produto_id: insumoSelecionado.produto_id,
+                  p_produto_id: insumoSelecionado.insumo.produto_id,
                   p_quantidade: -quantidadeInsumoAjustada, // Quantidade negativa para baixa
                   p_tipo_operacao: 'consumo_insumo_selecionado',
-                  p_observacao: `Consumo de insumo selecionado - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumoSelecionado.nome} - Unidade: ${unidadeInsumo} - Qtd: ${quantidadeInsumoAjustada}`
+                  p_observacao: `Consumo de insumo selecionado - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumoSelecionado.insumo.nome} - Unidade: ${unidadeInsumo} - Qtd: ${quantidadeInsumoAjustada}`
                 });
 
                 if (insumoError) {
-                  console.error(`❌ [INSUMOS] Erro ao baixar insumo selecionado ${insumoSelecionado.nome}:`, insumoError);
+                  console.error(`❌ [INSUMOS] Erro ao baixar insumo selecionado ${insumoSelecionado.insumo.nome}:`, insumoError);
                   // ✅ NÃO INTERROMPER a venda por erro de insumo - apenas logar
-                  console.warn(`⚠️ [INSUMOS] Continuando venda apesar do erro no insumo selecionado: ${insumoSelecionado.nome}`);
+                  console.warn(`⚠️ [INSUMOS] Continuando venda apesar do erro no insumo selecionado: ${insumoSelecionado.insumo.nome}`);
                 } else {
-                  console.log(`✅ [INSUMOS] Baixa realizada com sucesso: ${insumoSelecionado.nome}`);
+                  console.log(`✅ [INSUMOS] Baixa realizada com sucesso: ${insumoSelecionado.insumo.nome}`);
                 }
 
               } catch (error) {

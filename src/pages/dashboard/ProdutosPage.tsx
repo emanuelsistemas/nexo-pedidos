@@ -5329,6 +5329,13 @@ const ProdutosPage: React.FC = () => {
   })();
 
   const getFilteredAndSortedProducts = (grupo: Grupo) => {
+    // Se há pesquisa global ativa, os produtos já foram filtrados no filteredAndSortedGrupos
+    // Então retornamos os produtos do grupo como estão
+    if (globalProductSearch.trim()) {
+      return grupo.produtos;
+    }
+
+    // Caso contrário, usar a pesquisa local do grupo
     const searchTerm = productSearchTerms[grupo.id] || '';
     const sortOrder = productSortOrders[grupo.id] || 'asc';
 
@@ -6335,6 +6342,29 @@ const ProdutosPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Indicador de pesquisa global ativa */}
+      {globalProductSearch.trim() && isDataReady && (
+        <div className="mb-3 p-3 bg-primary-500/10 border border-primary-500/20 rounded-lg">
+          <div className="flex items-center gap-2 text-primary-400">
+            <Search size={16} />
+            <span className="text-sm">
+              Pesquisando por "{globalProductSearch}" - {
+                filteredAndSortedGrupos.reduce((total, grupo) => total + grupo.produtos.length, 0)
+              } produto(s) encontrado(s) em {filteredAndSortedGrupos.length} grupo(s)
+            </span>
+            <button
+              onClick={() => {
+                setGlobalProductSearch('');
+                setIsGlobalSearchExpanded(false);
+              }}
+              className="ml-auto text-primary-400 hover:text-primary-300"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {!isDataReady ? (
         <div>
