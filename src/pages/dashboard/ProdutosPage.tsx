@@ -478,23 +478,33 @@ const ProdutosPage: React.FC = () => {
 
   // Utilitários de formatação/validação de quantidade para insumos
   const sanitizeQuantidadeInput = (valor: string, fracionado: boolean): string => {
-    if (!valor) return '';
+    console.log('🔍 SANITIZE INPUT - Entrada:', { valor, fracionado });
+
+    if (!valor) {
+      console.log('🔍 SANITIZE INPUT - Valor vazio, retornando ""');
+      return '';
+    }
 
     if (!fracionado) {
       // Unitário: apenas números inteiros
-      return valor.replace(/[^0-9]/g, '');
+      const resultado = valor.replace(/[^0-9]/g, '');
+      console.log('🔍 SANITIZE INPUT - Unitário:', { valorOriginal: valor, resultado });
+      return resultado;
     }
 
     // Fracionado: permite números, vírgula e ponto
     let v = valor.replace(/[^0-9.,]/g, '');
+    console.log('🔍 SANITIZE INPUT - Após remover caracteres inválidos:', v);
 
     // Substituir vírgula por ponto para processamento
     v = v.replace(',', '.');
+    console.log('🔍 SANITIZE INPUT - Após substituir vírgula por ponto:', v);
 
     // Permitir apenas um ponto decimal
     const pontos = v.split('.');
     if (pontos.length > 2) {
       v = pontos[0] + '.' + pontos.slice(1).join('');
+      console.log('🔍 SANITIZE INPUT - Após corrigir múltiplos pontos:', v);
     }
 
     // Limitar casas decimais a 3
@@ -502,10 +512,13 @@ const ProdutosPage: React.FC = () => {
     if (parts.length === 2 && parts[1].length > 3) {
       parts[1] = parts[1].slice(0, 3);
       v = parts.join('.');
+      console.log('🔍 SANITIZE INPUT - Após limitar casas decimais:', v);
     }
 
     // Retornar com vírgula para exibição
-    return v.replace('.', ',');
+    const resultado = v.replace('.', ',');
+    console.log('🔍 SANITIZE INPUT - Resultado final:', resultado);
+    return resultado;
   };
 
   const padQuantidadeFracionada = (valor: string): string => {
@@ -708,6 +721,8 @@ const ProdutosPage: React.FC = () => {
 
   // Estado para controlar quando o campo de quantidade de movimento está vazio
   const [quantidadeMovimentoVazia, setQuantidadeMovimentoVazia] = useState(false);
+  // ✅ NOVO: Estado textual para o input de quantidade (permite vírgula/ponto durante digitação)
+  const [quantidadeMovimentoTexto, setQuantidadeMovimentoTexto] = useState<string>('');
   const [isLoadingEstoque, setIsLoadingEstoque] = useState(false);
 
   // Estados para validação NFe
@@ -8585,10 +8600,21 @@ const ProdutosPage: React.FC = () => {
                                         return (
                                           <input
                                             type="text"
-                                            value={novoMovimento.quantidade === 0 && quantidadeMovimentoVazia ? '' : String(novoMovimento.quantidade)}
+                                            inputMode={isFracionado ? 'decimal' : 'numeric'}
+                                            value={quantidadeMovimentoTexto !== '' ? quantidadeMovimentoTexto : (novoMovimento.quantidade === 0 && quantidadeMovimentoVazia ? '' : String(novoMovimento.quantidade))}
                                             onChange={(e) => {
+                                              // 🔍 LOG: Debug do campo quantidade
+                                              console.log('🔍 CAMPO QUANTIDADE - DEBUG:', {
+                                                valorDigitado: e.target.value,
+                                                isFracionado: isFracionado,
+                                                unidadeSelecionada: unidadesMedida.find(u => u.id === editingProduto?.unidade_medida_id),
+                                                quantidadeAtual: novoMovimento.quantidade,
+                                                quantidadeVazia: quantidadeMovimentoVazia
+                                              });
+
                                               // Se o campo estiver vazio
                                               if (e.target.value === '') {
+                                                console.log('🔍 Campo vazio - limpando quantidade');
                                                 setQuantidadeMovimentoVazia(true);
                                                 setNovoMovimento({
                                                   ...novoMovimento,
@@ -8599,34 +8625,50 @@ const ProdutosPage: React.FC = () => {
 
                                               setQuantidadeMovimentoVazia(false);
 
-                                              // Permitir apenas números, vírgulas e pontos
-                                              const valorDigitado = e.target.value.replace(/[^\d.,]/g, '');
+                                              // ✅ CORREÇÃO: Permitir digitação de vírgula/ponto sem bloquear
+                                              const valorDigitado = e.target.value;
 
-                                              // Se o campo contém apenas vírgula ou ponto no final, permitir (ex: "2," ou "2.")
+                                              // Permitir vírgula ou ponto no final (usuário ainda digitando)
                                               if (valorDigitado.endsWith(',') || valorDigitado.endsWith('.')) {
+                                                console.log('🔍 Usuário ainda digitando (vírgula/ponto no final) - permitindo');
                                                 // Não processar ainda, apenas permitir a digitação
                                                 return;
                                               }
 
-                                              // Converter vírgula para ponto para processamento
-                                              const valorLimpo = valorDigitado.replace(',', '.');
+                                              const valorSanitizado = sanitizeQuantidadeInput(valorDigitado, isFracionado);
+                                              console.log('🔍 Após sanitização:', {
+                                                valorOriginal: valorDigitado,
+                                                valorSanitizado: valorSanitizado,
+                                                isFracionado: isFracionado
+                                              });
 
-                                              // Se não for um número válido, não atualiza
-                                              if (valorLimpo === '' || isNaN(parseFloat(valorLimpo))) {
+                                              if (valorSanitizado === '') {
+                                                console.log('🔍 Valor sanitizado vazio - limpando quantidade');
+                                                setNovoMovimento({
+                                                  ...novoMovimento,
+                                                  quantidade: 0
+                                                });
                                                 return;
                                               }
 
-                                              const valor = parseFloat(valorLimpo);
-
-                                              // Se for fracionado, limitar a 3 casas decimais; se não, arredondar para inteiro
-                                              const valorFinal = isFracionado
-                                                ? Math.round(valor * 1000) / 1000 // 3 casas decimais
-                                                : Math.floor(valor); // Número inteiro
-
-                                              setNovoMovimento({
-                                                ...novoMovimento,
-                                                quantidade: valorFinal >= 0 ? valorFinal : 0
+                                              // Converter para número
+                                              const valor = parseFloat(valorSanitizado.replace(',', '.'));
+                                              console.log('🔍 Conversão para número:', {
+                                                valorSanitizado: valorSanitizado,
+                                                valorConvertido: valor,
+                                                isNaN: isNaN(valor),
+                                                isValid: !isNaN(valor) && valor >= 0
                                               });
+
+                                              if (!isNaN(valor) && valor >= 0) {
+                                                console.log('🔍 Atualizando quantidade para:', valor);
+                                                setNovoMovimento({
+                                                  ...novoMovimento,
+                                                  quantidade: valor
+                                                });
+                                              } else {
+                                                console.log('🔍 Valor inválido - não atualizando');
+                                              }
                                             }}
                                             onFocus={() => {
                                               // Ao receber o foco, garantir que o campo esteja vazio para facilitar a digitação
@@ -8635,14 +8677,22 @@ const ProdutosPage: React.FC = () => {
                                               }
                                             }}
                                             onBlur={() => {
-                                              // Se o campo estiver vazio ao perder o foco, mantém vazio
-                                              if (!quantidadeMovimentoVazia) {
-                                                // Se tiver valor, formata para casas decimais adequadas
-                                                const casasDecimais = isFracionado ? 3 : 0;
-                                                setNovoMovimento({
-                                                  ...novoMovimento,
-                                                  quantidade: parseFloat(novoMovimento.quantidade.toFixed(casasDecimais))
-                                                });
+                                              // ✅ CORREÇÃO: Formatar adequadamente baseado no tipo de unidade
+                                              if (!quantidadeMovimentoVazia && novoMovimento.quantidade > 0) {
+                                                if (isFracionado) {
+                                                  // Para fracionados, manter até 3 casas decimais
+                                                  const valorFormatado = parseFloat(novoMovimento.quantidade.toFixed(3));
+                                                  setNovoMovimento({
+                                                    ...novoMovimento,
+                                                    quantidade: valorFormatado
+                                                  });
+                                                } else {
+                                                  // Para inteiros, arredondar
+                                                  setNovoMovimento({
+                                                    ...novoMovimento,
+                                                    quantidade: Math.floor(novoMovimento.quantidade)
+                                                  });
+                                                }
                                               }
                                             }}
                                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"

@@ -13925,11 +13925,17 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Salvar insumos selecionados se existirem
+      console.log('🔍 DEBUG INSUMOS - Produto:', item.produto.nome);
+      console.log('🔍 DEBUG INSUMOS - Tem insumos?', item.produto.insumos?.length || 0);
+      console.log('🔍 DEBUG INSUMOS - Flag selecionar_insumos_venda:', item.produto.selecionar_insumos_venda);
+      console.log('🔍 DEBUG INSUMOS - Insumos selecionados:', item.insumosSelecionados?.length || 0);
+
       if (item.produto.insumos && item.produto.insumos.length > 0) {
         let sucessoInsumos = false;
 
         // Verificar se o produto tem flag selecionar_insumos_venda ativa
         if (item.produto.selecionar_insumos_venda && item.insumosSelecionados && item.insumosSelecionados.length > 0) {
+          console.log('📝 Salvando insumos selecionados:', item.insumosSelecionados);
           // Salvar apenas os insumos selecionados pelo usuário
           sucessoInsumos = await salvarInsumosItem(
             itemInserido.id, // ID do item recém-criado
@@ -13938,6 +13944,7 @@ const PDVPage: React.FC = () => {
             userData.user.id
           );
         } else if (!item.produto.selecionar_insumos_venda) {
+          console.log('📝 Salvando TODOS os insumos do produto:', item.produto.insumos);
           // Salvar todos os insumos do produto (flag desativada)
           sucessoInsumos = await salvarTodosInsumosItem(
             itemInserido.id, // ID do item recém-criado
@@ -13947,6 +13954,7 @@ const PDVPage: React.FC = () => {
             userData.user.id
           );
         } else {
+          console.log('⚠️ Flag ativa mas nenhum insumo selecionado - não salvando nada');
           // Flag ativa mas nenhum insumo selecionado - não salvar nada
           sucessoInsumos = true;
         }
@@ -13955,6 +13963,8 @@ const PDVPage: React.FC = () => {
           // Não falhar a operação inteira por causa dos insumos, mas registrar o erro
           toast.error(`Aviso: Insumos do item ${itemData.nome_produto} não foram salvos`);
         }
+      } else {
+        console.log('ℹ️ Produto não tem insumos cadastrados');
       }
 
       // ✅ NOVO: Toast de confirmação para debug (removido para não poluir a interface)
@@ -14075,11 +14085,17 @@ const PDVPage: React.FC = () => {
         }
 
         // ✅ NOVO: Atualizar insumos do item se existirem
+        console.log('🔍 DEBUG INSUMOS UPDATE - Produto:', item.produto.nome);
+        console.log('🔍 DEBUG INSUMOS UPDATE - Tem insumos?', item.produto.insumos?.length || 0);
+        console.log('🔍 DEBUG INSUMOS UPDATE - Flag selecionar_insumos_venda:', item.produto.selecionar_insumos_venda);
+        console.log('🔍 DEBUG INSUMOS UPDATE - Insumos selecionados:', item.insumosSelecionados?.length || 0);
+
         if (item.produto.insumos && item.produto.insumos.length > 0) {
           let sucessoInsumos = false;
 
           // Verificar se o produto tem flag selecionar_insumos_venda ativa
           if (item.produto.selecionar_insumos_venda && item.insumosSelecionados && item.insumosSelecionados.length > 0) {
+            console.log('📝 Atualizando insumos selecionados:', item.insumosSelecionados);
             // Importar função de atualização de insumos
             const { atualizarInsumosItem } = await import('../../utils/pdvInsumosUtils');
 
@@ -14091,6 +14107,7 @@ const PDVPage: React.FC = () => {
               userData.user.id
             );
           } else if (!item.produto.selecionar_insumos_venda) {
+            console.log('📝 Atualizando com TODOS os insumos do produto:', item.produto.insumos);
             // Importar funções de insumos
             const { removerInsumosItem, salvarTodosInsumosItem } = await import('../../utils/pdvInsumosUtils');
 
@@ -14106,6 +14123,7 @@ const PDVPage: React.FC = () => {
               );
             }
           } else {
+            console.log('⚠️ Flag ativa mas nenhum insumo selecionado - removendo insumos existentes');
             // Flag ativa mas nenhum insumo selecionado - remover insumos existentes
             const { removerInsumosItem } = await import('../../utils/pdvInsumosUtils');
             sucessoInsumos = await removerInsumosItem(item.pdv_item_id!, userData.user.id);
@@ -14117,6 +14135,8 @@ const PDVPage: React.FC = () => {
           } else {
             console.log('✅ SUCESSO: Insumos atualizados para o item:', item.produto.nome);
           }
+        } else {
+          console.log('ℹ️ Produto não tem insumos cadastrados para atualizar');
         }
 
           console.log('✅ Item atualizado:', item.produto.nome);
