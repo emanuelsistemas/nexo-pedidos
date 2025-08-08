@@ -3753,8 +3753,73 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função para verificar se produto está sendo usado como insumo
+  const verificarVinculacaoInsumo = async (produtoId: string): Promise<{ temVinculacao: boolean; produtosVinculados: any[] }> => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return { temVinculacao: false, produtosVinculados: [] };
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return { temVinculacao: false, produtosVinculados: [] };
+
+      // Buscar produtos que usam este produto como insumo
+      const { data: produtosComInsumo, error } = await supabase
+        .from('produtos')
+        .select('id, nome, insumos')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .eq('deletado', false);
+
+      if (error) {
+        console.error('❌ Erro ao verificar vinculação de insumos:', error);
+        return { temVinculacao: false, produtosVinculados: [] };
+      }
+
+      // Filtrar produtos que contêm este produto nos insumos
+      const produtosVinculados = produtosComInsumo?.filter(produto => {
+        if (!produto.insumos || !Array.isArray(produto.insumos)) return false;
+        return produto.insumos.some((insumo: any) => insumo.produto_id === produtoId);
+      }) || [];
+
+      return {
+        temVinculacao: produtosVinculados.length > 0,
+        produtosVinculados
+      };
+    } catch (error) {
+      console.error('❌ Erro ao verificar vinculação de insumos:', error);
+      return { temVinculacao: false, produtosVinculados: [] };
+    }
+  };
+
   const handleSubmitProduto = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ✅ NOVO: Validar se está tentando desmarcar matéria prima de produto vinculado
+    if (editingProduto && editingProduto.materia_prima && !novoProduto.materia_prima) {
+      const { temVinculacao, produtosVinculados } = await verificarVinculacaoInsumo(editingProduto.id);
+
+      if (temVinculacao) {
+        const nomesProdutos = produtosVinculados.map(p => p.nome).join('\n• ');
+        const mensagem = `⚠️ ATENÇÃO: Não é possível desmarcar "Matéria prima"!\n\n` +
+          `Este produto está sendo usado como insumo nos seguintes produtos:\n\n• ${nomesProdutos}\n\n` +
+          `Para desmarcar "Matéria prima", primeiro remova este produto dos insumos dos produtos listados acima.`;
+
+        alert(mensagem);
+
+        // Reverter o checkbox para marcado
+        setNovoProduto(prev => ({
+          ...prev,
+          materia_prima: true
+        }));
+
+        return;
+      }
+    }
 
     // Validar campos obrigatórios com detalhes específicos
     const { camposObrigatorios, camposComErro } = validarCamposObrigatorios();
@@ -6770,7 +6835,9 @@ const ProdutosPage: React.FC = () => {
                           }
                         }}
                       >
-                        Insumos {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
+                        <Layers size={16} />
+                        <span>Insumos</span>
+                        {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
                       </button>
                     </div>
 
