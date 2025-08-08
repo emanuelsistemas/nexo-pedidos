@@ -70,15 +70,39 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     return unidadesFracionadas.includes(unidadeUpper) ? 0.001 : 1;
   };
 
-  // ✅ NOVO: Formatar quantidade baseado na unidade
+  // ✅ Utilitários de quantidade para fracionados (vírgula, 3 casas)
+  const sanitizeQuantidadeInput = (valor: string, fracionado: boolean): string => {
+    if (!valor) return '';
+    if (!fracionado) {
+      return valor.replace(/[^0-9]/g, '');
+    }
+    let v = valor.replace(/[^0-9.,]/g, '');
+    v = v.replace(',', '.');
+    const partes = v.split('.');
+    if (partes.length > 2) {
+      v = partes[0] + '.' + partes.slice(1).join('');
+    }
+    if (partes.length === 2) {
+      partes[1] = partes[1].slice(0, 3);
+      v = partes[0] + '.' + partes[1];
+    }
+    return v.replace('.', ',');
+  };
+
+  const padQuantidadeFracionada = (valor: string): string => {
+    if (!valor) return '';
+    const num = parseFloat(valor.replace(',', '.'));
+    if (isNaN(num)) return '';
+    return num.toFixed(3).replace('.', ',');
+  };
+
+  // ✅ NOVO: Formatar quantidade baseado na unidade (vírgula e 3 casas em fracionados)
   const formatarQuantidadeDisplay = (quantidade: number, unidade: string): string => {
     const incremento = getIncremento(unidade);
     if (incremento === 1) {
-      // Unidade inteira - mostrar sem decimais
       return `${Math.round(quantidade)} ${unidade}`;
     } else {
-      // Unidade fracionada - mostrar com até 3 decimais, removendo zeros desnecessários
-      return `${quantidade.toFixed(3).replace(/\.?0+$/, '')} ${unidade}`;
+      return `${quantidade.toFixed(3).replace('.', ',')} ${unidade}`;
     }
   };
 
@@ -163,12 +187,12 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
       
       // Verificar quantidade mínima
       if (insumo.quantidade_minima && quantidadeSelecionada < insumo.quantidade_minima) {
-        insumosInvalidos.push(`${insumo.nome} (mín: ${insumo.quantidade_minima} ${insumo.unidade_medida})`);
+        insumosInvalidos.push(`${insumo.nome} (mín: ${formatarQuantidadeDisplay(insumo.quantidade_minima, insumo.unidade_medida)})`);
       }
-      
+
       // Verificar quantidade máxima
       if (insumo.quantidade_maxima && quantidadeSelecionada > insumo.quantidade_maxima) {
-        insumosInvalidos.push(`${insumo.nome} (máx: ${insumo.quantidade_maxima} ${insumo.unidade_medida})`);
+        insumosInvalidos.push(`${insumo.nome} (máx: ${formatarQuantidadeDisplay(insumo.quantidade_maxima, insumo.unidade_medida)})`);
       }
     });
 
@@ -186,7 +210,8 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
   };
 
   const confirmarEdicaoQuantidade = (insumoId: string) => {
-    const novaQuantidade = parseFloat(quantidadeTemp);
+    // Converter vírgula para ponto para calcular
+    const novaQuantidade = parseFloat(quantidadeTemp.replace(',', '.'));
 
     if (isNaN(novaQuantidade) || novaQuantidade < 0) {
       showMessage('error', 'Quantidade inválida');
@@ -323,10 +348,19 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                           {editandoQuantidade === insumo.produto_id ? (
                             <div className="flex items-center gap-1">
                               <input
-                                type="number"
+                                type="text"
+                                inputMode={getIncremento(insumo.unidade_medida) === 1 ? 'numeric' : 'decimal'}
                                 value={quantidadeTemp}
-                                onChange={(e) => setQuantidadeTemp(e.target.value)}
-                                onBlur={() => confirmarEdicaoQuantidade(insumo.produto_id)}
+                                onChange={(e) => {
+                                  const fracionado = getIncremento(insumo.unidade_medida) !== 1;
+                                  setQuantidadeTemp(sanitizeQuantidadeInput(e.target.value, fracionado));
+                                }}
+                                onBlur={() => {
+                                  if (getIncremento(insumo.unidade_medida) !== 1) {
+                                    setQuantidadeTemp(padQuantidadeFracionada(quantidadeTemp));
+                                  }
+                                  confirmarEdicaoQuantidade(insumo.produto_id);
+                                }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
                                     confirmarEdicaoQuantidade(insumo.produto_id);
@@ -334,9 +368,7 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                                     cancelarEdicaoQuantidade();
                                   }
                                 }}
-                                className="w-16 px-2 py-1 text-center text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary-500"
-                                step={getIncremento(insumo.unidade_medida)}
-                                min="0"
+                                className="w-20 px-2 py-1 text-center text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary-500"
                                 autoFocus
                               />
                               <span className="text-xs text-gray-400">{insumo.unidade_medida}</span>
