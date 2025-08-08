@@ -5785,12 +5785,12 @@ const ProdutosPage: React.FC = () => {
     // Encontrar a unidade de medida do produto
     const unidadeMedida = unidadesMedida.find(u => u.id === produto.unidade_medida_id);
 
-    // Se for KG, mostrar 3 casas decimais, senão mostrar como número inteiro
-    if (unidadeMedida?.sigla === 'KG') {
-      return valor.toFixed(3);
-    } else {
-      return Math.floor(valor).toString();
-    }
+    const sigla = (unidadeMedida?.sigla || '').toString().trim().toUpperCase();
+    const unidadesFracionadas = ['KG', 'G', 'L', 'LT', 'ML', 'M', 'CM', 'MM', 'M2', 'M³', 'M3'];
+    const isFracionado = (unidadeMedida?.fracionado === true) || unidadesFracionadas.includes(sigla);
+
+    // Fracionados com 3 casas; inteiros arredondados para baixo
+    return isFracionado ? valor.toFixed(3) : Math.floor(valor).toString();
   };
 
   const renderProduto = (grupo: Grupo, produto: Produto) => {

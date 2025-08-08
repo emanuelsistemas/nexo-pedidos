@@ -513,6 +513,12 @@ const PDVPage: React.FC = () => {
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
   const [observacaoFechamento, setObservacaoFechamento] = useState('');
 
+  // ✅ NOVO: Estados para modal de validação de vendas abertas
+  const [showValidacaoVendasModal, setShowValidacaoVendasModal] = useState(false);
+  const [validacoesPendentesTexto, setValidacoesPendentesTexto] = useState('');
+  const [mesasAbertasData, setMesasAbertasData] = useState<any[]>([]);
+  const [comandasAbertasData, setComandasAbertasData] = useState<any[]>([]);
+
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
   const [observacaoSangria, setObservacaoSangria] = useState('');
@@ -1939,10 +1945,12 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Verificar se há mesas ou comandas abertas antes de fechar o caixa
       const validacoesPendentes = [];
+      let mesasAbertas = null;
+      let comandasAbertas = null;
 
       // Verificar mesas abertas se a empresa trabalha com mesas
       if (pdvConfig?.mesas) {
-        const { data: mesasAbertas, error: mesasError } = await supabase
+        const { data: mesasData, error: mesasError } = await supabase
           .from('pdv')
           .select('id, numero_venda, mesa_numero, nome_cliente')
           .eq('empresa_id', usuarioData.empresa_id)
@@ -1955,6 +1963,7 @@ const PDVPage: React.FC = () => {
           return;
         }
 
+        mesasAbertas = mesasData;
         if (mesasAbertas && mesasAbertas.length > 0) {
           const numerosMesas = mesasAbertas.map(v => v.mesa_numero).join(', ');
           validacoesPendentes.push(`${mesasAbertas.length} mesa(s) aberta(s): ${numerosMesas}`);
@@ -1963,7 +1972,7 @@ const PDVPage: React.FC = () => {
 
       // Verificar comandas abertas se a empresa trabalha com comandas
       if (pdvConfig?.comandas) {
-        const { data: comandasAbertas, error: comandasError } = await supabase
+        const { data: comandasData, error: comandasError } = await supabase
           .from('pdv')
           .select('id, numero_venda, comanda_numero, nome_cliente')
           .eq('empresa_id', usuarioData.empresa_id)
@@ -1976,6 +1985,7 @@ const PDVPage: React.FC = () => {
           return;
         }
 
+        comandasAbertas = comandasData;
         if (comandasAbertas && comandasAbertas.length > 0) {
           const numerosComandas = comandasAbertas.map(v => v.comanda_numero).join(', ');
           validacoesPendentes.push(`${comandasAbertas.length} comanda(s) aberta(s): ${numerosComandas}`);
@@ -1986,30 +1996,20 @@ const PDVPage: React.FC = () => {
       if (validacoesPendentes.length > 0) {
         const mensagem = validacoesPendentes.join('\n\n');
 
-        // Fechar modal de fechamento atual
+        // Fechar TODOS os modais primeiro
         setShowFecharCaixaModal(false);
+        setShowCaixaModal(false);
 
-        // Mostrar modal de validação
-        const confirmar = window.confirm(
-          `⚠️ ATENÇÃO: Não é possível fechar o caixa!\n\n` +
-          `Existem vendas em aberto que precisam ser finalizadas antes:\n\n` +
-          `${mensagem}\n\n` +
-          `Por favor, finalize todas as vendas em aberto antes de fechar o caixa.\n\n` +
-          `Deseja abrir o menu de controle para verificar as vendas?`
-        );
-
-        if (confirmar) {
-          // Abrir modal de mesas se há mesas abertas
-          if (pdvConfig?.mesas && mesasAbertas && mesasAbertas.length > 0) {
-            await carregarVendasMesas();
-            setShowMesasModal(true);
-          }
-          // Ou abrir modal de comandas se há comandas abertas
-          else if (pdvConfig?.comandas && comandasAbertas && comandasAbertas.length > 0) {
-            await carregarVendasComandas();
-            setShowComandasModal(true);
-          }
-        }
+        // Aguardar um pouco para garantir que os modais fechem
+        setTimeout(() => {
+          console.log('🚨 Abrindo modal de validação de vendas abertas');
+          // Configurar dados para o modal de validação
+          setValidacoesPendentesTexto(mensagem);
+          setMesasAbertasData(mesasAbertas || []);
+          setComandasAbertasData(comandasAbertas || []);
+          setShowValidacaoVendasModal(true);
+          console.log('✅ Modal de validação configurado');
+        }, 100);
 
         return;
       }
@@ -2134,6 +2134,36 @@ const PDVPage: React.FC = () => {
       toast.error('Erro ao fechar caixa');
     } finally {
       setLoadingFecharCaixa(false);
+    }
+  };
+
+  // ✅ NOVO: Função para fechar modal de validação de vendas
+  const fecharModalValidacaoVendas = () => {
+    setShowValidacaoVendasModal(false);
+    setValidacoesPendentesTexto('');
+    setMesasAbertasData([]);
+    setComandasAbertasData([]);
+  };
+
+  // ✅ NOVO: Função para abrir controle de mesas/comandas
+  const abrirControleVendas = async () => {
+    try {
+      // Abrir modal de mesas se há mesas abertas
+      if (pdvConfig?.mesas && mesasAbertasData.length > 0) {
+        await carregarVendasMesas();
+        setShowMesasModal(true);
+      }
+      // Ou abrir modal de comandas se há comandas abertas
+      else if (pdvConfig?.comandas && comandasAbertasData.length > 0) {
+        await carregarVendasComandas();
+        setShowComandasModal(true);
+      }
+
+      // Fechar modal de validação
+      fecharModalValidacaoVendas();
+    } catch (error) {
+      console.error('❌ Erro ao abrir controle de vendas:', error);
+      toast.error('Erro ao abrir controle de vendas');
     }
   };
 
@@ -34873,6 +34903,91 @@ const PDVPage: React.FC = () => {
                   <Coffee size={16} />
                   Confirmar
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de validação de vendas abertas */}
+      <AnimatePresence>
+        {showValidacaoVendasModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-[99999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-900 rounded-xl border-2 border-red-500 p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Cabeçalho */}
+              <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-700">
+                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-red-400 mb-1">
+                    Não é possível fechar o caixa!
+                  </h3>
+                  <p className="text-gray-400 text-sm">
+                    Existem vendas em aberto que precisam ser finalizadas
+                  </p>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="mb-6">
+                <p className="text-white text-base mb-4 leading-relaxed">
+                  Existem vendas em aberto que precisam ser finalizadas antes:
+                </p>
+
+                <div className="bg-gray-800 rounded-lg p-4 mb-4">
+                  {validacoesPendentesTexto.split('\n\n').map((linha, index) => (
+                    <div key={index} className="flex items-center gap-2 text-yellow-400 font-medium mb-2 last:mb-0">
+                      <span className="text-yellow-500">•</span>
+                      <span>{linha}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Por favor, finalize todas as vendas em aberto antes de fechar o caixa.
+                  Você pode usar os botões abaixo para acessar o controle de vendas.
+                </p>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  onClick={fecharModalValidacaoVendas}
+                  className="flex-1 min-w-[120px] px-4 py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors"
+                >
+                  Fechar
+                </button>
+
+                {(mesasAbertasData.length > 0 || comandasAbertasData.length > 0) && (
+                  <button
+                    onClick={abrirControleVendas}
+                    className="flex-2 min-w-[180px] px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    {mesasAbertasData.length > 0 ? (
+                      <>
+                        <span>🏠</span>
+                        Abrir Controle de Mesas
+                      </>
+                    ) : (
+                      <>
+                        <span>📋</span>
+                        Abrir Controle de Comandas
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </motion.div>
           </motion.div>
