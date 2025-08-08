@@ -9576,6 +9576,8 @@ const ProdutosPage: React.FC = () => {
           setInsumoParaEdicaoQuantidade(null);
         }}
         insumo={insumoParaEdicaoQuantidade}
+        controlarLimites={false}
+
         onConfirm={confirmarEdicaoQuantidadeInsumo}
       />
 

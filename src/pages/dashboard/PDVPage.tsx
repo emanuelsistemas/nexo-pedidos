@@ -52,7 +52,8 @@ import {
   Truck,
   MapPin,
   RotateCcw,
-  Edit
+  Edit,
+  Coffee
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -463,6 +464,7 @@ const PDVPage: React.FC = () => {
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
+  const [showConsumoInternoModal, setShowConsumoInternoModal] = useState(false);
 
   // ✅ NOVO: Estados para controle de caixa
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
@@ -527,6 +529,7 @@ const PDVPage: React.FC = () => {
   const [loadingBotaoSuprimento, setLoadingBotaoSuprimento] = useState(false);
   const [loadingBotaoMovimentos, setLoadingBotaoMovimentos] = useState(false);
   const [loadingBotaoDevolucoes, setLoadingBotaoDevolucoes] = useState(false);
+  const [loadingBotaoConsumoInterno, setLoadingBotaoConsumoInterno] = useState(false);
 
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
@@ -3485,6 +3488,33 @@ const PDVPage: React.FC = () => {
           setLoadingBotaoCaixa(false);
         }
       }
+    },
+    {
+      id: 'consumo-interno',
+      icon: Coffee,
+      label: 'Consumo Interno',
+      color: 'orange',
+      onClick: async (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingBotaoConsumoInterno) {
+          return;
+        }
+
+        try {
+          setLoadingBotaoConsumoInterno(true);
+          setShowConsumoInternoModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de consumo interno:', error);
+          toast.error('Erro ao abrir consumo interno');
+        } finally {
+          setLoadingBotaoConsumoInterno(false);
+        }
+      }
     }
   ];
 
@@ -3502,6 +3532,7 @@ const PDVPage: React.FC = () => {
       case 'suprimento': return loadingBotaoSuprimento;
       case 'movimentos': return loadingBotaoMovimentos;
       case 'devolucoes': return loadingBotaoDevolucoes;
+      case 'consumo-interno': return loadingBotaoConsumoInterno;
       default: return false;
     }
   };
@@ -4992,7 +5023,8 @@ const PDVPage: React.FC = () => {
         ocultar_nfce_sem_impressao: false,
         ocultar_nfce_producao: false,
         ocultar_producao: false,
-        rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
+        rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
+        consumo_interno: false
       });
     } else {
       setPdvConfig(data);

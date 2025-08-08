@@ -50,11 +50,16 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
   // Inicializar com quantidades padrão dos insumos
   useEffect(() => {
     if (isOpen && produto.insumos) {
-      const insumosIniciais = produto.insumos.map(insumo => ({
-        insumo,
-        quantidade: insumo.quantidade // Usar quantidade padrão do insumo
-      }));
+      console.log('🔍 [INSUMOS] Inicializando modal com insumos:', produto.insumos);
+      const insumosIniciais = produto.insumos.map(insumo => {
+        console.log(`🔍 [INSUMO] ${insumo.nome}: quantidade=${insumo.quantidade}, unidade=${insumo.unidade_medida}`);
+        return {
+          insumo,
+          quantidade: insumo.quantidade // Usar quantidade padrão do insumo
+        };
+      });
       setInsumosSelecionados(insumosIniciais);
+      console.log('🔍 [INSUMOS] Insumos inicializados:', insumosIniciais);
     }
   }, [isOpen, produto.insumos]);
 
