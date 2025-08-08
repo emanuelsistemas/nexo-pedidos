@@ -425,6 +425,10 @@ const ProdutosPage: React.FC = () => {
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ✅ NOVO: Estados para modal de validação de matéria prima
+  const [showModalVinculacaoInsumo, setShowModalVinculacaoInsumo] = useState(false);
+  const [produtosVinculadosInsumo, setProdutosVinculadosInsumo] = useState<any[]>([]);
+
   // ✅ NOVO: Estados para controlar loading dos botões de edição
   const [loadingEditProduto, setLoadingEditProduto] = useState<string | null>(null);
   const [loadingEditGrupo, setLoadingEditGrupo] = useState<string | null>(null);
@@ -2768,6 +2772,11 @@ const ProdutosPage: React.FC = () => {
 
       // Definir os insumos no estado
       const insumos = produtoData.insumos || [];
+      console.log('📥 Carregando insumos do banco:', {
+        produtoId,
+        insumosCarregados: insumos.length,
+        insumos
+      });
       setProdutoInsumos(insumos);
     } catch (error: any) {
       console.error('Erro ao carregar insumos:', error);
@@ -3804,12 +3813,9 @@ const ProdutosPage: React.FC = () => {
       const { temVinculacao, produtosVinculados } = await verificarVinculacaoInsumo(editingProduto.id);
 
       if (temVinculacao) {
-        const nomesProdutos = produtosVinculados.map(p => p.nome).join('\n• ');
-        const mensagem = `⚠️ ATENÇÃO: Não é possível desmarcar "Matéria prima"!\n\n` +
-          `Este produto está sendo usado como insumo nos seguintes produtos:\n\n• ${nomesProdutos}\n\n` +
-          `Para desmarcar "Matéria prima", primeiro remova este produto dos insumos dos produtos listados acima.`;
-
-        alert(mensagem);
+        // Armazenar produtos vinculados e mostrar modal
+        setProdutosVinculadosInsumo(produtosVinculados);
+        setShowModalVinculacaoInsumo(true);
 
         // Reverter o checkbox para marcado
         setNovoProduto(prev => ({
@@ -4137,8 +4143,20 @@ const ProdutosPage: React.FC = () => {
           ocultar_visualizacao_pdv: (novoProduto.materia_prima && novoProduto.ocultar_visualizacao_pdv) || false,
           // ✅ NOVO CAMPO: Produção
           producao: novoProduto.producao || false,
-          // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
-          insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
+          // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos (sempre prioritário)
+          insumos: (() => {
+            // Sempre usar produtoInsumos como fonte da verdade
+            // Se estiver vazio, usar array vazio (não novoProduto.insumos)
+            const insumosParaSalvar = produtoInsumos;
+            console.log('💾 Salvando insumos (CRIAÇÃO):', {
+              produtoInsumosLength: produtoInsumos.length,
+              produtoInsumos,
+              novoProdutoInsumos: novoProduto.insumos,
+              insumosParaSalvar,
+              observacao: 'SEMPRE usando produtoInsumos como fonte da verdade'
+            });
+            return insumosParaSalvar;
+          })(),
           // ✅ NOVO CAMPO: Selecionar insumos na venda (só se houver insumos)
           selecionar_insumos_venda: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda) || false,
           // ✅ NOVO CAMPO: Controlar quantidades no insumo (só se houver insumos e selecionar_insumos_venda estiver ativo)
@@ -4208,8 +4226,21 @@ const ProdutosPage: React.FC = () => {
           ocultar_visualizacao_pdv: (novoProduto.materia_prima && novoProduto.ocultar_visualizacao_pdv) || false,
           // ✅ NOVO CAMPO: Produção
           producao: novoProduto.producao || false,
-          // ✅ NOVO CAMPO: Insumos - usar estado produtoInsumos se disponível
-          insumos: produtoInsumos.length > 0 ? produtoInsumos : (novoProduto.insumos || []),
+          // ✅ NOVO CAMPO: Insumos - SEMPRE usar estado produtoInsumos na edição
+          insumos: (() => {
+            // Na edição, SEMPRE usar produtoInsumos (estado atual)
+            // Na criação, usar produtoInsumos se houver, senão novoProduto.insumos
+            const insumosParaSalvar = produtoInsumos;
+            console.log('💾 Salvando insumos (EDIÇÃO):', {
+              produtoId: editingProduto?.id,
+              produtoInsumosLength: produtoInsumos.length,
+              produtoInsumos,
+              novoProdutoInsumos: novoProduto.insumos,
+              insumosParaSalvar,
+              observacao: 'SEMPRE usando produtoInsumos na edição'
+            });
+            return insumosParaSalvar;
+          })(),
           // ✅ NOVO CAMPO: Selecionar insumos na venda (só se houver insumos)
           selecionar_insumos_venda: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda) || false,
           // ✅ NOVO CAMPO: Controlar quantidades no insumo (só se houver insumos e selecionar_insumos_venda estiver ativo)
@@ -9459,6 +9490,12 @@ const ProdutosPage: React.FC = () => {
                                         type="button"
                                         onClick={() => {
                                           const novosInsumos = produtoInsumos.filter((_, i) => i !== index);
+                                          console.log('🗑️ Removendo insumo:', {
+                                            index,
+                                            insumoRemovido: produtoInsumos[index],
+                                            insumosAnteriores: produtoInsumos.length,
+                                            novosInsumos: novosInsumos.length
+                                          });
                                           setProdutoInsumos(novosInsumos);
 
                                           // Se não restaram insumos, limpar as opções relacionadas
@@ -9650,7 +9687,14 @@ const ProdutosPage: React.FC = () => {
                             }}
                             disabled={isLoading}
                           >
-                            {isLoading ? 'Salvando...' : 'Concluir'}
+                            {isLoading ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <span>Salvando, aguarde...</span>
+                              </div>
+                            ) : (
+                              'Salvar'
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -10270,6 +10314,73 @@ const ProdutosPage: React.FC = () => {
                     Adicionar Selecionados
                   </Button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Validação de Vinculação de Insumo */}
+      <AnimatePresence>
+        {showModalVinculacaoInsumo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowModalVinculacaoInsumo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card border border-gray-700 rounded-lg p-6 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5 text-yellow-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Não é possível desmarcar "Matéria prima"
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Este produto possui vinculações ativas
+                  </p>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="mb-6">
+                <p className="text-gray-300 mb-4">
+                  Este produto está sendo usado como insumo nos seguintes produtos:
+                </p>
+
+                <div className="bg-gray-800/50 rounded-lg p-4 max-h-40 overflow-y-auto">
+                  {produtosVinculadosInsumo.map((produto, index) => (
+                    <div key={produto.id} className="flex items-center gap-2 py-2">
+                      <div className="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0"></div>
+                      <span className="text-white font-medium">{produto.nome}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-gray-400 text-sm mt-4">
+                  Para desmarcar "Matéria prima", primeiro remova este produto dos insumos dos produtos listados acima.
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => setShowModalVinculacaoInsumo(false)}
+                >
+                  Entendi
+                </Button>
               </div>
             </motion.div>
           </motion.div>
