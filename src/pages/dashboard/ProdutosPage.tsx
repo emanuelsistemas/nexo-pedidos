@@ -6929,12 +6929,23 @@ const ProdutosPage: React.FC = () => {
                               </p>
                               {/* ✅ NOVO: Tag da unidade de medida */}
                               {novoProduto.unidade_medida_id && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                    {(() => {
+                                      const unidade = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                      return unidade ? unidade.sigla : 'UN';
+                                    })()}
+                                  </span>
+                                  {/* ✅ NOVO: Tag "Fracionado" se a unidade for fracionada */}
                                   {(() => {
                                     const unidade = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
-                                    return unidade ? unidade.sigla : 'UN';
+                                    return unidade && unidade.fracionado ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                                        Fracionado
+                                      </span>
+                                    ) : null;
                                   })()}
-                                </span>
+                                </div>
                               )}
                             </div>
                           </div>
