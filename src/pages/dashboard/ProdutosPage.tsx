@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode, Copy, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move } from 'lucide-react';
+import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode, Copy, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, Settings, ImageIcon, Package, PlusCircle, FileText, Layers } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Grupo, Produto, OpcaoAdicional, ProdutoOpcao } from '../../types';
 import { showMessage } from '../../utils/toast';
@@ -6676,21 +6676,22 @@ const ProdutosPage: React.FC = () => {
                     {/* Abas */}
                     <div className="flex border-b border-gray-700 mb-6">
                       <button
-                        className={`px-4 py-2 font-medium text-sm ${
+                        className={`flex-1 px-4 py-3 font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
                           activeTab === 'dados'
-                            ? 'text-primary-500 border-b-2 border-primary-500'
-                            : 'text-gray-400 hover:text-white'
+                            ? 'text-primary-500 border-b-2 border-primary-500 bg-primary-500/10'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                         }`}
                         onClick={() => setActiveTab('dados')}
                       >
-                        Geral
+                        <Settings size={16} />
+                        <span>Geral</span>
                       </button>
                       <button
-                        className={`px-4 py-2 font-medium text-sm ${
+                        className={`flex-1 px-4 py-3 font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
                           activeTab === 'fotos'
-                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            ? 'text-primary-500 border-b-2 border-primary-500 bg-primary-500/10'
                             : editingProduto
-                              ? 'text-gray-400 hover:text-white'
+                              ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                               : 'text-gray-600 cursor-not-allowed'
                         }`}
                         onClick={() => {
@@ -6701,14 +6702,16 @@ const ProdutosPage: React.FC = () => {
                           }
                         }}
                       >
-                        Fotos {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
+                        <ImageIcon size={16} />
+                        <span>Fotos</span>
+                        {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
                       </button>
                       <button
-                        className={`px-4 py-2 font-medium text-sm ${
+                        className={`flex-1 px-4 py-3 font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
                           activeTab === 'estoque'
-                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            ? 'text-primary-500 border-b-2 border-primary-500 bg-primary-500/10'
                             : editingProduto
-                              ? 'text-gray-400 hover:text-white'
+                              ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                               : 'text-gray-600 cursor-not-allowed'
                         }`}
                         onClick={() => {
@@ -6721,36 +6724,40 @@ const ProdutosPage: React.FC = () => {
                           }
                         }}
                       >
-                        Estoque {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
+                        <Package size={16} />
+                        <span>Estoque</span>
+                        {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
                       </button>
                       {opcoesAdicionaisHabilitado && (
                         <button
-                          className={`px-4 py-2 font-medium text-sm ${
+                          className={`flex-1 px-4 py-3 font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
                             activeTab === 'adicionais'
-                              ? 'text-primary-500 border-b-2 border-primary-500'
-                              : 'text-gray-400 hover:text-white'
+                              ? 'text-primary-500 border-b-2 border-primary-500 bg-primary-500/10'
+                              : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                           }`}
                           onClick={() => setActiveTab('adicionais')}
                         >
-                          Adicionais
+                          <PlusCircle size={16} />
+                          <span>Adicionais</span>
                         </button>
                       )}
                       <button
-                        className={`px-4 py-2 font-medium text-sm ${
+                        className={`flex-1 px-4 py-3 font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
                           activeTab === 'impostos'
-                            ? 'text-primary-500 border-b-2 border-primary-500'
-                            : 'text-gray-400 hover:text-white'
+                            ? 'text-primary-500 border-b-2 border-primary-500 bg-primary-500/10'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                         }`}
                         onClick={() => setActiveTab('impostos')}
                       >
-                        Impostos
+                        <FileText size={16} />
+                        <span>Impostos</span>
                       </button>
                       <button
-                        className={`px-4 py-2 font-medium text-sm ${
+                        className={`flex-1 px-4 py-3 font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
                           activeTab === 'insumos'
-                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            ? 'text-primary-500 border-b-2 border-primary-500 bg-primary-500/10'
                             : editingProduto
-                              ? 'text-gray-400 hover:text-white'
+                              ? 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                               : 'text-gray-600 cursor-not-allowed'
                         }`}
                         onClick={() => {
