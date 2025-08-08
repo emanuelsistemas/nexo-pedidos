@@ -448,8 +448,6 @@ const ImportarProdutosPage: React.FC = () => {
                     <ul className="text-sm text-blue-300 space-y-1">
                       <li>• Formatos aceitos: .xlsx, .xls, .csv</li>
                       <li>• Tamanho máximo: 25MB (~25.000 produtos)</li>
-                      <li>• Colunas obrigatórias: nome, preco, codigo</li>
-                      <li>• Colunas opcionais: descricao, grupo, ativo</li>
                       <li>• Processamento em lotes para otimização</li>
                     </ul>
                   </div>
