@@ -486,25 +486,25 @@ const ProdutosPage: React.FC = () => {
     }
 
     if (!fracionado) {
-      // Unitário: apenas números inteiros
+      // ✅ UNITÁRIO: apenas números inteiros - remove qualquer vírgula, ponto ou caractere não numérico
       const resultado = valor.replace(/[^0-9]/g, '');
-      console.log('🔍 SANITIZE INPUT - Unitário:', { valorOriginal: valor, resultado });
+      console.log('🔍 SANITIZE INPUT - Unitário (só inteiros):', { valorOriginal: valor, resultado });
       return resultado;
     }
 
     // Fracionado: permite números, vírgula e ponto
     let v = valor.replace(/[^0-9.,]/g, '');
-    console.log('🔍 SANITIZE INPUT - Após remover caracteres inválidos:', v);
+    console.log('🔍 SANITIZE INPUT - Fracionado - Após remover caracteres inválidos:', v);
 
     // Substituir vírgula por ponto para processamento
     v = v.replace(',', '.');
-    console.log('🔍 SANITIZE INPUT - Após substituir vírgula por ponto:', v);
+    console.log('🔍 SANITIZE INPUT - Fracionado - Após substituir vírgula por ponto:', v);
 
     // Permitir apenas um ponto decimal
     const pontos = v.split('.');
     if (pontos.length > 2) {
       v = pontos[0] + '.' + pontos.slice(1).join('');
-      console.log('🔍 SANITIZE INPUT - Após corrigir múltiplos pontos:', v);
+      console.log('🔍 SANITIZE INPUT - Fracionado - Após corrigir múltiplos pontos:', v);
     }
 
     // Limitar casas decimais a 3
@@ -512,12 +512,12 @@ const ProdutosPage: React.FC = () => {
     if (parts.length === 2 && parts[1].length > 3) {
       parts[1] = parts[1].slice(0, 3);
       v = parts.join('.');
-      console.log('🔍 SANITIZE INPUT - Após limitar casas decimais:', v);
+      console.log('🔍 SANITIZE INPUT - Fracionado - Após limitar casas decimais:', v);
     }
 
     // Retornar com vírgula para exibição
     const resultado = v.replace('.', ',');
-    console.log('🔍 SANITIZE INPUT - Resultado final:', resultado);
+    console.log('🔍 SANITIZE INPUT - Fracionado - Resultado final:', resultado);
     return resultado;
   };
 
@@ -5185,6 +5185,15 @@ const ProdutosPage: React.FC = () => {
     // Resetar estados de custo
     setPrecoCustoFormatado('0,00');
 
+    // ✅ NOVO: Resetar estados de quantidade de movimento de estoque
+    setQuantidadeMovimentoVazia(false);
+    setQuantidadeMovimentoTexto('');
+    setNovoMovimento({
+      tipo: 'entrada',
+      quantidade: 0,
+      observacao: ''
+    });
+
     // Resetar validação de NCM
     setNcmValidacao({
       validando: false,
@@ -8628,9 +8637,25 @@ const ProdutosPage: React.FC = () => {
 
                                               setQuantidadeMovimentoVazia(false);
 
-                                              // Se termina com vírgula ou ponto, não processar ainda (mas texto já foi atualizado)
-                                              if (valorDigitado.endsWith(',') || valorDigitado.endsWith('.')) {
-                                                console.log('🔍 Vírgula/ponto no final - texto atualizado, aguardando mais dígitos');
+                                              // ✅ Para unidades NÃO fracionadas: não permitir vírgula/ponto
+                                              if (!isFracionado && (valorDigitado.includes(',') || valorDigitado.includes('.'))) {
+                                                console.log('🔍 Unidade não fracionada - removendo vírgula/ponto');
+                                                const valorLimpo = valorDigitado.replace(/[^0-9]/g, '');
+                                                setQuantidadeMovimentoTexto(valorLimpo);
+
+                                                if (valorLimpo !== '') {
+                                                  const valor = parseInt(valorLimpo);
+                                                  setNovoMovimento({
+                                                    ...novoMovimento,
+                                                    quantidade: valor
+                                                  });
+                                                }
+                                                return;
+                                              }
+
+                                              // Para unidades fracionadas: se termina com vírgula ou ponto, aguardar mais dígitos
+                                              if (isFracionado && (valorDigitado.endsWith(',') || valorDigitado.endsWith('.'))) {
+                                                console.log('🔍 Unidade fracionada - vírgula/ponto no final, aguardando mais dígitos');
                                                 return;
                                               }
 
