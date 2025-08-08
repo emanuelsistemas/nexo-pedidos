@@ -6437,7 +6437,7 @@ const PDVPage: React.FC = () => {
                 <div class="adicionais">
                   <strong>Insumos:</strong><br>
                   ${item.insumos_selecionados.map(insumoSelecionado => `
-                    • ${(insumoSelecionado.quantidade * (item.quantidade || 1)).toFixed(3).replace(/\.?0+$/, '')}x ${insumoSelecionado.insumo.nome}
+                    • ${(()=>{const q=(insumoSelecionado.quantidade*(item.quantidade||1));const u=insumoSelecionado.insumo.unidade_medida||'';const fr=['KG','L','LT','ML','G','M','CM','MM'].includes(u.toUpperCase());return (fr?q.toFixed(3).replace('.',',').replace(/,?0+$/,''):Math.round(q).toString())+`x ${insumoSelecionado.insumo.nome}`;})()}
                   `).join('<br>')}
                 </div>
               ` : ''}
@@ -10616,6 +10616,25 @@ const PDVPage: React.FC = () => {
     // Se não permite fracionamento, mostrar como número inteiro
     return quantidade.toString();
   };
+
+  // ✅ Utilitário: verificar se a unidade é fracionada
+  const isUnidadeFracionadaSigla = (sigla?: string) => {
+    if (!sigla) return false;
+    const u = sigla.toUpperCase();
+    return ['KG', 'L', 'LT', 'ML', 'G', 'M', 'CM', 'MM'].includes(u);
+  };
+
+  // ✅ Utilitário: formatar quantidade considerando unidade (vírgula, até 3 casas)
+  const formatarQtdUnidade = (quantidade: number, unidade?: string) => {
+    if (isUnidadeFracionadaSigla(unidade)) {
+      return quantidade
+        .toFixed(3)
+        .replace('.', ',')
+        .replace(/,?0+$/, '');
+    }
+    return Math.round(quantidade).toString();
+  };
+
 
   // ✅ NOVO: Função para iniciar edição de quantidade no carrinho
   const iniciarEdicaoQuantidade = (itemId: string, quantidadeAtual: number, unidadeMedida?: any) => {
@@ -20536,7 +20555,7 @@ const PDVPage: React.FC = () => {
                                       <div className="flex items-center gap-2 flex-1">
                                         {/* ✅ NOVO: Quantidade na frente do nome */}
                                         <span className="text-gray-300 text-sm font-medium">
-                                          {(insumoSelecionado.quantidade * item.quantidade).toFixed(3).replace(/\.?0+$/, '')}x - {insumoSelecionado.insumo.nome}
+                                          {formatarQtdUnidade(insumoSelecionado.quantidade * item.quantidade, insumoSelecionado.insumo.unidade_medida)}x - {insumoSelecionado.insumo.nome}
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-2">
@@ -20561,7 +20580,7 @@ const PDVPage: React.FC = () => {
                                         </button>
                                         {/* Quantidade total do insumo */}
                                         <span className="text-orange-300 text-sm font-medium min-w-[4rem] text-right">
-                                          {(insumoSelecionado.quantidade * item.quantidade).toFixed(3).replace(/\.?0+$/, '')} {insumoSelecionado.insumo.unidade_medida || 'UN'}
+                                          {formatarQtdUnidade(insumoSelecionado.quantidade * item.quantidade, insumoSelecionado.insumo.unidade_medida)} {insumoSelecionado.insumo.unidade_medida || 'UN'}
                                         </span>
                                       </div>
                                     </div>
