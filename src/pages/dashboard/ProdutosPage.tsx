@@ -468,9 +468,144 @@ const ProdutosPage: React.FC = () => {
     }
   }, [produtoInsumos]);
 
+  // Utilitários de formatação/validação de quantidade para insumos
+  const sanitizeQuantidadeInput = (valor: string, fracionado: boolean): string => {
+    if (!valor) return '';
+
+    if (!fracionado) {
+      // Unitário: apenas números inteiros
+      return valor.replace(/[^0-9]/g, '');
+    }
+
+    // Fracionado: permite números, vírgula e ponto
+    let v = valor.replace(/[^0-9.,]/g, '');
+
+    // Substituir vírgula por ponto para processamento
+    v = v.replace(',', '.');
+
+    // Permitir apenas um ponto decimal
+    const pontos = v.split('.');
+    if (pontos.length > 2) {
+      v = pontos[0] + '.' + pontos.slice(1).join('');
+    }
+
+    // Limitar casas decimais a 3
+    const parts = v.split('.');
+    if (parts.length === 2 && parts[1].length > 3) {
+      parts[1] = parts[1].slice(0, 3);
+      v = parts.join('.');
+    }
+
+    // Retornar com vírgula para exibição
+    return v.replace('.', ',');
+  };
+
+  const padQuantidadeFracionada = (valor: string): string => {
+    if (!valor) return '';
+    // aceita "," ou "." e padroniza exibição com vírgula e 3 casas
+    const num = parseFloat(valor.replace(',', '.'));
+    if (isNaN(num)) return '';
+    return num.toFixed(3).replace('.', ',');
+  };
+
+  // Função para formatar quantidade do insumo na exibição da lista
+  const formatarQuantidadeInsumo = (quantidade: number, unidadeMedida: string, produtoId?: string): string => {
+    // Tentar encontrar a informação real da unidade de medida do produto
+    let isFracionado = false;
+
+    if (produtoId) {
+      const produto = materiasPrimas.find(p => p.id === produtoId);
+      if (produto?.unidade_medida?.fracionado !== undefined) {
+        isFracionado = produto.unidade_medida.fracionado;
+      } else {
+        // Fallback: assumir baseado na sigla da unidade
+        const unidadeUpper = unidadeMedida?.toUpperCase() || '';
+        isFracionado = ['KG', 'L', 'ML', 'G', 'M', 'CM', 'MM', 'LT'].includes(unidadeUpper);
+      }
+    } else {
+      // Fallback: assumir baseado na sigla da unidade
+      const unidadeUpper = unidadeMedida?.toUpperCase() || '';
+      isFracionado = ['KG', 'L', 'ML', 'G', 'M', 'CM', 'MM', 'LT'].includes(unidadeUpper);
+    }
+
+    if (isFracionado) {
+      return quantidade.toFixed(3).replace('.', ',');
+    } else {
+      return quantidade.toString();
+    }
+  };
+
   // ✅ NOVO: Estados para edição simples de quantidade de insumo
   const [showEdicaoQuantidadeInsumo, setShowEdicaoQuantidadeInsumo] = useState(false);
   const [insumoParaEdicaoQuantidade, setInsumoParaEdicaoQuantidade] = useState<any>(null);
+
+  // Estados para formatação dos campos de quantidade mínima/máxima dos insumos
+  const [quantidadesInsumosFormatadas, setQuantidadesInsumosFormatadas] = useState<Record<string, {minima: string, maxima: string}>>({});
+
+  // Função para verificar se um insumo é fracionado
+  const isInsumoFracionado = (produtoId: string): boolean => {
+    // Buscar primeiro nas matérias-primas
+    let produto: any = materiasPrimas.find(p => p.id === produtoId);
+
+    // Se não encontrou, buscar em todos os produtos de todos os grupos
+    if (!produto) {
+      for (const grupo of grupos) {
+        const achado = grupo.produtos?.find((p: any) => p.id === produtoId);
+        if (achado) {
+          produto = achado;
+          break;
+        }
+      }
+    }
+
+    // Extrair informações de unidade
+    const um = produto?.unidade_medida;
+    const fracionadoBanco = typeof um === 'object' ? um?.fracionado : undefined;
+    let sigla = '';
+    if (typeof um === 'string') {
+      sigla = um;
+    } else if (typeof um === 'object') {
+      sigla = (um?.sigla || um?.nome || '').toString();
+    }
+    sigla = sigla.trim().toUpperCase();
+
+    const siglasFracionadas = ['KG','G','L','LT','ML','M','CM','MM','M2','M³','M3'];
+    const fracionadoHeuristica = siglasFracionadas.includes(sigla);
+
+    const resultado = (fracionadoBanco === true) || fracionadoHeuristica;
+
+    console.log('🔍 Debug isInsumoFracionado:', {
+      produtoId,
+      produto: produto ? {
+        id: produto.id,
+        nome: produto.nome,
+        unidade_medida: um,
+        sigla,
+        fracionadoBanco
+      } : null,
+      resultado
+    });
+
+    return resultado;
+  };
+
+  // Função para formatar valor de quantidade de insumo (mínima/máxima)
+  const formatarValorQuantidadeInsumo = (valor: number, fracionado: boolean): string => {
+    if (fracionado) {
+      return valor.toFixed(3).replace('.', ',');
+    } else {
+      return valor.toString();
+    }
+  };
+
+  // Função para obter valor formatado do estado ou calcular
+  const getQuantidadeInsumoFormatada = (insumoId: string, tipo: 'minima' | 'maxima', valorPadrao: number, fracionado: boolean): string => {
+    const formatado = quantidadesInsumosFormatadas[insumoId]?.[tipo];
+    if (formatado !== undefined) {
+      return formatado;
+    }
+    return formatarValorQuantidadeInsumo(valorPadrao, fracionado);
+  };
 
   // ✅ NOVO: Estado para pesquisa de insumos
   const [pesquisaInsumo, setPesquisaInsumo] = useState('');
@@ -9221,7 +9356,7 @@ const ProdutosPage: React.FC = () => {
                                         <div>
                                           <h4 className="text-white font-medium text-sm">{insumo.nome}</h4>
                                           <p className="text-gray-400 text-xs">
-                                            Quantidade: {insumo.quantidade} {insumo.unidade_medida}
+                                            Quantidade: {formatarQuantidadeInsumo(insumo.quantidade, insumo.unidade_medida, insumo.produto_id)} {insumo.unidade_medida}
                                           </p>
                                         </div>
                                       </div>
@@ -9230,7 +9365,12 @@ const ProdutosPage: React.FC = () => {
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          setInsumoParaEdicaoQuantidade(insumo);
+                                          // Adicionar informação se a unidade é fracionada
+                                          const insumoComFracionado = {
+                                            ...insumo,
+                                            unidade_fracionada: isInsumoFracionado(insumo.produto_id)
+                                          };
+                                          setInsumoParaEdicaoQuantidade(insumoComFracionado);
                                           setShowEdicaoQuantidadeInsumo(true);
                                         }}
                                         className="p-1.5 text-gray-400 hover:text-primary-400 transition-colors"
@@ -9278,29 +9418,60 @@ const ProdutosPage: React.FC = () => {
                                             Quantidade Mínima
                                           </label>
                                           <input
-                                            type="number"
-                                            value={insumo.quantidade_minima !== undefined ? insumo.quantidade_minima : insumo.quantidade}
+                                            type="text"
+                                            inputMode={isInsumoFracionado(insumo.produto_id) ? 'decimal' : 'numeric'}
+                                            value={getQuantidadeInsumoFormatada(
+                                              insumo.produto_id,
+                                              'minima',
+                                              insumo.quantidade_minima !== undefined ? insumo.quantidade_minima : insumo.quantidade,
+                                              isInsumoFracionado(insumo.produto_id)
+                                            )}
                                             onChange={(e) => {
-                                              const valor = parseFloat(e.target.value) || 0;
+                                              const fracionado = isInsumoFracionado(insumo.produto_id);
+                                              const valorSanitizado = sanitizeQuantidadeInput(e.target.value, fracionado);
 
-                                              // ✅ NOVO: Validar se a quantidade mínima não é menor que a quantidade padrão
-                                              if (valor < insumo.quantidade) {
-                                                showMessage('error', `Quantidade mínima não pode ser menor que a quantidade padrão: ${insumo.quantidade} ${insumo.unidade_medida}`);
+                                              // Atualizar estado de formatação
+                                              setQuantidadesInsumosFormatadas(prev => ({
+                                                ...prev,
+                                                [insumo.produto_id]: {
+                                                  ...prev[insumo.produto_id],
+                                                  minima: valorSanitizado
+                                                }
+                                              }));
+                                            }}
+                                            onBlur={() => {
+                                              const fracionado = isInsumoFracionado(insumo.produto_id);
+                                              const valorAtual = quantidadesInsumosFormatadas[insumo.produto_id]?.minima || '';
+
+                                              if (fracionado) {
+                                                const valorFormatado = padQuantidadeFracionada(valorAtual);
+                                                setQuantidadesInsumosFormatadas(prev => ({
+                                                  ...prev,
+                                                  [insumo.produto_id]: {
+                                                    ...prev[insumo.produto_id],
+                                                    minima: valorFormatado
+                                                  }
+                                                }));
+                                              }
+
+                                              // Converter para número e validar
+                                              const valorNum = parseFloat(valorAtual.replace(',', '.')) || 0;
+
+                                              if (valorNum < insumo.quantidade) {
+                                                showMessage('error', `Quantidade mínima não pode ser menor que a quantidade padrão: ${formatarQuantidadeInsumo(insumo.quantidade, insumo.unidade_medida, insumo.produto_id)} ${insumo.unidade_medida}`);
                                                 return;
                                               }
 
                                               const novosInsumos = [...produtoInsumos];
                                               novosInsumos[index] = {
                                                 ...novosInsumos[index],
-                                                quantidade_minima: valor
+                                                quantidade_minima: valorNum
                                               };
                                               setProdutoInsumos(novosInsumos);
                                             }}
                                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
-                                            placeholder={insumo.quantidade.toString()}
-                                            step="0.001"
-                                            min={insumo.quantidade}
-                                            title={`Mínimo permitido: ${insumo.quantidade} ${insumo.unidade_medida}`}
+                                            placeholder={formatarQuantidadeInsumo(insumo.quantidade, insumo.unidade_medida, insumo.produto_id)}
+                                            title={`Mínimo permitido: ${formatarQuantidadeInsumo(insumo.quantidade, insumo.unidade_medida, insumo.produto_id)} ${insumo.unidade_medida}`}
                                           />
                                         </div>
                                         <div>
@@ -9318,16 +9489,49 @@ const ProdutosPage: React.FC = () => {
                                             </div>
                                           </label>
                                           <input
-                                            type="number"
-                                            value={insumo.quantidade_maxima || 0}
+                                            type="text"
+                                            inputMode={isInsumoFracionado(insumo.produto_id) ? 'decimal' : 'numeric'}
+                                            value={getQuantidadeInsumoFormatada(
+                                              insumo.produto_id,
+                                              'maxima',
+                                              insumo.quantidade_maxima || 0,
+                                              isInsumoFracionado(insumo.produto_id)
+                                            )}
                                             onChange={(e) => {
-                                              const valor = parseFloat(e.target.value) || 0;
+                                              const fracionado = isInsumoFracionado(insumo.produto_id);
+                                              const valorSanitizado = sanitizeQuantidadeInput(e.target.value, fracionado);
 
-                                              // ✅ NOVO: Validar se a quantidade máxima não é menor que a mínima (se não for 0)
-                                              if (valor > 0) {
+                                              // Atualizar estado de formatação
+                                              setQuantidadesInsumosFormatadas(prev => ({
+                                                ...prev,
+                                                [insumo.produto_id]: {
+                                                  ...prev[insumo.produto_id],
+                                                  maxima: valorSanitizado
+                                                }
+                                              }));
+                                            }}
+                                            onBlur={() => {
+                                              const fracionado = isInsumoFracionado(insumo.produto_id);
+                                              const valorAtual = quantidadesInsumosFormatadas[insumo.produto_id]?.maxima || '';
+
+                                              if (fracionado && valorAtual) {
+                                                const valorFormatado = padQuantidadeFracionada(valorAtual);
+                                                setQuantidadesInsumosFormatadas(prev => ({
+                                                  ...prev,
+                                                  [insumo.produto_id]: {
+                                                    ...prev[insumo.produto_id],
+                                                    maxima: valorFormatado
+                                                  }
+                                                }));
+                                              }
+
+                                              // Converter para número e validar
+                                              const valorNum = parseFloat(valorAtual.replace(',', '.')) || 0;
+
+                                              if (valorNum > 0) {
                                                 const quantidadeMinima = insumo.quantidade_minima !== undefined ? insumo.quantidade_minima : insumo.quantidade;
-                                                if (valor < quantidadeMinima) {
-                                                  showMessage('error', `Quantidade máxima não pode ser menor que a mínima: ${quantidadeMinima} ${insumo.unidade_medida}`);
+                                                if (valorNum < quantidadeMinima) {
+                                                  showMessage('error', `Quantidade máxima não pode ser menor que a mínima: ${formatarQuantidadeInsumo(quantidadeMinima, insumo.unidade_medida, insumo.produto_id)} ${insumo.unidade_medida}`);
                                                   return;
                                                 }
                                               }
@@ -9335,14 +9539,12 @@ const ProdutosPage: React.FC = () => {
                                               const novosInsumos = [...produtoInsumos];
                                               novosInsumos[index] = {
                                                 ...novosInsumos[index],
-                                                quantidade_maxima: valor
+                                                quantidade_maxima: valorNum
                                               };
                                               setProdutoInsumos(novosInsumos);
                                             }}
                                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-1.5 px-2 text-white text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20"
                                             placeholder="0 (ilimitado)"
-                                            step="0.001"
-                                            min="0"
                                           />
                                         </div>
                                       </div>
@@ -9807,7 +10009,8 @@ const ProdutosPage: React.FC = () => {
                       const isSelecionado = insumosSelecionados[produto.id]?.selecionado || false;
                       const quantidade = insumosSelecionados[produto.id]?.quantidade || '';
                       const unidadeMedida = produto.unidade_medida;
-                      const isFracionado = unidadeMedida?.fracionado || false;
+                      const siglaUM = (unidadeMedida?.sigla || '').toString().trim().toUpperCase();
+                      const isFracionado = (unidadeMedida?.fracionado === true) || ['KG','G','L','LT','ML','M','CM','MM','M2','M³','M3'].includes(siglaUM);
 
                       return (
                         <div key={produto.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
@@ -9891,25 +10094,36 @@ const ProdutosPage: React.FC = () => {
                                     Quantidade por porção ({unidadeMedida?.sigla || 'UN'})
                                   </label>
                                   <input
-                                    type="number"
+                                    type="text"
+                                    inputMode={isFracionado ? 'decimal' : 'numeric'}
                                     value={quantidade}
                                     onChange={(e) => {
+                                      const sanitized = sanitizeQuantidadeInput(e.target.value, isFracionado);
                                       setInsumosSelecionados(prev => ({
                                         ...prev,
                                         [produto.id]: {
                                           ...prev[produto.id],
-                                          quantidade: e.target.value
+                                          quantidade: sanitized
                                         }
                                       }));
                                     }}
-                                    step={isFracionado ? "0.001" : "1"}
-                                    min="0"
-                                    placeholder={`Ex: ${isFracionado ? '0.250' : '1'}`}
+                                    onBlur={() => {
+                                      if (isFracionado) {
+                                        setInsumosSelecionados(prev => ({
+                                          ...prev,
+                                          [produto.id]: {
+                                            ...prev[produto.id],
+                                            quantidade: padQuantidadeFracionada(prev[produto.id]?.quantidade || quantidade || '')
+                                          }
+                                        }));
+                                      }
+                                    }}
+                                    placeholder={`Ex: ${isFracionado ? '0,250' : '1'}`}
                                     className="w-full bg-gray-900/50 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   />
                                   <p className="text-xs text-gray-500 mt-1">
                                     {isFracionado
-                                      ? 'Use até 3 casas decimais (ex: 0.250 para 250g)'
+                                      ? 'Use até 3 casas decimais (ex: 0,250 para 250g)'
                                       : 'Use números inteiros (ex: 1, 2, 3)'
                                     }
                                   </p>
@@ -9948,16 +10162,21 @@ const ProdutosPage: React.FC = () => {
                       const novosInsumos: any[] = [];
 
                       Object.entries(insumosSelecionados).forEach(([produtoId, config]) => {
-                        if (config.selecionado && config.quantidade && parseFloat(config.quantidade) > 0) {
-                          const produto = materiasPrimas.find(p => p.id === produtoId);
-                          if (produto) {
-                            novosInsumos.push({
-                              produto_id: produtoId,
-                              nome: produto.nome,
-                              quantidade: parseFloat(config.quantidade),
-                              unidade_medida: produto.unidade_medida?.sigla || 'UN'
-                            });
-                          }
+                        const produto = materiasPrimas.find(p => p.id === produtoId);
+                        if (!produto) return;
+                        const isFracionado = !!produto.unidade_medida?.fracionado;
+                        const valorStr = (config.quantidade || '').toString();
+                        const valorNum = parseFloat(valorStr.replace(',', '.'));
+                        const valido = config.selecionado && !isNaN(valorNum) && valorNum > 0 && (
+                          isFracionado ? true : Number.isInteger(valorNum)
+                        );
+                        if (valido) {
+                          novosInsumos.push({
+                            produto_id: produtoId,
+                            nome: produto.nome,
+                            quantidade: valorNum,
+                            unidade_medida: produto.unidade_medida?.sigla || 'UN'
+                          });
                         }
                       });
 

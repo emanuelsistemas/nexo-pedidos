@@ -495,6 +495,7 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Estados para pagamentos do caixa
   const [pagamentosCaixa, setPagamentosCaixa] = useState<any[]>([]);
   const [totalPagamentosCaixa, setTotalPagamentosCaixa] = useState(0);
+  const [valoresPagamentosPorForma, setValoresPagamentosPorForma] = useState<{[key: string]: number}>({});
   const [pagamentosExpandido, setPagamentosExpandido] = useState(false);
 
   // ✅ NOVO: Estados para sangrias do caixa
@@ -1806,10 +1807,11 @@ const PDVPage: React.FC = () => {
       console.log('✅ Sangria registrada com sucesso!');
       toast.success('Sangria registrada com sucesso!');
 
-      // Limpar campos e fechar modal
+      // Limpar campos e mudar para aba de listagem
       setValorSangria('');
       setObservacaoSangria('');
-      setShowSangriaModal(false);
+      setAbaSangriaAtiva('listagem'); // Mudar para aba de listagem
+      await carregarSangriasCaixa(); // Recarregar listagem
 
       // Recarregar dados do caixa se estiver aberto
       if (showCaixaModal) {
@@ -2022,6 +2024,9 @@ const PDVPage: React.FC = () => {
       setRecebimentosFiadoCaixa([]);
       setTotalRecebimentosFiado(0);
       setValoresFiadoPorForma({});
+      setPagamentosCaixa([]);
+      setTotalPagamentosCaixa(0);
+      setValoresPagamentosPorForma({});
 
       // ✅ NOVO: Validar se não há erros antes de atualizar a página
       console.log('🔍 Validando estado do sistema antes de atualizar...');
@@ -2191,6 +2196,7 @@ const PDVPage: React.FC = () => {
           observacoes,
           descricao,
           data_pagamento,
+          formas_pagamento_empresa_id,
           formas_pagamento_empresa:formas_pagamento_empresa_id (
             forma_pagamento_opcoes:forma_pagamento_opcao_id (
               nome
@@ -2213,6 +2219,42 @@ const PDVPage: React.FC = () => {
           return total + (parseFloat(pagamento.valor_pagamento) || 0);
         }, 0);
         setTotalPagamentosCaixa(totalPagamentos);
+
+        // ✅ NOVO: Calcular valores de pagamentos por forma de pagamento
+        const valoresPagamentosPorForma: {[key: string]: number} = {};
+
+        // Mapear forma_pagamento_empresa_id para forma_pagamento_opcao_id
+        const formaEmpresaParaOpcaoMap: {[key: string]: string} = {};
+        formasData?.forEach(forma => {
+          formaEmpresaParaOpcaoMap[forma.id] = forma.forma_pagamento_opcao_id;
+        });
+
+        console.log('🔍 DEBUG - Mapeamento formas empresa para opcao:', formaEmpresaParaOpcaoMap);
+        console.log('🔍 DEBUG - Pagamentos carregados:', pagamentosData);
+
+        (pagamentosData || []).forEach(pagamento => {
+          console.log('🔍 DEBUG - Processando pagamento:', {
+            id: pagamento.id,
+            valor: pagamento.valor_pagamento,
+            formas_pagamento_empresa_id: pagamento.formas_pagamento_empresa_id
+          });
+
+          const formaOpcaoId = formaEmpresaParaOpcaoMap[pagamento.formas_pagamento_empresa_id];
+          console.log('🔍 DEBUG - Forma opcao ID encontrada:', formaOpcaoId);
+
+          if (formaOpcaoId) {
+            if (!valoresPagamentosPorForma[formaOpcaoId]) {
+              valoresPagamentosPorForma[formaOpcaoId] = 0;
+            }
+            valoresPagamentosPorForma[formaOpcaoId] += parseFloat(pagamento.valor_pagamento) || 0;
+            console.log('🔍 DEBUG - Valor adicionado:', valoresPagamentosPorForma[formaOpcaoId]);
+          } else {
+            console.log('❌ DEBUG - Forma opcao ID não encontrada para empresa ID:', pagamento.formas_pagamento_empresa_id);
+          }
+        });
+
+        console.log('💰 Valores de pagamentos por forma de pagamento:', valoresPagamentosPorForma);
+        setValoresPagamentosPorForma(valoresPagamentosPorForma);
       }
 
       // ✅ NOVO: Buscar sangrias do caixa
@@ -33524,6 +33566,9 @@ const PDVPage: React.FC = () => {
                   setRecebimentosFiadoCaixa([]);
                   setTotalRecebimentosFiado(0);
                   setValoresFiadoPorForma({});
+                  setPagamentosCaixa([]);
+                  setTotalPagamentosCaixa(0);
+                  setValoresPagamentosPorForma({});
                 }}
                 style={{
                   position: 'absolute',
@@ -33618,7 +33663,23 @@ const PDVPage: React.FC = () => {
 
               {formasPagamentoCaixa.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  {formasPagamentoCaixa.map((forma) => (
+                  {formasPagamentoCaixa.map((forma) => {
+                    // ✅ NOVO: Verificar se há algum valor para exibir o card
+                    const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
+                    const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
+                    const valorPagamentos = valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] || 0;
+                    const isDinheiro = forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro');
+                    const valorSangria = isDinheiro ? totalSangriasCaixa : 0;
+                    const valorSuprimento = isDinheiro ? totalSuprimentosCaixa : 0;
+
+                    // Se não há nenhum valor, não exibir o card
+                    const temAlgumValor = valorAtual > 0 || valorFiado > 0 || valorPagamentos > 0 || valorSangria > 0 || valorSuprimento > 0;
+
+                    if (!temAlgumValor) {
+                      return null;
+                    }
+
+                    return (
                     <div
                       key={forma.id}
                       style={{
@@ -33655,8 +33716,51 @@ const PDVPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* ✅ NOVO: Mostrar valor total se houver fiado */}
-                        {pdvConfig?.fiado && valoresFiadoPorForma[forma.forma_pagamento_opcao_id] > 0 && (
+                        {/* ✅ NOVO: Mostrar valor de pagamentos se houver */}
+                        {valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', color: '#ef4444' }}>Pagamentos:</span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444' }}>
+                              -R$ {valoresPagamentosPorForma[forma.forma_pagamento_opcao_id].toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* ✅ NOVO: Mostrar sangrias se for Dinheiro e houver sangrias */}
+                        {forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro') && totalSangriasCaixa > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', color: '#dc2626' }}>Sangria:</span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#dc2626' }}>
+                              -R$ {totalSangriasCaixa.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* ✅ NOVO: Mostrar suprimentos se for Dinheiro e houver suprimentos */}
+                        {forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro') && totalSuprimentosCaixa > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', color: '#059669' }}>Suprimento:</span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#059669' }}>
+                              +R$ {totalSuprimentosCaixa.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* ✅ NOVO: Mostrar valor total se houver fiado, pagamentos, sangrias ou suprimentos */}
+                        {(
+                          (pdvConfig?.fiado && valoresFiadoPorForma[forma.forma_pagamento_opcao_id] > 0) ||
+                          valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] > 0 ||
+                          (forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro') && (totalSangriasCaixa > 0 || totalSuprimentosCaixa > 0))
+                        ) && (
                           <div style={{
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -33668,7 +33772,10 @@ const PDVPage: React.FC = () => {
                             <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#3b82f6' }}>
                               R$ {(
                                 (valoresReaisCaixa[forma.id]?.atual || 0) +
-                                (valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0)
+                                (valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0) -
+                                (valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] || 0) +
+                                (forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro') ? totalSuprimentosCaixa : 0) -
+                                (forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro') ? totalSangriasCaixa : 0)
                               ).toLocaleString('pt-BR', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
@@ -33706,7 +33813,8 @@ const PDVPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{
@@ -34165,6 +34273,7 @@ const PDVPage: React.FC = () => {
                   setValoresFiadoPorForma({});
                   setPagamentosCaixa([]);
                   setTotalPagamentosCaixa(0);
+                  setValoresPagamentosPorForma({});
                   setSangriasCaixaModal([]);
                   setTotalSangriasCaixa(0);
                   setSuprimentosCaixaModal([]);
