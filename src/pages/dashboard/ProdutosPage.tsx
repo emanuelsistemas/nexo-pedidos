@@ -6916,18 +6916,27 @@ const ProdutosPage: React.FC = () => {
                   </form>
                 ) : (
                   <div>
-                    {/* ✅ NOVO: Área de visualização do nome do produto em tempo real */}
-                    {!isGrupoForm && (
+                    {/* ✅ NOVO: Área de visualização do nome do produto em tempo real - só aparece se nome > 1 caractere */}
+                    {!isGrupoForm && novoProduto.nome && novoProduto.nome.length > 1 && (
                       <div className="mb-6 p-4 bg-gray-800/30 border border-gray-700 rounded-lg">
                         <div className="flex items-center gap-3">
                           <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
                           <div className="flex-1">
                             <p className="text-xs text-gray-400 mb-1">Nome do produto:</p>
-                            <p className="text-lg font-medium text-white min-h-[1.5rem]">
-                              {novoProduto.nome || (
-                                <span className="text-gray-500 italic">Digite o nome do produto...</span>
+                            <div className="flex items-center gap-3 min-h-[1.5rem]">
+                              <p className="text-lg font-medium text-white">
+                                {novoProduto.nome}
+                              </p>
+                              {/* ✅ NOVO: Tag da unidade de medida */}
+                              {novoProduto.unidade_medida_id && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                  {(() => {
+                                    const unidade = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                    return unidade ? unidade.sigla : 'UN';
+                                  })()}
+                                </span>
                               )}
-                            </p>
+                            </div>
                           </div>
                         </div>
                       </div>
