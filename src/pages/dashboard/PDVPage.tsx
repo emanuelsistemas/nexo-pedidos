@@ -14866,38 +14866,32 @@ const PDVPage: React.FC = () => {
     }
 
     try {
-      // Obter dados do usuário
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        toast.error('Usuário não autenticado');
-        return;
-      }
-
-      const { data: usuarioData } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('id', userData.user.id)
-        .single();
-
-      if (!usuarioData?.empresa_id) {
-        toast.error('Empresa não encontrada');
-        return;
-      }
-
       // Processar cada item do carrinho
       for (const item of carrinho) {
+        // ✅ Pular itens sem controle de estoque
+        if (item.vendaSemProduto || item.produto?.codigo === '999999') {
+          continue;
+        }
+
         try {
-          // Chamar a função de atualização de estoque
-          const { error } = await supabase.rpc('atualizar_estoque_produto', {
+          // ✅ Ajustar quantidade conforme unidade de medida
+          const fracionado = item?.produto?.unidade_medida?.fracionado || false;
+          let quantidade = parseFloat(String(item.quantidade)) || 0;
+          quantidade = fracionado ? Math.round(quantidade * 1000) / 1000 : Math.floor(quantidade);
+          if (quantidade <= 0) {
+            continue; // nada a baixar
+          }
+
+          // ✅ Usar a mesma RPC da finalização de venda (sem p_empresa_id, com p_tipo_operacao)
+          const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
             p_produto_id: item.produto.id,
-            p_empresa_id: usuarioData.empresa_id,
-            p_quantidade: -item.quantidade, // Quantidade negativa para dar baixa
-            p_tipo_movimentacao: 'consumo_interno',
+            p_quantidade: -quantidade, // Quantidade negativa para baixa
+            p_tipo_operacao: 'consumo_interno',
             p_observacao: 'Consumo interno da empresa'
           });
 
-          if (error) {
-            console.error(`❌ Erro ao dar baixa no produto ${item.produto.nome}:`, error);
+          if (estoqueError) {
+            console.error(`❌ Erro ao dar baixa no produto ${item.produto.nome}:`, estoqueError);
             toast.error(`Erro ao dar baixa no produto: ${item.produto.nome}`);
             return;
           }

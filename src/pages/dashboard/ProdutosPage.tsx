@@ -440,6 +440,33 @@ const ProdutosPage: React.FC = () => {
   const [materiasPrimas, setMateriasPrimas] = useState<any[]>([]);
   const [loadingMateriasPrimas, setLoadingMateriasPrimas] = useState(false);
   const [insumosSelecionados, setInsumosSelecionados] = useState<{[key: string]: {selecionado: boolean, quantidade: string}}>({});
+  // Fotos principais dos insumos (miniaturas na listagem da aba Insumos)
+  const [insumoFotosPrincipais, setInsumoFotosPrincipais] = useState<Record<string, ProdutoFoto | null>>({});
+
+  // Carregar/atualizar fotos principais dos insumos quando a lista de insumos mudar
+  useEffect(() => {
+    const carregarFotosInsumos = async () => {
+      try {
+        const map: Record<string, ProdutoFoto | null> = {};
+        for (const insumo of produtoInsumos) {
+          if (insumo?.produto_id) {
+            // reutiliza a função já existente para pegar a foto principal de um produto
+            const foto = await getProdutoFotoPrincipal(insumo.produto_id);
+            map[insumo.produto_id] = foto;
+          }
+        }
+        setInsumoFotosPrincipais(map);
+      } catch (e) {
+        console.error('Erro ao carregar fotos dos insumos:', e);
+      }
+    };
+
+    if (produtoInsumos && produtoInsumos.length > 0) {
+      carregarFotosInsumos();
+    } else {
+      setInsumoFotosPrincipais({});
+    }
+  }, [produtoInsumos]);
 
   // ✅ NOVO: Estados para edição simples de quantidade de insumo
   const [showEdicaoQuantidadeInsumo, setShowEdicaoQuantidadeInsumo] = useState(false);
@@ -9178,10 +9205,18 @@ const ProdutosPage: React.FC = () => {
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex-1">
                                       <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-primary-500/20 rounded-lg flex items-center justify-center">
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
-                                            <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
-                                          </svg>
+                                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
+                                          {insumoFotosPrincipais[insumo.produto_id]?.url ? (
+                                            <img
+                                              src={insumoFotosPrincipais[insumo.produto_id]!.url}
+                                              alt={insumo.nome}
+                                              className="w-full h-full object-cover"
+                                            />
+                                          ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
+                                              <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                                            </svg>
+                                          )}
                                         </div>
                                         <div>
                                           <h4 className="text-white font-medium text-sm">{insumo.nome}</h4>
