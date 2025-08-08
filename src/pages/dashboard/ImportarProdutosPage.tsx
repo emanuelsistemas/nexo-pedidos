@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, Download, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Trash2 } from 'lucide-react';
+import { X, Upload, Download, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Trash2, Tag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
@@ -81,6 +81,7 @@ const ImportarProdutosPage: React.FC = () => {
   const [importacoes, setImportacoes] = useState<ImportacaoHistorico[]>([]);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [usuarioNome, setUsuarioNome] = useState<string>('');
+  const [regimeTributario, setRegimeTributario] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -113,6 +114,19 @@ const ImportarProdutosPage: React.FC = () => {
 
           setEmpresaId(usuario.empresa_id);
           setUsuarioNome(usuario.nome);
+
+          // Buscar regime tributário da empresa
+          if (usuario.empresa_id) {
+            const { data: empresaData, error: empresaError } = await supabase
+              .from('empresas')
+              .select('regime_tributario')
+              .eq('id', usuario.empresa_id)
+              .single();
+
+            if (!empresaError && empresaData) {
+              setRegimeTributario(empresaData.regime_tributario);
+            }
+          }
         }
       } catch (error) {
         console.error('Erro ao buscar dados do usuário:', error);
@@ -135,37 +149,39 @@ const ImportarProdutosPage: React.FC = () => {
 
     try {
       setIsLoading(true);
-      
-      // Simular busca no banco - aqui você implementaria a consulta real
-      // Por enquanto, vamos usar dados mockados
-      const mockData: ImportacaoHistorico[] = [
-        {
-          id: '1',
-          nome_arquivo: 'produtos_janeiro_2025.xlsx',
-          data_importacao: '2025-01-15T10:30:00Z',
-          usuario_nome: usuarioNome,
-          status: 'concluida',
-          total_produtos: 150,
-          produtos_importados: 145,
-          produtos_com_erro: 5,
-          observacoes: 'Importação concluída com sucesso. 5 produtos com código duplicado.',
-          empresa_id: empresaId
-        },
-        {
-          id: '2',
-          nome_arquivo: 'produtos_dezembro_2024.csv',
-          data_importacao: '2024-12-20T14:15:00Z',
-          usuario_nome: usuarioNome,
-          status: 'erro',
-          total_produtos: 200,
-          produtos_importados: 0,
-          produtos_com_erro: 200,
-          observacoes: 'Erro no formato do arquivo. Verifique as colunas obrigatórias.',
-          empresa_id: empresaId
-        }
-      ];
 
-      setImportacoes(mockData);
+      // Buscar importações reais do banco de dados
+      // Por enquanto, como a tabela ainda não existe, vamos retornar array vazio
+      // Quando a tabela for criada, substituir por:
+      // const { data, error } = await supabase
+      //   .from('importacoes_produtos')
+      //   .select(`
+      //     id,
+      //     nome_arquivo,
+      //     data_importacao,
+      //     status,
+      //     total_produtos,
+      //     produtos_importados,
+      //     produtos_com_erro,
+      //     observacoes,
+      //     arquivo_url,
+      //     usuarios!inner(nome)
+      //   `)
+      //   .eq('empresa_id', empresaId)
+      //   .order('data_importacao', { ascending: false });
+
+      // if (error) throw error;
+
+      // const importacoesFormatadas = data?.map(item => ({
+      //   ...item,
+      //   usuario_nome: item.usuarios.nome,
+      //   empresa_id: empresaId
+      // })) || [];
+
+      // setImportacoes(importacoesFormatadas);
+
+      // Por enquanto, retornar array vazio até a tabela ser criada
+      setImportacoes([]);
       setIsDataReady(true);
     } catch (error) {
       console.error('Erro ao buscar importações:', error);
@@ -207,38 +223,13 @@ const ImportarProdutosPage: React.FC = () => {
     try {
       setIsUploading(true);
 
-      // Aqui você implementaria o upload e processamento do arquivo
-      // Por enquanto, vamos simular o processo
-      
-      showMessage('Arquivo enviado com sucesso! Processamento iniciado.', 'success');
-      
-      // Simular adição de nova importação
-      const novaImportacao: ImportacaoHistorico = {
-        id: Date.now().toString(),
-        nome_arquivo: selectedFile.name,
-        data_importacao: new Date().toISOString(),
-        usuario_nome: usuarioNome,
-        status: 'processando',
-        total_produtos: 0,
-        produtos_importados: 0,
-        produtos_com_erro: 0,
-        observacoes: 'Processamento em andamento...',
-        empresa_id: empresaId
-      };
+      // Aqui será implementado o upload e processamento real do arquivo
+      // Por enquanto, apenas mostrar mensagem informativa
 
-      setImportacoes(prev => [novaImportacao, ...prev]);
+      showMessage('Funcionalidade de importação será implementada em breve. Backend em desenvolvimento.', 'info');
+
       setSelectedFile(null);
       setShowSidebar(false);
-
-      // Simular conclusão após 3 segundos
-      setTimeout(() => {
-        setImportacoes(prev => prev.map(imp => 
-          imp.id === novaImportacao.id 
-            ? { ...imp, status: 'concluida', total_produtos: 50, produtos_importados: 48, produtos_com_erro: 2, observacoes: 'Importação concluída com sucesso!' }
-            : imp
-        ));
-        showMessage('Importação concluída com sucesso!', 'success');
-      }, 3000);
 
     } catch (error) {
       console.error('Erro ao importar produtos:', error);
@@ -289,6 +280,121 @@ const ImportarProdutosPage: React.FC = () => {
     return new Date(dateString).toLocaleString('pt-BR');
   };
 
+  const getRegimeTributarioText = (regime: number | null) => {
+    switch (regime) {
+      case 1:
+        return 'Simples Nacional';
+      case 2:
+        return 'Simples Nacional - Excesso';
+      case 3:
+        return 'Lucro Real';
+      case 4:
+        return 'Lucro Presumido';
+      default:
+        return 'Não informado';
+    }
+  };
+
+  const getRegimeTributarioColor = (regime: number | null) => {
+    switch (regime) {
+      case 1:
+        return 'bg-green-500/10 text-green-400 border-green-500/20';
+      case 2:
+        return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+      case 3:
+        return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      case 4:
+        return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+      default:
+        return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+    }
+  };
+
+  const gerarPlanilhaExemplo = () => {
+    // Definir colunas baseadas no regime tributário
+    const colunasGerais = [
+      'Código do Produto*',
+      'Código de Barras',
+      'Nome do Produto*',
+      'Unidade de Medida*',
+      'Preço de Custo',
+      'Preço Padrão*',
+      'Descrição Adicional',
+      'Estoque Inicial',
+      'Unidade de Medida Estoque',
+      'Produto Alcoólico',
+      'Este produto é Pizza?',
+      'Matéria prima',
+      'Produção'
+    ];
+
+    const colunasImpostos = [
+      'NCM*',
+      'CFOP*',
+      regimeTributario === 1 ? 'CSOSN*' : 'CST*',
+      'Origem do Produto',
+      'Alíquota ICMS (%)',
+      'Alíquota PIS (%)',
+      'Alíquota COFINS (%)',
+      'Peso Líquido (kg)'
+    ];
+
+    const todasColunas = [...colunasGerais, ...colunasImpostos];
+
+    // Dados de exemplo
+    const exemploGeral = [
+      'PROD001',
+      '7891234567890',
+      'Pizza Margherita Grande',
+      'UN',
+      '15.50',
+      '35.90',
+      'Pizza tradicional com molho de tomate mussarela e manjericao',
+      '0',
+      'UN',
+      'false',
+      'true',
+      'false',
+      'true'
+    ];
+
+    const exemploImpostos = [
+      '19059090',
+      '5102',
+      regimeTributario === 1 ? '102' : '00',
+      '0',
+      '18',
+      '1.65',
+      '7.6',
+      '0.5'
+    ];
+
+    const exemploCompleto = [...exemploGeral, ...exemploImpostos];
+
+    // Criar CSV com separador ponto e vírgula e UTF-8 BOM para Excel
+    const csvContent = [
+      todasColunas.join(';'),
+      exemploCompleto.join(';')
+    ].join('\n');
+
+    // Adicionar BOM para UTF-8 (compatibilidade com Excel)
+    const BOM = '\uFEFF';
+    const csvWithBOM = BOM + csvContent;
+
+    // Criar e baixar arquivo
+    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `planilha_exemplo_produtos_${getRegimeTributarioText(regimeTributario).replace(/\s+/g, '_').toLowerCase()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showMessage('Planilha de exemplo baixada com sucesso!', 'success');
+  };
+
   const renderSkeletonCards = () => {
     return Array.from({ length: 4 }).map((_, index) => (
       <div key={index} className="bg-background-card rounded-lg border border-gray-800 p-6">
@@ -316,6 +422,45 @@ const ImportarProdutosPage: React.FC = () => {
           <Upload size={16} className="mr-2" />
           Importar Produtos
         </Button>
+      </div>
+
+      {/* Área de Informações e Download */}
+      <div className="bg-background-card rounded-lg border border-gray-800 p-6 mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Tag do Regime Tributário */}
+          <div className="flex items-center gap-3">
+            <Tag size={20} className="text-gray-400" />
+            <span className="text-gray-300 font-medium">Regime Tributário:</span>
+            <div className={`px-3 py-1 rounded-full border text-sm font-medium ${getRegimeTributarioColor(regimeTributario)}`}>
+              {getRegimeTributarioText(regimeTributario)}
+            </div>
+          </div>
+
+          {/* Botão de Download da Planilha */}
+          <Button
+            type="button"
+            variant="text"
+            onClick={gerarPlanilhaExemplo}
+            className="text-primary-400 hover:text-primary-300 border border-primary-500/20 hover:border-primary-500/40"
+          >
+            <Download size={16} className="mr-2" />
+            Baixar Planilha de Exemplo
+          </Button>
+        </div>
+
+        {/* Informações sobre a planilha */}
+        <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <h4 className="text-blue-400 font-medium mb-2">📋 Sobre a Planilha de Exemplo</h4>
+          <div className="text-sm text-blue-300 space-y-1">
+            <p>• A planilha contém todas as colunas necessárias para importação</p>
+            <p>• Campos marcados com * são obrigatórios</p>
+            <p>• A primeira linha contém um exemplo preenchido</p>
+            <p>• Os campos de impostos são ajustados para o regime tributário da empresa</p>
+            {regimeTributario === 1 && (
+              <p>• <strong>Simples Nacional:</strong> Utiliza CSOSN ao invés de CST</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Lista de Importações */}
