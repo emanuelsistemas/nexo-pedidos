@@ -8540,7 +8540,9 @@ const ProdutosPage: React.FC = () => {
                                       {(() => {
                                         // Verificar se a unidade de medida permite fracionamento
                                         const unidadeSelecionada = unidadesMedida.find(u => u.id === editingProduto?.unidade_medida_id);
-                                        const isFracionado = unidadeSelecionada?.fracionado || false;
+                                        const sigla = (unidadeSelecionada?.sigla || '').toString().trim().toUpperCase();
+                                        const unidadesFracionadas = ['KG', 'G', 'L', 'LT', 'ML', 'M', 'CM', 'MM', 'M2', 'M³', 'M3'];
+                                        const isFracionado = (unidadeSelecionada?.fracionado === true) || unidadesFracionadas.includes(sigla);
                                         const placeholder = isFracionado ? "0,000" : "0";
 
                                         return (
