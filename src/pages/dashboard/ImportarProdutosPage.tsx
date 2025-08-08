@@ -190,9 +190,10 @@ const ImportarProdutosPage: React.FC = () => {
         return;
       }
 
-      // Validar tamanho (máximo 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        showMessage('Arquivo muito grande. Tamanho máximo: 10MB', 'error');
+      // Validar tamanho (máximo 25MB - otimizado para ~25.000 produtos)
+      const maxSize = 25 * 1024 * 1024; // 25MB - limite técnico otimizado
+      if (file.size > maxSize) {
+        showMessage('Arquivo muito grande. Tamanho máximo: 25MB (~25.000 produtos)', 'error');
         return;
       }
 
@@ -446,9 +447,10 @@ const ImportarProdutosPage: React.FC = () => {
                     <h3 className="text-blue-400 font-medium mb-2">Instruções para Importação</h3>
                     <ul className="text-sm text-blue-300 space-y-1">
                       <li>• Formatos aceitos: .xlsx, .xls, .csv</li>
-                      <li>• Tamanho máximo: 10MB</li>
+                      <li>• Tamanho máximo: 25MB (~25.000 produtos)</li>
                       <li>• Colunas obrigatórias: nome, preco, codigo</li>
                       <li>• Colunas opcionais: descricao, grupo, ativo</li>
+                      <li>• Processamento em lotes para otimização</li>
                     </ul>
                   </div>
 
@@ -474,7 +476,7 @@ const ImportarProdutosPage: React.FC = () => {
                           {selectedFile ? selectedFile.name : 'Clique para selecionar um arquivo'}
                         </span>
                         <span className="text-xs text-gray-500 mt-1">
-                          .xlsx, .xls ou .csv (máx. 10MB)
+                          .xlsx, .xls ou .csv (máx. 25MB)
                         </span>
                       </label>
                     </div>
