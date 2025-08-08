@@ -5532,6 +5532,19 @@ const ProdutosPage: React.FC = () => {
     }
   }, [grupos, fotosJaCarregadas]);
 
+
+  // Carregar fotos principais dos insumos mostrados na aba Insumos
+  useEffect(() => {
+    if (produtoInsumos && produtoInsumos.length > 0) {
+      produtoInsumos.forEach((insumo: any) => {
+        const id = insumo?.produto_id;
+        if (id && produtosFotosPrincipais[id] === undefined) {
+          atualizarFotoProdutoEspecifico(id);
+        }
+      });
+    }
+  }, [produtoInsumos]);
+
   // ✅ LIMPAR CACHE QUANDO COMPONENTE FOR DESMONTADO
   useEffect(() => {
     return () => {
@@ -9317,10 +9330,17 @@ const ProdutosPage: React.FC = () => {
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex-1">
                                       <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-primary-500/20 rounded-lg flex items-center justify-center">
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
-                                            <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
-                                          </svg>
+                                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
+                                          {(() => {
+                                            const fotoInsumo = produtosFotosPrincipais[insumo.produto_id];
+                                            return fotoInsumo ? (
+                                              <img src={fotoInsumo.url} alt={insumo.nome} className="w-full h-full object-cover" />
+                                            ) : (
+                                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
+                                                <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                                              </svg>
+                                            );
+                                          })()}
                                         </div>
                                         <div>
                                           <h4 className="text-white font-medium text-sm">{insumo.nome}</h4>
