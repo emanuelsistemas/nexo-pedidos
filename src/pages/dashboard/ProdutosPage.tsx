@@ -478,33 +478,23 @@ const ProdutosPage: React.FC = () => {
 
   // Utilitários de formatação/validação de quantidade para insumos
   const sanitizeQuantidadeInput = (valor: string, fracionado: boolean): string => {
-    console.log('🔍 SANITIZE INPUT - Entrada:', { valor, fracionado });
-
-    if (!valor) {
-      console.log('🔍 SANITIZE INPUT - Valor vazio, retornando ""');
-      return '';
-    }
+    if (!valor) return '';
 
     if (!fracionado) {
       // ✅ UNITÁRIO: apenas números inteiros - remove qualquer vírgula, ponto ou caractere não numérico
-      const resultado = valor.replace(/[^0-9]/g, '');
-      console.log('🔍 SANITIZE INPUT - Unitário (só inteiros):', { valorOriginal: valor, resultado });
-      return resultado;
+      return valor.replace(/[^0-9]/g, '');
     }
 
     // Fracionado: permite números, vírgula e ponto
     let v = valor.replace(/[^0-9.,]/g, '');
-    console.log('🔍 SANITIZE INPUT - Fracionado - Após remover caracteres inválidos:', v);
 
     // Substituir vírgula por ponto para processamento
     v = v.replace(',', '.');
-    console.log('🔍 SANITIZE INPUT - Fracionado - Após substituir vírgula por ponto:', v);
 
     // Permitir apenas um ponto decimal
     const pontos = v.split('.');
     if (pontos.length > 2) {
       v = pontos[0] + '.' + pontos.slice(1).join('');
-      console.log('🔍 SANITIZE INPUT - Fracionado - Após corrigir múltiplos pontos:', v);
     }
 
     // Limitar casas decimais a 3
@@ -512,13 +502,10 @@ const ProdutosPage: React.FC = () => {
     if (parts.length === 2 && parts[1].length > 3) {
       parts[1] = parts[1].slice(0, 3);
       v = parts.join('.');
-      console.log('🔍 SANITIZE INPUT - Fracionado - Após limitar casas decimais:', v);
     }
 
     // Retornar com vírgula para exibição
-    const resultado = v.replace('.', ',');
-    console.log('🔍 SANITIZE INPUT - Fracionado - Resultado final:', resultado);
-    return resultado;
+    return v.replace('.', ',');
   };
 
   const padQuantidadeFracionada = (valor: string): string => {
@@ -8615,18 +8602,11 @@ const ProdutosPage: React.FC = () => {
                                             onChange={(e) => {
                                               const valorDigitado = e.target.value;
 
-                                              console.log('🔍 CAMPO QUANTIDADE - NOVO DEBUG:', {
-                                                valorDigitado: valorDigitado,
-                                                isFracionado: isFracionado,
-                                                quantidadeTextoAtual: quantidadeMovimentoTexto
-                                              });
-
                                               // ✅ SEMPRE atualizar o estado do texto primeiro (isso permite vírgula aparecer)
                                               setQuantidadeMovimentoTexto(valorDigitado);
 
                                               // Se o campo estiver vazio
                                               if (valorDigitado === '') {
-                                                console.log('🔍 Campo vazio - limpando');
                                                 setQuantidadeMovimentoVazia(true);
                                                 setNovoMovimento({
                                                   ...novoMovimento,
@@ -8639,7 +8619,6 @@ const ProdutosPage: React.FC = () => {
 
                                               // ✅ Para unidades NÃO fracionadas: não permitir vírgula/ponto
                                               if (!isFracionado && (valorDigitado.includes(',') || valorDigitado.includes('.'))) {
-                                                console.log('🔍 Unidade não fracionada - removendo vírgula/ponto');
                                                 const valorLimpo = valorDigitado.replace(/[^0-9]/g, '');
                                                 setQuantidadeMovimentoTexto(valorLimpo);
 
@@ -8655,7 +8634,6 @@ const ProdutosPage: React.FC = () => {
 
                                               // Para unidades fracionadas: se termina com vírgula ou ponto, aguardar mais dígitos
                                               if (isFracionado && (valorDigitado.endsWith(',') || valorDigitado.endsWith('.'))) {
-                                                console.log('🔍 Unidade fracionada - vírgula/ponto no final, aguardando mais dígitos');
                                                 return;
                                               }
 
@@ -8673,7 +8651,6 @@ const ProdutosPage: React.FC = () => {
                                               const valor = parseFloat(valorSanitizado.replace(',', '.'));
 
                                               if (!isNaN(valor) && valor >= 0) {
-                                                console.log('🔍 Atualizando quantidade para:', valor);
                                                 setNovoMovimento({
                                                   ...novoMovimento,
                                                   quantidade: valor

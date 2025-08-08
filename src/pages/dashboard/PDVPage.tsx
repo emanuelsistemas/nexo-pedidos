@@ -1522,10 +1522,6 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função para verificar status do caixa
   const verificarStatusCaixa = async () => {
     try {
-      console.log('🔍 Verificando status do caixa...');
-      console.log('📋 pdvConfig:', pdvConfig);
-      console.log('🔧 controla_caixa:', pdvConfig?.controla_caixa);
-
       setLoadingCaixa(true);
 
       const { data: authData } = await supabase.auth.getUser();
@@ -1545,11 +1541,7 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      console.log('🏢 Empresa ID:', usuarioData.empresa_id);
-      console.log('👤 Usuário ID:', authData.user.id);
-
       // Verificar se há caixa aberto para este usuário (qualquer data)
-      console.log('📅 Buscando caixa aberto (qualquer data)');
 
       const { data: caixaData, error } = await supabase
         .from('caixa_controle')
@@ -1562,8 +1554,7 @@ const PDVPage: React.FC = () => {
         .limit(1)
         .single();
 
-      console.log('💰 Dados do caixa encontrados:', caixaData);
-      console.log('❌ Erro na consulta:', error);
+
 
       if (error && error.code !== 'PGRST116') {
         console.error('Erro ao verificar status do caixa:', error);
@@ -1572,7 +1563,6 @@ const PDVPage: React.FC = () => {
 
       // Se encontrou caixa aberto, definir como aberto
       if (caixaData) {
-        console.log('✅ Caixa encontrado - definindo como aberto');
         setCaixaAberto(true);
       } else {
         console.log('❌ Nenhum caixa aberto encontrado');
@@ -2171,8 +2161,6 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função para carregar dados do caixa aberto
   const carregarDadosCaixa = async () => {
     try {
-      console.log('🔍 Carregando dados do caixa...');
-
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) return;
 
@@ -2214,7 +2202,6 @@ const PDVPage: React.FC = () => {
         usuario_nome: usuarioNome?.nome || 'N/A'
       };
 
-      console.log('✅ Dados do caixa carregados:', caixaComUsuario);
       setDadosCaixa(caixaComUsuario);
 
       // Buscar formas de pagamento da empresa
@@ -2237,7 +2224,6 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      console.log('✅ Formas de pagamento carregadas:', formasData);
       setFormasPagamentoCaixa(formasData || []);
 
       // ✅ NOVO: Buscar recebimentos de fiado para este caixa (se fiado estiver habilitado)
@@ -2355,9 +2341,7 @@ const PDVPage: React.FC = () => {
               valoresPagamentosPorForma[formaOpcaoId] = 0;
             }
             valoresPagamentosPorForma[formaOpcaoId] += parseFloat(pagamento.valor_pagamento) || 0;
-            console.log('🔍 DEBUG - Valor adicionado:', valoresPagamentosPorForma[formaOpcaoId]);
           } else {
-            console.log('❌ DEBUG - Forma opcao ID não encontrada para empresa ID:', pagamento.formas_pagamento_empresa_id);
           }
         });
 
@@ -6797,8 +6781,6 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função para carregar listas de filtros
   const carregarListasFiltros = async () => {
     try {
-      console.log('🔍 Carregando listas de filtros...');
-
       // Obter usuário autenticado
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
@@ -6818,10 +6800,7 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      console.log('✅ Empresa ID encontrada:', usuarioData.empresa_id);
-
       // Carregar operadores (usuários que fizeram vendas com caixa)
-      console.log('🔍 Buscando operadores...');
 
       // Primeiro buscar IDs únicos de usuários dos caixas
       const { data: caixasData, error: caixasError } = await supabase
@@ -6832,12 +6811,9 @@ const PDVPage: React.FC = () => {
       if (caixasError) {
         console.error('❌ Erro ao buscar caixas:', caixasError);
       } else {
-        console.log('📊 Caixas encontrados:', caixasData?.length || 0);
-
         if (caixasData && caixasData.length > 0) {
           // Extrair IDs únicos de usuários
           const usuariosIds = [...new Set(caixasData.map(c => c.usuario_id))];
-          console.log('👥 IDs únicos de usuários:', usuariosIds);
 
           // Buscar dados dos usuários
           const { data: usuariosData, error: usuariosError } = await supabase
@@ -6848,17 +6824,14 @@ const PDVPage: React.FC = () => {
           if (usuariosError) {
             console.error('❌ Erro ao buscar usuários:', usuariosError);
           } else {
-            console.log('✅ Operadores encontrados:', usuariosData);
             setOperadoresList(usuariosData || []);
           }
         } else {
-          console.log('⚠️ Nenhum caixa encontrado');
           setOperadoresList([]);
         }
       }
 
       // Carregar formas de pagamento ativas da empresa
-      console.log('🔍 Buscando formas de pagamento...');
 
       // Primeiro buscar IDs das formas de pagamento da empresa
       const { data: formasEmpresaData, error: formasEmpresaError } = await supabase
@@ -6870,12 +6843,9 @@ const PDVPage: React.FC = () => {
       if (formasEmpresaError) {
         console.error('❌ Erro ao buscar formas da empresa:', formasEmpresaError);
       } else {
-        console.log('📊 Formas da empresa encontradas:', formasEmpresaData?.length || 0);
-
         if (formasEmpresaData && formasEmpresaData.length > 0) {
           // Extrair IDs das formas de pagamento
           const formasIds = formasEmpresaData.map(f => f.forma_pagamento_opcao_id);
-          console.log('💳 IDs das formas:', formasIds);
 
           // Buscar dados das formas de pagamento
           const { data: formasOpcoesData, error: formasOpcoesError } = await supabase
@@ -6886,28 +6856,18 @@ const PDVPage: React.FC = () => {
           if (formasOpcoesError) {
             console.error('❌ Erro ao buscar opções de formas:', formasOpcoesError);
           } else {
-            console.log('✅ Formas de pagamento encontradas:', formasOpcoesData);
-
             // ✅ NOVO: Adicionar "Fiado" à lista se estiver habilitado na configuração PDV
             let formasComFiado = [...(formasOpcoesData || [])];
-            console.log('🔍 DEBUG FIADO:', {
-              pdvConfig: pdvConfig,
-              fiado: pdvConfig?.fiado,
-              formasOriginais: formasOpcoesData?.length
-            });
 
             if (pdvConfig?.fiado) {
               // Verificar se "Fiado" já não está na lista
               const jaTemFiado = formasComFiado.some(forma => forma.nome?.toLowerCase() === 'fiado');
               if (!jaTemFiado) {
-                console.log('✅ Adicionando Fiado à lista de filtros');
                 formasComFiado.push({
                   id: 'fiado',
                   nome: 'Fiado',
                   tipo: 'fiado'
                 });
-              } else {
-                console.log('⚠️ Fiado já existe na lista');
               }
             } else {
               console.log('❌ Fiado não está habilitado no pdvConfig');
@@ -7121,7 +7081,6 @@ const PDVPage: React.FC = () => {
           .in('id', Array.from(formasPagamentoIds));
 
         if (formasData) {
-          console.log('✅ Formas de pagamento carregadas:', formasData);
           formasData.forEach(forma => {
             formasPagamentoMap.set(forma.id, forma);
           });
@@ -7224,7 +7183,7 @@ const PDVPage: React.FC = () => {
               throw new Error('Formato inválido de formas_pagamento');
             }
 
-            console.log('📊 Processando formas parciais:', formasParciais);
+
 
             // Enriquecer dados das formas com informações do mapa
             const formasEnriquecidas = formasParciais.map((pagamento: any) => {
@@ -7244,7 +7203,7 @@ const PDVPage: React.FC = () => {
               formas_detalhes: formasEnriquecidas
             };
 
-            console.log('✅ Forma de pagamento processada:', formaPagamentoInfo);
+
           } catch (error) {
             console.error('❌ Erro ao processar formas de pagamento:', error, 'Dados:', venda.formas_pagamento);
             formaPagamentoInfo = {
@@ -7691,7 +7650,6 @@ const PDVPage: React.FC = () => {
 
         if (!insumosError && insumosResult) {
           insumosData = insumosResult;
-          console.log('✅ Insumos carregados:', insumosData.length);
         } else if (insumosError) {
           console.error('❌ Erro ao carregar insumos:', insumosError);
         }
@@ -8700,10 +8658,7 @@ const PDVPage: React.FC = () => {
         nfce_data: nfceData
       };
 
-      console.log('📡 REPROCESSAMENTO - Payload completo:', JSON.stringify(requestPayload, null, 2));
-      console.log('📡 REPROCESSAMENTO - Empresa ID:', usuarioData.empresa_id);
-      console.log('📡 REPROCESSAMENTO - Dados da empresa:', empresaData);
-      console.log('📡 REPROCESSAMENTO - Config NFe:', nfeConfigData);
+
       console.log('📡 REPROCESSAMENTO - Venda para editar:', vendaParaEditarNfce);
 
       // Enviar para reprocessamento
@@ -15693,9 +15648,7 @@ const PDVPage: React.FC = () => {
         }
 
         caixaId = caixaAberto.id;
-        console.log('✅ Caixa encontrado:', caixaId);
       } else {
-        console.log('📝 Controle de caixa DESABILITADO - Venda sem vinculação de caixa');
       }
 
       // Gerar número da venda
