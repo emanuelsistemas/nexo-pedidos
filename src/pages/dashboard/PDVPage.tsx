@@ -52,7 +52,8 @@ import {
   Truck,
   MapPin,
   RotateCcw,
-  Edit
+  Edit,
+  Coffee
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -463,6 +464,7 @@ const PDVPage: React.FC = () => {
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
+  const [showConsumoInternoModal, setShowConsumoInternoModal] = useState(false);
 
   // ✅ NOVO: Estados para controle de caixa
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
@@ -3253,6 +3255,25 @@ const PDVPage: React.FC = () => {
         setShowCaixaModal(true);
         console.log('🎭 showCaixaModal definido como true');
       }
+    },
+    {
+      id: 'consumo-interno',
+      icon: Coffee,
+      label: 'Consumo Interno',
+      color: 'orange',
+      onClick: async (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        try {
+          setShowConsumoInternoModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de consumo interno:', error);
+          toast.error('Erro ao abrir consumo interno');
+        }
+      }
     }
   ];
 
@@ -3315,6 +3336,10 @@ const PDVPage: React.FC = () => {
       // ✅ NOVO: Se for o item 'observacao-venda', só mostrar se houver itens no carrinho
       if (item.id === 'observacao-venda') {
         return carrinho.length > 0;
+      }
+      // ✅ NOVO: Se for o item 'consumo-interno', só mostrar se a configuração estiver habilitada E houver itens no carrinho
+      if (item.id === 'consumo-interno') {
+        return pdvConfig?.consumo_interno === true && carrinho.length > 0;
       }
       // Se for um dos itens de controle de caixa, só mostrar se a configuração estiver habilitada
       if (['sangria', 'suprimento', 'pagamentos'].includes(item.id)) {
@@ -4635,7 +4660,8 @@ const PDVPage: React.FC = () => {
         ocultar_nfce_sem_impressao: false,
         ocultar_nfce_producao: false,
         ocultar_producao: false,
-        rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
+        rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
+        consumo_interno: false
       });
     } else {
       setPdvConfig(data);
@@ -14829,6 +14855,70 @@ const PDVPage: React.FC = () => {
       console.error('❌ Erro ao carregar vendas de delivery:', error);
     } finally {
       setCarregandoVendasDelivery(false);
+    }
+  };
+
+  // ✅ NOVA: Função para confirmar consumo interno
+  const confirmarConsumoInterno = async () => {
+    if (carrinho.length === 0) {
+      toast.error('Carrinho vazio');
+      return;
+    }
+
+    try {
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      // Processar cada item do carrinho
+      for (const item of carrinho) {
+        try {
+          // Chamar a função de atualização de estoque
+          const { error } = await supabase.rpc('atualizar_estoque_produto', {
+            p_produto_id: item.produto.id,
+            p_empresa_id: usuarioData.empresa_id,
+            p_quantidade: -item.quantidade, // Quantidade negativa para dar baixa
+            p_tipo_movimentacao: 'consumo_interno',
+            p_observacao: 'Consumo interno da empresa'
+          });
+
+          if (error) {
+            console.error(`❌ Erro ao dar baixa no produto ${item.produto.nome}:`, error);
+            toast.error(`Erro ao dar baixa no produto: ${item.produto.nome}`);
+            return;
+          }
+        } catch (error) {
+          console.error(`❌ Erro ao processar produto ${item.produto.nome}:`, error);
+          toast.error(`Erro ao processar produto: ${item.produto.nome}`);
+          return;
+        }
+      }
+
+      // Sucesso - limpar carrinho e fechar modal
+      setCarrinho([]);
+      setShowConsumoInternoModal(false);
+      toast.success('Consumo interno registrado com sucesso!');
+
+      // Recarregar estoque para atualizar as informações
+      await loadEstoque();
+
+    } catch (error) {
+      console.error('❌ Erro ao confirmar consumo interno:', error);
+      toast.error('Erro ao confirmar consumo interno');
     }
   };
 
@@ -34481,6 +34571,94 @@ const PDVPage: React.FC = () => {
                   className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors"
                 >
                   Fechar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Consumo Interno */}
+      <AnimatePresence>
+        {showConsumoInternoModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-orange-600/20 border-b border-orange-500/30 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Coffee size={24} className="text-orange-400" />
+                    <h3 className="text-xl font-semibold text-white">Consumo Interno</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowConsumoInternoModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="p-6">
+                <div className="mb-4">
+                  <p className="text-gray-300 text-sm mb-4">
+                    Confirme a baixa de estoque dos produtos abaixo para consumo interno da empresa:
+                  </p>
+                </div>
+
+                {/* Lista de produtos */}
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {carrinho.map((item) => (
+                    <div key={item.id} className="bg-gray-800/50 rounded-lg p-3 flex justify-between items-center">
+                      <div className="flex-1">
+                        <div className="text-white font-medium text-sm">{item.produto.nome}</div>
+                        <div className="text-gray-400 text-xs">
+                          {item.produto.unidade_medida?.sigla || 'UN'}
+                        </div>
+                      </div>
+                      <div className="text-orange-400 font-medium">
+                        {item.quantidade}x
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Total de itens */}
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-400">Total de itens:</span>
+                    <span className="text-white font-medium">
+                      {carrinho.reduce((total, item) => total + item.quantidade, 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-800/30 p-6 flex gap-3">
+                <button
+                  onClick={() => setShowConsumoInternoModal(false)}
+                  className="flex-1 px-4 py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarConsumoInterno}
+                  className="flex-1 px-4 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+                >
+                  <Coffee size={16} />
+                  Confirmar
                 </button>
               </div>
             </motion.div>

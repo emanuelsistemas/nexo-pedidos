@@ -63,11 +63,11 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     return insumoSelecionado?.quantidade || 0;
   };
 
-  // ✅ NOVO: Determinar incremento baseado na unidade de medida
+  // ✅ Determinar incremento baseado na unidade de medida (fracionados com 3 casas decimais)
   const getIncremento = (unidadeMedida: string): number => {
-    const unidadesFracionadas = ['KG', 'L', 'ML', 'G', 'M', 'CM', 'MM'];
-    const unidadeUpper = unidadeMedida.toUpperCase();
-    return unidadesFracionadas.includes(unidadeUpper) ? 0.1 : 1;
+    const unidadesFracionadas = ['KG', 'L', 'LT', 'ML', 'G', 'M', 'CM', 'MM'];
+    const unidadeUpper = (unidadeMedida || '').toUpperCase();
+    return unidadesFracionadas.includes(unidadeUpper) ? 0.001 : 1;
   };
 
   // ✅ NOVO: Formatar quantidade baseado na unidade
