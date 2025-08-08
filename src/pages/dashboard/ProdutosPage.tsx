@@ -29,6 +29,7 @@ interface UnidadeMedida {
   sigla: string;
   nome: string;
   empresa_id: string;
+  fracionado?: boolean;
   created_at?: string;
 }
 
@@ -1874,12 +1875,14 @@ const ProdutosPage: React.FC = () => {
   // Efeito para arredondar o estoque inicial quando a unidade de medida mudar
   useEffect(() => {
     if (novoProduto.estoque_inicial !== undefined && novoProduto.unidade_medida_id) {
-      // Verificar se a unidade de medida é KG
+      // Verificar se a unidade de medida permite fracionamento
       const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
-      const isKG = unidadeSelecionada?.sigla === 'KG';
+      const sigla = (unidadeSelecionada?.sigla || '').toString().trim().toUpperCase();
+      const unidadesFracionadas = ['KG','G','L','LT','ML','M','CM','MM','M2','M³','M3'];
+      const isFracionado = (unidadeSelecionada?.fracionado === true) || unidadesFracionadas.includes(sigla);
 
-      // Se não for KG e o valor for fracionado, arredondar para número inteiro
-      if (!isKG && novoProduto.estoque_inicial % 1 !== 0) {
+      // Se NÃO for fracionado e o valor for decimal, arredondar para número inteiro
+      if (!isFracionado && novoProduto.estoque_inicial % 1 !== 0) {
         setNovoProduto(prev => ({
           ...prev,
           estoque_inicial: Math.floor(prev.estoque_inicial || 0)
@@ -1891,12 +1894,14 @@ const ProdutosPage: React.FC = () => {
   // Efeito para arredondar o estoque mínimo quando a unidade de medida mudar
   useEffect(() => {
     if (novoProduto.estoque_minimo !== undefined && novoProduto.unidade_medida_id) {
-      // Verificar se a unidade de medida é KG
+      // Verificar se a unidade de medida permite fracionamento
       const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
-      const isKG = unidadeSelecionada?.sigla === 'KG';
+      const sigla = (unidadeSelecionada?.sigla || '').toString().trim().toUpperCase();
+      const unidadesFracionadas = ['KG','G','L','LT','ML','M','CM','MM','M2','M³','M3'];
+      const isFracionado = (unidadeSelecionada?.fracionado === true) || unidadesFracionadas.includes(sigla);
 
-      // Se não for KG e o valor for fracionado, arredondar para número inteiro
-      if (!isKG && novoProduto.estoque_minimo % 1 !== 0) {
+      // Se NÃO for fracionado e o valor for decimal, arredondar para número inteiro
+      if (!isFracionado && novoProduto.estoque_minimo % 1 !== 0) {
         setNovoProduto(prev => ({
           ...prev,
           estoque_minimo: Math.floor(prev.estoque_minimo || 0)
@@ -8468,10 +8473,13 @@ const ProdutosPage: React.FC = () => {
                                       })()}
                                       <p className="text-xs text-gray-500 mt-1">
                                         {(() => {
-                                          // Verificar se a unidade de medida é KG
+                                          // Verificar se a unidade de medida permite fracionamento
                                           const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
-                                          return unidadeSelecionada?.sigla === 'KG'
-                                            ? "Valores fracionados permitidos para KG (ex: 0,5)"
+                                          const sigla = (unidadeSelecionada?.sigla || '').toString().trim().toUpperCase();
+                                          const unidadesFracionadas = ['KG','G','L','LT','ML','M','CM','MM','M2','M³','M3'];
+                                          const isFracionado = (unidadeSelecionada?.fracionado === true) || unidadesFracionadas.includes(sigla);
+                                          return isFracionado
+                                            ? "Valores fracionados permitidos (ex: 0,500)"
                                             : "Apenas valores inteiros permitidos para esta unidade";
                                         })()}
                                       </p>
