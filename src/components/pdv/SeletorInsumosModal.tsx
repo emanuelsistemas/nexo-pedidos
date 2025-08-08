@@ -50,16 +50,11 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
   // Inicializar com quantidades padrão dos insumos
   useEffect(() => {
     if (isOpen && produto.insumos) {
-      console.log('🔍 [INSUMOS] Inicializando modal com insumos:', produto.insumos);
-      const insumosIniciais = produto.insumos.map(insumo => {
-        console.log(`🔍 [INSUMO] ${insumo.nome}: quantidade=${insumo.quantidade}, unidade=${insumo.unidade_medida}`);
-        return {
-          insumo,
-          quantidade: insumo.quantidade // Usar quantidade padrão do insumo
-        };
-      });
+      const insumosIniciais = produto.insumos.map(insumo => ({
+        insumo,
+        quantidade: insumo.quantidade // Usar quantidade padrão do insumo
+      }));
       setInsumosSelecionados(insumosIniciais);
-      console.log('🔍 [INSUMOS] Insumos inicializados:', insumosIniciais);
     }
   }, [isOpen, produto.insumos]);
 
@@ -68,11 +63,11 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     return insumoSelecionado?.quantidade || 0;
   };
 
-  // ✅ Determinar incremento baseado na unidade de medida (3 casas decimais para fracionados)
+  // ✅ NOVO: Determinar incremento baseado na unidade de medida
   const getIncremento = (unidadeMedida: string): number => {
-    const unidadesFracionadas = ['KG', 'G', 'L', 'LT', 'ML', 'M', 'CM', 'MM'];
-    const unidadeUpper = (unidadeMedida || '').toUpperCase();
-    return unidadesFracionadas.includes(unidadeUpper) ? 0.001 : 1;
+    const unidadesFracionadas = ['KG', 'L', 'ML', 'G', 'M', 'CM', 'MM'];
+    const unidadeUpper = unidadeMedida.toUpperCase();
+    return unidadesFracionadas.includes(unidadeUpper) ? 0.1 : 1;
   };
 
   // ✅ NOVO: Formatar quantidade baseado na unidade
@@ -82,8 +77,8 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
       // Unidade inteira - mostrar sem decimais
       return `${Math.round(quantidade)} ${unidade}`;
     } else {
-      // Unidade fracionada - mostrar com até 3 decimais
-      return `${quantidade.toFixed(3)} ${unidade}`;
+      // Unidade fracionada - mostrar com até 3 decimais, removendo zeros desnecessários
+      return `${quantidade.toFixed(3).replace(/\.?0+$/, '')} ${unidade}`;
     }
   };
 

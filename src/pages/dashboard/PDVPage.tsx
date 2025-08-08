@@ -52,8 +52,7 @@ import {
   Truck,
   MapPin,
   RotateCcw,
-  Edit,
-  Coffee
+  Edit
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -464,7 +463,6 @@ const PDVPage: React.FC = () => {
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
-  const [showConsumoInternoModal, setShowConsumoInternoModal] = useState(false);
 
   // ✅ NOVO: Estados para controle de caixa
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
@@ -529,7 +527,6 @@ const PDVPage: React.FC = () => {
   const [loadingBotaoSuprimento, setLoadingBotaoSuprimento] = useState(false);
   const [loadingBotaoMovimentos, setLoadingBotaoMovimentos] = useState(false);
   const [loadingBotaoDevolucoes, setLoadingBotaoDevolucoes] = useState(false);
-  const [loadingBotaoConsumoInterno, setLoadingBotaoConsumoInterno] = useState(false);
 
   // ✅ NOVO: Estados para sangria e suprimento
   const [valorSangria, setValorSangria] = useState('');
@@ -1537,13 +1534,15 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função para verificar status do caixa
   const verificarStatusCaixa = async () => {
     try {
-
+      console.log('🔍 Verificando status do caixa...');
+      console.log('📋 pdvConfig:', pdvConfig);
+      console.log('🔧 controla_caixa:', pdvConfig?.controla_caixa);
 
       setLoadingCaixa(true);
 
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
-
+        console.log('❌ Usuário não autenticado');
         return;
       }
 
@@ -1554,11 +1553,15 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) {
-
+        console.log('❌ Empresa não encontrada');
         return;
       }
 
+      console.log('🏢 Empresa ID:', usuarioData.empresa_id);
+      console.log('👤 Usuário ID:', authData.user.id);
+
       // Verificar se há caixa aberto para este usuário (qualquer data)
+      console.log('📅 Buscando caixa aberto (qualquer data)');
 
       const { data: caixaData, error } = await supabase
         .from('caixa_controle')
@@ -1571,7 +1574,8 @@ const PDVPage: React.FC = () => {
         .limit(1)
         .single();
 
-
+      console.log('💰 Dados do caixa encontrados:', caixaData);
+      console.log('❌ Erro na consulta:', error);
 
       if (error && error.code !== 'PGRST116') {
         console.error('Erro ao verificar status do caixa:', error);
@@ -1580,14 +1584,17 @@ const PDVPage: React.FC = () => {
 
       // Se encontrou caixa aberto, definir como aberto
       if (caixaData) {
-
+        console.log('✅ Caixa encontrado - definindo como aberto');
         setCaixaAberto(true);
       } else {
+        console.log('❌ Nenhum caixa aberto encontrado');
         // Se não encontrou caixa aberto e controle de caixa está habilitado, mostrar modal
         if (pdvConfig?.controla_caixa === true) {
+          console.log('🔒 Controle de caixa habilitado - bloqueando PDV');
           setCaixaAberto(false);
           setShowAberturaCaixaModal(true);
         } else {
+          console.log('🔓 Controle de caixa desabilitado - permitindo operação');
           setCaixaAberto(true); // Se não controla caixa, permitir operação
         }
       }
@@ -3488,33 +3495,6 @@ const PDVPage: React.FC = () => {
           setLoadingBotaoCaixa(false);
         }
       }
-    },
-    {
-      id: 'consumo-interno',
-      icon: Coffee,
-      label: 'Consumo Interno',
-      color: 'orange',
-      onClick: async (e?: React.MouseEvent) => {
-        if (e) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-
-        // ✅ NOVO: Evitar múltiplos cliques
-        if (loadingBotaoConsumoInterno) {
-          return;
-        }
-
-        try {
-          setLoadingBotaoConsumoInterno(true);
-          setShowConsumoInternoModal(true);
-        } catch (error) {
-          console.error('❌ Erro ao abrir modal de consumo interno:', error);
-          toast.error('Erro ao abrir consumo interno');
-        } finally {
-          setLoadingBotaoConsumoInterno(false);
-        }
-      }
     }
   ];
 
@@ -3532,7 +3512,6 @@ const PDVPage: React.FC = () => {
       case 'suprimento': return loadingBotaoSuprimento;
       case 'movimentos': return loadingBotaoMovimentos;
       case 'devolucoes': return loadingBotaoDevolucoes;
-      case 'consumo-interno': return loadingBotaoConsumoInterno;
       default: return false;
     }
   };
@@ -4003,18 +3982,21 @@ const PDVPage: React.FC = () => {
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
-
+  // ✅ NOVO: Monitor do buffer para debug
+  useEffect(() => {
+    console.log('🔄 Buffer de código de barras mudou:', codigoBarrasBuffer);
+  }, [codigoBarrasBuffer]);
 
   // Listener global para captura de código de barras, F1-F9 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-
+      console.log('🎹 Tecla pressionada:', event.key, 'Código:', event.code);
 
       // ✅ CORRIGIDO: Capturar apenas teclas F reais (F1, F2, etc.) para atalhos do menu PDV
       if (event.key.startsWith('F') && event.key.length >= 2 && event.key.length <= 3) {
         const fNumber = parseInt(event.key.substring(1));
         if (!isNaN(fNumber) && fNumber >= 0 && fNumber <= 9) {
-
+          console.log('🔧 Atalho F detectado:', fNumber);
           event.preventDefault();
           let menuIndex;
           if (fNumber === 0) {
@@ -4040,8 +4022,10 @@ const PDVPage: React.FC = () => {
 
       // Só funciona se a configuração estiver habilitada
       if (!pdvConfig?.venda_codigo_barras) {
+        console.log('⚠️ Captura de código de barras desabilitada na configuração');
         return;
       }
+      console.log('✅ Captura de código de barras habilitada');
 
       // Ignorar se estiver digitando em um input, textarea ou elemento editável
       const target = event.target as HTMLElement;
@@ -4055,9 +4039,11 @@ const PDVPage: React.FC = () => {
       }
 
       // Só capturar números
+      console.log('🔍 Testando se é número:', event.key, '| Teste regex:', /^\d$/.test(event.key));
       if (!/^\d$/.test(event.key)) {
         // Se pressionar Enter e tiver código no buffer, processar
         if (event.key === 'Enter' && codigoBarrasBuffer.length > 0) {
+          console.log('🚀 Enter pressionado com buffer:', codigoBarrasBuffer);
           processarCodigoBarras(codigoBarrasBuffer);
           setCodigoBarrasBuffer('');
           if (timeoutId) {
@@ -4065,17 +4051,24 @@ const PDVPage: React.FC = () => {
             setTimeoutId(null);
           }
         } else if (event.key === 'Enter') {
+          console.log('⚠️ Enter pressionado mas buffer vazio. Buffer atual:', codigoBarrasBuffer);
           // ✅ NOVO: Teste direto da função para debug
+          console.log('🧪 Testando função diretamente com código "49"');
           processarCodigoBarras('49');
         } else if (event.key === 'F12') {
           // ✅ NOVO: Teste com F12 para debug
+          console.log('🧪 F12 pressionado - testando busca de produto oculto');
           processarCodigoBarras('49');
         }
+        console.log('🔍 Tecla não numérica ignorada:', event.key);
         return;
       }
 
       // Adicionar número ao buffer
       const novoBuffer = codigoBarrasBuffer + event.key;
+      console.log('📝 Adicionando dígito:', event.key, '→ Buffer anterior:', codigoBarrasBuffer, '→ Novo buffer:', novoBuffer);
+      console.log('🔍 Estado React do buffer antes:', codigoBarrasBuffer);
+      console.log('🔍 Novo valor calculado:', novoBuffer);
       setCodigoBarrasBuffer(novoBuffer);
 
       // Limpar timeout anterior
@@ -4108,8 +4101,11 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Função para buscar produto incluindo ocultos (para validação)
   const buscarProdutoComOcultos = async (codigo: string): Promise<Produto | null> => {
+    console.log('🔍 Buscando produto com código:', codigo);
+
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
+      console.log('❌ Usuário não autenticado');
       return null;
     }
 
@@ -4120,8 +4116,11 @@ const PDVPage: React.FC = () => {
       .single();
 
     if (!usuarioData?.empresa_id) {
+      console.log('❌ Empresa não encontrada para o usuário');
       return null;
     }
+
+    console.log('🏢 Empresa ID:', usuarioData.empresa_id);
 
     const { data, error } = await supabase
       .from('produtos')
@@ -4179,39 +4178,59 @@ const PDVPage: React.FC = () => {
       .limit(1);
 
     if (error) {
+      console.log('❌ Erro na consulta:', error);
       return null;
     }
 
     if (!data || data.length === 0) {
+      console.log('❌ Nenhum produto encontrado com código:', codigo);
       return null;
     }
 
     const produto = data[0] as Produto;
+    console.log('✅ Produto encontrado:', {
+      id: produto.id,
+      nome: produto.nome,
+      codigo: produto.codigo,
+      materia_prima: produto.materia_prima,
+      ocultar_visualizacao_pdv: produto.ocultar_visualizacao_pdv
+    });
+
     return produto;
   };
 
   // Função para processar código de barras capturado
   const processarCodigoBarras = async (codigo: string) => {
+    console.log('🚀 Processando código de barras:', codigo);
+
     // Primeiro, buscar produto incluindo ocultos para validação
     const produtoCompleto = await buscarProdutoComOcultos(codigo);
 
     if (produtoCompleto) {
+      console.log('📦 Produto encontrado na busca completa');
+
       // ✅ NOVO: Verificar se produto está oculto no PDV
       if (produtoCompleto.ocultar_visualizacao_pdv) {
+        console.log('🚫 Produto está oculto no PDV - mostrando modal específico');
         setProdutoOcultoPDV(produtoCompleto);
         setShowProdutoOcultoPDV(true);
         return;
       }
 
+      console.log('✅ Produto não está oculto - buscando na lista normal');
       // Se não está oculto, buscar na lista normal (que já exclui ocultos) - BUSCA EXATA
       const produto = produtos.find(p =>
         (p.codigo_barras && p.codigo_barras === codigo) ||
         (p.codigo && p.codigo === codigo)
       );
       if (produto) {
+        console.log('✅ Produto encontrado na lista normal - adicionando ao carrinho');
         adicionarAoCarrinho(produto);
+      } else {
+        console.log('❌ Produto não encontrado na lista normal (pode estar oculto)');
       }
     } else {
+      console.log('❌ Produto não encontrado - mostrando modal não encontrado');
       // Produto realmente não encontrado
       mostrarProdutoNaoEncontrado(codigo);
     }
@@ -5023,8 +5042,7 @@ const PDVPage: React.FC = () => {
         ocultar_nfce_sem_impressao: false,
         ocultar_nfce_producao: false,
         ocultar_producao: false,
-        rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
-        consumo_interno: false
+        rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
       });
     } else {
       setPdvConfig(data);
@@ -7103,7 +7121,11 @@ const PDVPage: React.FC = () => {
 
             // ✅ NOVO: Adicionar "Fiado" à lista se estiver habilitado na configuração PDV
             let formasComFiado = [...(formasOpcoesData || [])];
-
+            console.log('🔍 DEBUG FIADO:', {
+              pdvConfig: pdvConfig,
+              fiado: pdvConfig?.fiado,
+              formasOriginais: formasOpcoesData?.length
+            });
 
             if (pdvConfig?.fiado) {
               // Verificar se "Fiado" já não está na lista
@@ -9941,7 +9963,17 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Função que processa a adição do produto (extraída da função original)
   const processarAdicaoProduto = async (produto: Produto, quantidadePersonalizada?: number) => {
 
-
+    // 🔍 DEBUG: Log detalhado do produto recebido
+    console.log('🔍 DEBUG processarAdicaoProduto - Produto recebido:', {
+      id: produto.id,
+      nome: produto.nome,
+      temInsumos: produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0,
+      insumos: produto.insumos,
+      selecionar_insumos_venda: produto.selecionar_insumos_venda,
+      controlar_quantidades_insumo: produto.controlar_quantidades_insumo,
+      insumosSelecionados: (produto as any).insumosSelecionados,
+      quantidadePersonalizada
+    });
 
     // ✅ Verificar opções adicionais ANTES de qualquer outro fluxo
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
@@ -9950,7 +9982,14 @@ const PDVPage: React.FC = () => {
     const temInsumos = produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0;
     const deveSelecionarInsumos = produto.selecionar_insumos_venda && temInsumos;
 
-
+    // 🔍 DEBUG: Log da verificação de insumos
+    console.log('🔍 DEBUG verificação insumos:', {
+      temInsumos,
+      selecionar_insumos_venda: produto.selecionar_insumos_venda,
+      deveSelecionarInsumos,
+      jaTemInsumosSelecionados: !!(produto as any).insumosSelecionados,
+      vaiAbrirModal: deveSelecionarInsumos && !(produto as any).insumosSelecionados
+    });
 
     if (deveSelecionarInsumos && !(produto as any).insumosSelecionados) {
       console.log('🎯 ABRINDO MODAL DE INSUMOS para produto:', produto.nome);
@@ -10158,7 +10197,12 @@ const PDVPage: React.FC = () => {
 
     // ✅ CORREÇÃO: Aguardar venda ser criada antes de salvar item
     const aguardarVendaEsalvarItem = async () => {
-
+      console.log('🔍 DEBUG aguardarVendaEsalvarItem INICIADO:', {
+        produto: produto.nome,
+        isFirstItem,
+        vendaEmAndamento: !!vendaEmAndamento,
+        isEditingVenda
+      });
 
       // Se é primeiro item e não há venda, aguardar criação
       if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
@@ -10170,15 +10214,25 @@ const PDVPage: React.FC = () => {
         while (!vendaEmAndamento && tentativas < maxTentativas) {
           // Log reduzido para evitar spam no console
           if (tentativas % 10 === 0) {
-            // Log removido para limpeza do console
+            console.log(`🔍 DEBUG: Aguardando estado vendaEmAndamento ser atualizado... Tentativa ${tentativas}/${maxTentativas}`, {
+              vendaEmAndamento: !!vendaEmAndamento,
+              criandoVenda
+            });
           }
           await new Promise(resolve => setTimeout(resolve, 100));
           tentativas++;
         }
 
         if (!vendaEmAndamento) {
+          console.log('❌ DEBUG: Timeout - estado vendaEmAndamento não foi atualizado após', maxTentativas, 'tentativas');
+          console.log('❌ DEBUG: Isso indica um problema de timing/race condition no React state');
           return;
         }
+
+        console.log('✅ DEBUG: Estado vendaEmAndamento finalmente atualizado!', {
+          vendaId: vendaEmAndamento.id,
+          tentativasUsadas: tentativas
+        });
 
 
       }
@@ -10188,9 +10242,15 @@ const PDVPage: React.FC = () => {
 
 
       if (vendaAtual) {
+        console.log('🔍 DEBUG: Venda encontrada, tentando salvar item:', {
+          produto: produto.nome,
+          vendaId: vendaAtual.id,
+          isEditingVenda
+        });
 
         // ✅ CORREÇÃO: Só salvar se não é venda recuperada (para evitar duplicação)
         if (!isEditingVenda) {
+          console.log('🔍 DEBUG: Chamando salvarItemNaVendaEmAndamento para:', produto.nome);
           const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
 
           if (!itemSalvo) {
@@ -13885,7 +13945,7 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para criar venda em andamento no primeiro item (adaptada do sistema de rascunhos NFe)
   const criarVendaEmAndamento = async (): Promise<boolean> => {
-
+    console.log('🔍 DEBUG criarVendaEmAndamento INICIADO');
 
     try {
       // Obter dados do usuário
@@ -13975,7 +14035,10 @@ const PDVPage: React.FC = () => {
       // ✅ CORREÇÃO: Venda NOVA deve ter isEditingVenda = false
       setIsEditingVenda(false);
 
-
+      console.log('✅ DEBUG criarVendaEmAndamento SUCESSO:', {
+        vendaId: novaVendaEmAndamento.id,
+        numero: novaVendaEmAndamento.numero_venda
+      });
 
       return true;
 
@@ -13987,10 +14050,14 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para salvar item na venda em andamento (adaptada do sistema de rascunhos NFe)
   const salvarItemNaVendaEmAndamento = async (item: ItemCarrinho): Promise<any> => {
-
+    console.log('🔍 DEBUG salvarItemNaVendaEmAndamento INICIADO:', {
+      produto: item.produto.nome,
+      vendaEmAndamento: !!vendaEmAndamento
+    });
 
     try {
       if (!vendaEmAndamento) {
+        console.log('❌ DEBUG: Sem venda em andamento para salvar item:', item.produto.nome);
         return false;
       }
 
@@ -14756,6 +14823,14 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA: Função para filtrar vendas abertas
   const filtrarVendasAbertas = (vendas: any[]) => {
+    console.log('🔍 DEBUG - Filtros ativos:', {
+      filtroNomeCliente,
+      filtroMesa,
+      filtroComanda,
+      filtroDataInicioVendas,
+      filtroDataFimVendas,
+      totalVendas: vendas.length
+    });
 
     return vendas.filter(venda => {
       // Filtro por nome do cliente
@@ -15183,6 +15258,74 @@ const PDVPage: React.FC = () => {
       console.error('❌ Erro ao carregar vendas de delivery:', error);
     } finally {
       setCarregandoVendasDelivery(false);
+    }
+  };
+
+  // ✅ NOVA: Função para confirmar consumo interno
+  const confirmarConsumoInterno = async () => {
+    if (carrinho.length === 0) {
+      toast.error('Carrinho vazio');
+      return;
+    }
+
+    try {
+      setLoadingBotaoConsumoInterno(true);
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      // Processar cada item do carrinho
+      for (const item of carrinho) {
+        try {
+          // Chamar a função de atualização de estoque
+          const { error } = await supabase.rpc('atualizar_estoque_produto', {
+            p_produto_id: item.produto.id,
+            p_empresa_id: usuarioData.empresa_id,
+            p_quantidade: -item.quantidade, // Quantidade negativa para dar baixa
+            p_tipo_movimentacao: 'consumo_interno',
+            p_observacao: 'Consumo interno da empresa'
+          });
+
+          if (error) {
+            console.error(`❌ Erro ao dar baixa no produto ${item.produto.nome}:`, error);
+            toast.error(`Erro ao dar baixa no produto: ${item.produto.nome}`);
+            return;
+          }
+        } catch (error) {
+          console.error(`❌ Erro ao processar produto ${item.produto.nome}:`, error);
+          toast.error(`Erro ao processar produto: ${item.produto.nome}`);
+          return;
+        }
+      }
+
+      // Sucesso - limpar carrinho e fechar modal
+      setCarrinho([]);
+      setShowConsumoInternoModal(false);
+      toast.success('Consumo interno registrado com sucesso!');
+
+      // Recarregar estoque para atualizar as informações
+      await loadEstoque();
+
+    } catch (error) {
+      console.error('❌ Erro ao confirmar consumo interno:', error);
+      toast.error('Erro ao confirmar consumo interno');
+    } finally {
+      setLoadingBotaoConsumoInterno(false);
     }
   };
 
@@ -16810,44 +16953,18 @@ const PDVPage: React.FC = () => {
               // Sem documento = consumidor não identificado
               return {};
             })(),
-            produtos: carrinho.filter(item => !item.isDevolucao).map(item => {
-              // ✅ CORREÇÃO CRÍTICA: Para item 999999, usar dados da configuração PDV
-              if (item.produto.codigo === '999999' && configVendaSemProduto) {
-                return {
-                  codigo: item.produto.codigo, // Código 999999
-                  descricao: item.produto.nome,
-                  quantidade: item.quantidade,
-                  valor_unitario: item.produto.preco,
-                  unidade: item.produto.unidade_medida, // 'UN' fixo para venda sem produto
-                  // ✅ DADOS FISCAIS DA CONFIGURAÇÃO PDV (não do produto fictício):
-                  ncm: configVendaSemProduto.venda_sem_produto_ncm,
-                  cfop: configVendaSemProduto.venda_sem_produto_cfop,
-                  origem_produto: configVendaSemProduto.venda_sem_produto_origem,
-                  cst_icms: configVendaSemProduto.venda_sem_produto_cst,
-                  csosn_icms: configVendaSemProduto.venda_sem_produto_csosn,
-                  cest: configVendaSemProduto.venda_sem_produto_cest,
-                  margem_st: configVendaSemProduto.venda_sem_produto_margem_st,
-                  aliquota_icms: configVendaSemProduto.venda_sem_produto_aliquota_icms,
-                  aliquota_pis: configVendaSemProduto.venda_sem_produto_aliquota_pis,
-                  aliquota_cofins: configVendaSemProduto.venda_sem_produto_aliquota_cofins,
-                  codigo_barras: null, // Venda sem produto não tem código de barras
-                  adicionais: item.adicionais || []
-                };
-              } else {
-                // ✅ PRODUTOS NORMAIS: Usar dados reais do produto
-                return {
-                  codigo: item.produto.codigo,
-                  descricao: item.produto.nome,
-                  quantidade: item.quantidade,
-                  valor_unitario: item.produto.preco,
-                  unidade: item.produto.unidade_medida?.sigla,
-                  ncm: item.produto.ncm,
-                  cfop: item.produto.cfop,
-                  codigo_barras: item.produto.codigo_barras,
-                  adicionais: item.adicionais || []
-                };
-              }
-            })
+            produtos: carrinho.filter(item => !item.isDevolucao).map(item => ({
+              codigo: item.produto.codigo, // Código real do produto (SEM FALLBACK)
+              descricao: item.produto.nome,
+              quantidade: item.quantidade,
+              valor_unitario: item.produto.preco,
+              // ✅ CORREÇÃO: Para venda sem produto, usar unidade_medida diretamente
+              unidade: item.vendaSemProduto ? item.produto.unidade_medida : item.produto.unidade_medida?.sigla,
+              ncm: item.produto.ncm, // NCM real do produto (SEM FALLBACK)
+              cfop: item.produto.cfop, // CFOP real do produto (SEM FALLBACK)
+              codigo_barras: item.produto.codigo_barras, // Código de barras real (SEM FALLBACK)
+              adicionais: item.adicionais || [] // ✅ NOVO: Incluir adicionais para NFC-e
+            }))
           };
 
           // Dados NFC-e preparados
@@ -19409,6 +19526,7 @@ const PDVPage: React.FC = () => {
         }
 
         // ✅ NOVO: Verificar se é produto oculto antes de mostrar "não encontrado"
+        console.log('🔍 Produto não encontrado no campo de busca, verificando se está oculto:', termoBusca);
         processarCodigoBarras(termoBusca);
 
         // Manter o foco
@@ -28653,7 +28771,14 @@ const PDVPage: React.FC = () => {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={async () => {
-
+                            // 🔍 DEBUG: Log do clique no produto
+                            console.log('🔍 CLIQUE NO PRODUTO:', {
+                              id: produto.id,
+                              nome: produto.nome,
+                              temInsumos: produto.insumos && Array.isArray(produto.insumos) && produto.insumos.length > 0,
+                              selecionar_insumos_venda: produto.selecionar_insumos_venda,
+                              insumos: produto.insumos
+                            });
 
                             // ✅ CORREÇÃO: Fechar o modal de produtos IMEDIATAMENTE (igual ao comportamento da busca por código)
                             setShowAreaProdutos(false);

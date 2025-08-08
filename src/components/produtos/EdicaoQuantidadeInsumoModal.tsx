@@ -16,15 +16,13 @@ interface EdicaoQuantidadeInsumoModalProps {
   onClose: () => void;
   insumo: Insumo | null;
   onConfirm: (novaQuantidade: number) => void;
-  controlarLimites?: boolean; // quando true, respeita quantidade_minima/máxima
 }
 
 const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = ({
   isOpen,
   onClose,
   insumo,
-  onConfirm,
-  controlarLimites = false
+  onConfirm
 }) => {
   const [quantidade, setQuantidade] = useState<number>(0);
   const [quantidadeTemp, setQuantidadeTemp] = useState<string>('');
@@ -85,10 +83,11 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
     if (!insumo) return;
 
     const incremento = getIncremento(insumo.unidade_medida);
-    const quantidadeMinima = controlarLimites ? (insumo.quantidade_minima || insumo.quantidade) : 0;
+    const quantidadeMinima = insumo.quantidade_minima || insumo.quantidade;
     const novaQuantidade = Math.max(quantidadeMinima, quantidade - incremento);
 
-    if (controlarLimites && novaQuantidade < quantidadeMinima) {
+    // Verificar quantidade mínima
+    if (novaQuantidade < quantidadeMinima) {
       showMessage('error', `Quantidade mínima: ${formatarQuantidade(quantidadeMinima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
       return;
     }
@@ -108,16 +107,16 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
     if (!insumo) return;
 
     const novaQuantidade = parseFloat(quantidadeTemp) || 0;
-    const quantidadeMinima = controlarLimites ? (insumo.quantidade_minima || insumo.quantidade) : 0;
+    const quantidadeMinima = insumo.quantidade_minima || insumo.quantidade;
 
     // Validar quantidade mínima
-    if (controlarLimites && novaQuantidade < quantidadeMinima) {
+    if (novaQuantidade < quantidadeMinima) {
       showMessage('error', `Quantidade mínima: ${formatarQuantidade(quantidadeMinima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
       return;
     }
 
     // Validar quantidade máxima (se definida e não for 0)
-    if (controlarLimites && insumo.quantidade_maxima && insumo.quantidade_maxima > 0 && novaQuantidade > insumo.quantidade_maxima) {
+    if (insumo.quantidade_maxima && insumo.quantidade_maxima > 0 && novaQuantidade > insumo.quantidade_maxima) {
       showMessage('error', `Quantidade máxima: ${formatarQuantidade(insumo.quantidade_maxima, insumo.unidade_medida)} ${insumo.unidade_medida}`);
       return;
     }
@@ -202,7 +201,7 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
                   }}
                   className="w-24 px-3 py-2 text-center text-lg bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-primary-500"
                   step={getIncremento(insumo.unidade_medida)}
-                  min={controlarLimites ? (insumo.quantidade_minima || insumo.quantidade) : 0}
+                  min={insumo.quantidade_minima || insumo.quantidade}
                   autoFocus
                 />
                 <span className="text-gray-400 text-sm">{insumo.unidade_medida}</span>
