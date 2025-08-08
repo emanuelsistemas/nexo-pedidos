@@ -303,6 +303,9 @@ const ProdutosPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [productSearchTerms, setProductSearchTerms] = useState<Record<string, string>>({});
   const [productSortOrders, setProductSortOrders] = useState<Record<string, 'asc' | 'desc'>>({});
+  // Estados para pesquisa global de produtos
+  const [globalProductSearch, setGlobalProductSearch] = useState('');
+  const [isGlobalSearchExpanded, setIsGlobalSearchExpanded] = useState(false);
   const [produtoChacoalhando, setProdutoChacoalhando] = useState<string | null>(null);
   const [imagensCarregando, setImagensCarregando] = useState<Record<string, boolean>>({});
   const [novoProduto, setNovoProduto] = useState<Partial<Produto>>({
@@ -5203,7 +5206,67 @@ const ProdutosPage: React.FC = () => {
   };
 
   const filteredAndSortedGrupos = (() => {
-    // Primeiro filtrar por termo de busca
+    // Se há pesquisa global de produtos, filtrar grupos que contêm produtos correspondentes
+    if (globalProductSearch.trim()) {
+      const searchTermLower = globalProductSearch.toLowerCase();
+      const filtered = grupos.filter(grupo => {
+        // Verificar se algum produto do grupo corresponde à pesquisa
+        return grupo.produtos.some(produto =>
+          produto.nome.toLowerCase().includes(searchTermLower) ||
+          produto.codigo.toLowerCase().includes(searchTermLower) ||
+          (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(searchTermLower))
+        );
+      }).map(grupo => ({
+        ...grupo,
+        // Filtrar apenas os produtos que correspondem à pesquisa
+        produtos: grupo.produtos.filter(produto =>
+          produto.nome.toLowerCase().includes(searchTermLower) ||
+          produto.codigo.toLowerCase().includes(searchTermLower) ||
+          (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(searchTermLower))
+        )
+      }));
+
+      // Aplicar ordenação aos grupos filtrados
+      const gruposIds = grupos.map(g => g.id).join(',');
+      const gruposOrderStr = gruposOrder.join(',');
+
+      return filtered.sort((a, b) => {
+        const aTemPosicao = (a as any).ordenacao_cardapio_habilitada === true &&
+                           (a as any).ordenacao_cardapio_digital !== null &&
+                           (a as any).ordenacao_cardapio_digital !== undefined &&
+                           (a as any).ordenacao_cardapio_digital !== '';
+        const bTemPosicao = (b as any).ordenacao_cardapio_habilitada === true &&
+                           (b as any).ordenacao_cardapio_digital !== null &&
+                           (b as any).ordenacao_cardapio_digital !== undefined &&
+                           (b as any).ordenacao_cardapio_digital !== '';
+
+        if (aTemPosicao && bTemPosicao) {
+          const posicaoA = Number((a as any).ordenacao_cardapio_digital);
+          const posicaoB = Number((b as any).ordenacao_cardapio_digital);
+          return posicaoA - posicaoB;
+        }
+
+        if (aTemPosicao && !bTemPosicao) return -1;
+        if (!aTemPosicao && bTemPosicao) return 1;
+
+        if (gruposOrder.length > 0 && gruposOrderStr !== gruposIds) {
+          const indexA = gruposOrder.indexOf(a.id);
+          const indexB = gruposOrder.indexOf(b.id);
+
+          if (indexA !== -1 && indexB !== -1) {
+            return indexA - indexB;
+          }
+
+          if (indexA !== -1) return -1;
+          if (indexB !== -1) return 1;
+        }
+
+        const comparison = a.nome.localeCompare(b.nome);
+        return sortOrder === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    // Filtro normal por nome de grupo (quando não há pesquisa global)
     const filtered = grupos.filter(grupo =>
       grupo.nome.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -6213,7 +6276,23 @@ const ProdutosPage: React.FC = () => {
   return (
     <div className="w-full px-4 py-1">
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-semibold text-white">Produtos</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-white">Produtos</h1>
+          <motion.button
+            type="button"
+            onClick={() => {
+              setIsGlobalSearchExpanded(!isGlobalSearchExpanded);
+              if (isGlobalSearchExpanded) {
+                setGlobalProductSearch('');
+              }
+            }}
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Search size={20} />
+          </motion.button>
+        </div>
         <Button
           type="button"
           variant="primary"
@@ -6223,6 +6302,39 @@ const ProdutosPage: React.FC = () => {
           + Adicionar Grupo
         </Button>
       </div>
+
+      {/* Campo de pesquisa global expansível */}
+      <AnimatePresence>
+        {isGlobalSearchExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden mb-3"
+          >
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Pesquisar produtos em todos os grupos..."
+                value={globalProductSearch}
+                onChange={(e) => setGlobalProductSearch(e.target.value)}
+                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                autoFocus
+              />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              {globalProductSearch && (
+                <button
+                  onClick={() => setGlobalProductSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!isDataReady ? (
         <div>

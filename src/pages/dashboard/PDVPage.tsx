@@ -20674,9 +20674,8 @@ const PDVPage: React.FC = () => {
                                   {item.insumosSelecionados.map((insumoSelecionado, index) => (
                                     <div key={index} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-2">
                                       <div className="flex items-center gap-2 flex-1">
-                                        {/* ✅ NOVO: Quantidade na frente do nome */}
                                         <span className="text-gray-300 text-sm font-medium">
-                                          {formatarQtdUnidade(insumoSelecionado.quantidade * item.quantidade, insumoSelecionado.insumo.unidade_medida)}x - {insumoSelecionado.insumo.nome}
+                                          {insumoSelecionado.insumo.nome}
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-2">
