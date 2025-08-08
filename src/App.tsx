@@ -11,6 +11,7 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import ConexaoPage from './pages/dashboard/ConexaoPage';
 import ProdutosPage from './pages/dashboard/ProdutosPage';
 import AdicionaisPage from './pages/dashboard/AdicionaisPage';
+import ImportarProdutosPage from './pages/dashboard/ImportarProdutosPage';
 import UnidadeMedidaPage from './pages/dashboard/UnidadeMedidaPage';
 import ClientesPage from './pages/dashboard/ClientesPage';
 import VendedoresPage from './pages/dashboard/VendedoresPage';
@@ -66,6 +67,7 @@ function App() {
           <Route index element={<DashboardPage />} />
           <Route path="produtos" element={<ProdutosPage />} />
           <Route path="produtos/adicionais" element={<AdicionaisPage />} />
+          <Route path="produtos/importar" element={<ImportarProdutosPage />} />
           <Route path="unidade-medida" element={<UnidadeMedidaPage />} />
           <Route path="clientes" element={<ClientesPage />} />
           <Route path="vendedores" element={<VendedoresPage />} />

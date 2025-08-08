@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck, FileText, UserCheck, Briefcase, Receipt, FileX, BarChart3, RotateCcw } from 'lucide-react';
+import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck, FileText, UserCheck, Briefcase, Receipt, FileX, BarChart3, RotateCcw, Upload } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
@@ -173,6 +173,14 @@ const Sidebar: React.FC = () => {
         tooltip: 'Opções Adicionais'
       });
     }
+
+    // Adicionar submenu "Importar Produtos"
+    produtosSubmenu.push({
+      icon: Upload,
+      label: 'Importar Produtos',
+      path: '/dashboard/produtos/importar',
+      tooltip: 'Importar Produtos'
+    });
 
     const menuItems = [
       { icon: Home, label: 'Dashboard', path: '/dashboard', tooltip: 'Dashboard' },
