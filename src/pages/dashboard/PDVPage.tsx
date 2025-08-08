@@ -1937,6 +1937,83 @@ const PDVPage: React.FC = () => {
         return;
       }
 
+      // ✅ NOVO: Verificar se há mesas ou comandas abertas antes de fechar o caixa
+      const validacoesPendentes = [];
+
+      // Verificar mesas abertas se a empresa trabalha com mesas
+      if (pdvConfig?.mesas) {
+        const { data: mesasAbertas, error: mesasError } = await supabase
+          .from('pdv')
+          .select('id, numero_venda, mesa_numero, nome_cliente')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('status_venda', 'salva')
+          .not('mesa_numero', 'is', null);
+
+        if (mesasError) {
+          console.error('❌ Erro ao verificar mesas abertas:', mesasError);
+          toast.error('Erro ao verificar mesas abertas');
+          return;
+        }
+
+        if (mesasAbertas && mesasAbertas.length > 0) {
+          const numerosMesas = mesasAbertas.map(v => v.mesa_numero).join(', ');
+          validacoesPendentes.push(`${mesasAbertas.length} mesa(s) aberta(s): ${numerosMesas}`);
+        }
+      }
+
+      // Verificar comandas abertas se a empresa trabalha com comandas
+      if (pdvConfig?.comandas) {
+        const { data: comandasAbertas, error: comandasError } = await supabase
+          .from('pdv')
+          .select('id, numero_venda, comanda_numero, nome_cliente')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('status_venda', 'salva')
+          .not('comanda_numero', 'is', null);
+
+        if (comandasError) {
+          console.error('❌ Erro ao verificar comandas abertas:', comandasError);
+          toast.error('Erro ao verificar comandas abertas');
+          return;
+        }
+
+        if (comandasAbertas && comandasAbertas.length > 0) {
+          const numerosComandas = comandasAbertas.map(v => v.comanda_numero).join(', ');
+          validacoesPendentes.push(`${comandasAbertas.length} comanda(s) aberta(s): ${numerosComandas}`);
+        }
+      }
+
+      // Se há validações pendentes, mostrar modal de aviso
+      if (validacoesPendentes.length > 0) {
+        const mensagem = validacoesPendentes.join('\n\n');
+
+        // Fechar modal de fechamento atual
+        setShowFecharCaixaModal(false);
+
+        // Mostrar modal de validação
+        const confirmar = window.confirm(
+          `⚠️ ATENÇÃO: Não é possível fechar o caixa!\n\n` +
+          `Existem vendas em aberto que precisam ser finalizadas antes:\n\n` +
+          `${mensagem}\n\n` +
+          `Por favor, finalize todas as vendas em aberto antes de fechar o caixa.\n\n` +
+          `Deseja abrir o menu de controle para verificar as vendas?`
+        );
+
+        if (confirmar) {
+          // Abrir modal de mesas se há mesas abertas
+          if (pdvConfig?.mesas && mesasAbertas && mesasAbertas.length > 0) {
+            await carregarVendasMesas();
+            setShowMesasModal(true);
+          }
+          // Ou abrir modal de comandas se há comandas abertas
+          else if (pdvConfig?.comandas && comandasAbertas && comandasAbertas.length > 0) {
+            await carregarVendasComandas();
+            setShowComandasModal(true);
+          }
+        }
+
+        return;
+      }
+
       // Buscar caixa aberto do usuário
       const { data: caixaAberto, error: caixaError } = await supabase
         .from('caixa_controle')
@@ -6437,7 +6514,7 @@ const PDVPage: React.FC = () => {
                 <div class="adicionais">
                   <strong>Insumos:</strong><br>
                   ${item.insumos_selecionados.map(insumoSelecionado => `
-                    • ${(()=>{const q=(insumoSelecionado.quantidade*(item.quantidade||1));const u=insumoSelecionado.insumo.unidade_medida||'';const fr=['KG','L','LT','ML','G','M','CM','MM'].includes(u.toUpperCase());return (fr?q.toFixed(3).replace('.',',').replace(/,?0+$/,''):Math.round(q).toString())+`x ${insumoSelecionado.insumo.nome}`;})()}
+                    • ${(()=>{const q=(insumoSelecionado.quantidade*(item.quantidade||1));const u=insumoSelecionado.insumo.unidade_medida||'';const fr=['KG','L','LT','ML','G','M','CM','MM'].includes(u.toUpperCase());return (fr?q.toFixed(3).replace('.',','):Math.round(q).toString())+`x ${insumoSelecionado.insumo.nome}`;})()}
                   `).join('<br>')}
                 </div>
               ` : ''}
@@ -10629,8 +10706,7 @@ const PDVPage: React.FC = () => {
     if (isUnidadeFracionadaSigla(unidade)) {
       return quantidade
         .toFixed(3)
-        .replace('.', ',')
-        .replace(/,?0+$/, '');
+        .replace('.', ','); // manter 3 casas para fracionados
     }
     return Math.round(quantidade).toString();
   };
@@ -16283,11 +16359,17 @@ const PDVPage: React.FC = () => {
 
           // Baixando estoque do produto
 
+          // ✅ Ajustar quantidade para estoque conforme unidade (fracionados com 3 casas)
+          const unidadeProduto = item.produto?.unidade_medida?.sigla;
+          const quantidadeProdutoAjustada = isUnidadeFracionadaSigla(unidadeProduto)
+            ? Math.round(item.quantidade * 1000) / 1000
+            : Math.round(item.quantidade);
+
           const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
             p_produto_id: item.produto.id,
-            p_quantidade: -item.quantidade, // Quantidade negativa para baixa
+            p_quantidade: -quantidadeProdutoAjustada, // Quantidade negativa para baixa
             p_tipo_operacao: 'venda_pdv',
-            p_observacao: `Venda PDV #${numeroVenda}`
+            p_observacao: `Venda PDV #${numeroVenda} - Unidade: ${unidadeProduto || 'UN'} - Qtd: ${quantidadeProdutoAjustada}`
           });
 
           if (estoqueError) {
@@ -16326,15 +16408,19 @@ const PDVPage: React.FC = () => {
               try {
                 // ✅ Calcular quantidade proporcional do insumo selecionado
                 const quantidadeInsumoTotal = insumoSelecionado.quantidade * item.quantidade;
+                const unidadeInsumo = insumoSelecionado.insumo.unidade_medida;
+                const quantidadeInsumoAjustada = isUnidadeFracionadaSigla(unidadeInsumo)
+                  ? Math.round(quantidadeInsumoTotal * 1000) / 1000
+                  : Math.round(quantidadeInsumoTotal);
 
-                console.log(`🔍 [INSUMOS] Baixando insumo selecionado: ${insumoSelecionado.insumo.nome} - Quantidade: ${quantidadeInsumoTotal}`);
+                console.log(`🔍 [INSUMOS] Baixando insumo selecionado: ${insumoSelecionado.insumo.nome} - Qtd: ${quantidadeInsumoAjustada} ${unidadeInsumo}`);
 
                 // ✅ Dar baixa no estoque do insumo selecionado
                 const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
                   p_produto_id: insumoSelecionado.insumo.produto_id,
-                  p_quantidade: -quantidadeInsumoTotal, // Quantidade negativa para baixa
+                  p_quantidade: -quantidadeInsumoAjustada, // Quantidade negativa para baixa
                   p_tipo_operacao: 'consumo_insumo_selecionado',
-                  p_observacao: `Consumo de insumo selecionado - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumoSelecionado.insumo.nome}`
+                  p_observacao: `Consumo de insumo selecionado - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumoSelecionado.insumo.nome} - Unidade: ${unidadeInsumo} - Qtd: ${quantidadeInsumoAjustada}`
                 });
 
                 if (insumoError) {
@@ -16363,15 +16449,19 @@ const PDVPage: React.FC = () => {
               try {
                 // ✅ Calcular quantidade proporcional do insumo
                 const quantidadeInsumo = insumo.quantidade * item.quantidade;
+                const unidadeInsumoAuto = insumo.unidade_medida;
+                const quantidadeInsumoAjustadaAuto = isUnidadeFracionadaSigla(unidadeInsumoAuto)
+                  ? Math.round(quantidadeInsumo * 1000) / 1000
+                  : Math.round(quantidadeInsumo);
 
-                console.log(`🔍 [INSUMOS] Baixando insumo automático: ${insumo.nome} - Quantidade: ${quantidadeInsumo}`);
+                console.log(`🔍 [INSUMOS] Baixando insumo automático: ${insumo.nome} - Qtd: ${quantidadeInsumoAjustadaAuto} ${unidadeInsumoAuto}`);
 
                 // ✅ Dar baixa no estoque do insumo
                 const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
                   p_produto_id: insumo.produto_id,
-                  p_quantidade: -quantidadeInsumo, // Quantidade negativa para baixa
+                  p_quantidade: -quantidadeInsumoAjustadaAuto, // Quantidade negativa para baixa
                   p_tipo_operacao: 'consumo_insumo',
-                  p_observacao: `Consumo de insumo automático - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumo.nome}`
+                  p_observacao: `Consumo de insumo automático - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome} - Insumo: ${insumo.nome} - Unidade: ${unidadeInsumoAuto} - Qtd: ${quantidadeInsumoAjustadaAuto}`
                 });
 
                 if (insumoError) {
