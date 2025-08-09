@@ -11256,6 +11256,29 @@ const PDVPage: React.FC = () => {
     return calcularPrecoComDescontoQuantidade(produto, quantidade);
   };
 
+  // ✅ NOVO: Calcular acréscimo unitário por insumos (para incluir valor do insumo na venda)
+  const calcularAcrescimoInsumosUnitario = (insumosSelecionados?: Array<{ insumo: any; quantidade: number }>): number => {
+    if (!insumosSelecionados || insumosSelecionados.length === 0) return 0;
+
+    let acrescimo = 0;
+
+    for (const sel of insumosSelecionados) {
+      const i = sel.insumo || {};
+      // Só considerar insumos marcados para incluir valor e com quantidade > 0
+      if (i.adicionar_valor_insumo && sel.quantidade && sel.quantidade > 0) {
+        // Buscar preço padrão do insumo pelo produto_id
+        const produtoInsumo = produtos.find(p => p.id === i.produto_id);
+        const precoPadrao = produtoInsumo?.preco || 0;
+        // Regra simples: para UN multiplicar pela quantidade; para outras unidades, cobrar 1x
+        const unidade = (i.unidade_medida || '').toUpperCase();
+        const fator = unidade === 'UN' ? sel.quantidade : 1;
+        acrescimo += precoPadrao * fator;
+      }
+    }
+
+    return acrescimo;
+  };
+
   // Função para adicionar produto com vendedor específico
   const adicionarProdutoComVendedor = async (produto: Produto, vendedor: any, quantidadePersonalizada?: number) => {
     // ✅ FLUXO SEQUENCIAL: Esta função só é chamada quando vendedor já foi selecionado

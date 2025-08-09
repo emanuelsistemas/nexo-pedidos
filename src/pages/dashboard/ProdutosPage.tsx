@@ -10455,7 +10455,25 @@ const ProdutosPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    {/* ✅ NOVO: Mensagem informativa sobre produtos já lançados */}
+                    {materiasPrimasFiltradas.some(produto => produtoInsumos.some(insumo => insumo.produto_id === produto.id)) && (
+                      <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                          </svg>
+                          <span className="text-orange-400 text-sm font-medium">
+                            Produtos com tag "Lançado" já estão na lista de insumos e não podem ser selecionados novamente.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {materiasPrimasFiltradas.map((produto) => {
+                      // ✅ NOVO: Verificar se produto já está na lista de insumos
+                      const jaLancado = produtoInsumos.some(insumo => insumo.produto_id === produto.id);
                       const isSelecionado = insumosSelecionados[produto.id]?.selecionado || false;
                       const quantidade = insumosSelecionados[produto.id]?.quantidade || '';
                       const unidadeMedida = produto.unidade_medida;
@@ -10463,7 +10481,7 @@ const ProdutosPage: React.FC = () => {
                       const isFracionado = (unidadeMedida?.fracionado === true) || ['KG','G','L','LT','ML','M','CM','MM','M2','M³','M3'].includes(siglaUM);
 
                       return (
-                        <div key={produto.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                        <div key={produto.id} className={`border rounded-lg p-4 ${jaLancado ? 'bg-gray-900/50 border-gray-600' : 'bg-gray-800/50 border-gray-700'}`}>
                           <div className="flex items-start gap-3">
                             {/* Checkbox de seleção */}
                             <div className="flex items-center pt-1">
@@ -10471,17 +10489,20 @@ const ProdutosPage: React.FC = () => {
                                 type="checkbox"
                                 id={`insumo-${produto.id}`}
                                 checked={isSelecionado}
+                                disabled={jaLancado} // ✅ NOVO: Desabilitar se já foi lançado
                                 onChange={(e) => {
-                                  setInsumosSelecionados(prev => ({
-                                    ...prev,
-                                    [produto.id]: {
-                                      ...prev[produto.id],
-                                      selecionado: e.target.checked,
-                                      quantidade: e.target.checked ? prev[produto.id]?.quantidade || '' : ''
-                                    }
-                                  }));
+                                  if (!jaLancado) { // ✅ NOVO: Só permitir mudança se não foi lançado
+                                    setInsumosSelecionados(prev => ({
+                                      ...prev,
+                                      [produto.id]: {
+                                        ...prev[produto.id],
+                                        selecionado: e.target.checked,
+                                        quantidade: e.target.checked ? prev[produto.id]?.quantidade || '' : ''
+                                      }
+                                    }));
+                                  }
                                 }}
-                                className="rounded border-gray-600 text-primary-500 focus:ring-primary-500/20"
+                                className={`rounded border-gray-600 focus:ring-primary-500/20 ${jaLancado ? 'text-gray-500 cursor-not-allowed' : 'text-primary-500'}`}
                               />
                             </div>
 
@@ -10519,26 +10540,34 @@ const ProdutosPage: React.FC = () => {
                                     );
                                   })()}
                                 </div>
-                                <div>
-                                  <label
-                                    htmlFor={`insumo-${produto.id}`}
-                                    className="text-white font-medium cursor-pointer"
-                                  >
-                                    {produto.nome}
-                                  </label>
-                                  <p className="text-gray-400 text-sm">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <label
+                                      htmlFor={`insumo-${produto.id}`}
+                                      className={`font-medium ${jaLancado ? 'text-gray-400 cursor-not-allowed' : 'text-white cursor-pointer'}`}
+                                    >
+                                      {produto.nome}
+                                    </label>
+                                    {/* ✅ NOVO: Tag "Lançado" para produtos já adicionados */}
+                                    {jaLancado && (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                                        Lançado
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className={`text-sm ${jaLancado ? 'text-gray-500' : 'text-gray-400'}`}>
                                     Unidade: {unidadeMedida?.sigla || 'N/A'} ({unidadeMedida?.nome || 'Não definida'})
                                   </p>
                                   {produto.codigo && (
-                                    <p className="text-gray-500 text-xs">
+                                    <p className={`text-xs ${jaLancado ? 'text-gray-600' : 'text-gray-500'}`}>
                                       Código: {produto.codigo}
                                     </p>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Campo de quantidade (só aparece se selecionado) */}
-                              {isSelecionado && (
+                              {/* Campo de quantidade (só aparece se selecionado E não foi lançado) */}
+                              {isSelecionado && !jaLancado && (
                                 <div className="mt-3 pl-13">
                                   <label className="block text-sm font-medium text-gray-300 mb-2">
                                     Quantidade por porção ({unidadeMedida?.sigla || 'UN'})
