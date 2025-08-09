@@ -34088,6 +34088,17 @@ const PDVPage: React.FC = () => {
                     </span>
                   </div>
                   <div>
+                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>💰 Valor Total: </span>
+                    <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>
+                      R$ {(() => {
+                        const valorTotal = Object.values(formasPagamento).reduce((total, forma) => {
+                          return total + (forma.valorTotal || 0);
+                        }, 0);
+                        return formatarValorMonetario(valorTotal.toString());
+                      })()}
+                    </span>
+                  </div>
+                  <div>
                     <span style={{ fontSize: '14px', color: '#9ca3af' }}>📈 Status: </span>
                     <span style={{ fontWeight: 'bold', color: '#10b981' }}>
                       ABERTO
