@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, Download, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Trash2, Tag } from 'lucide-react';
+import { X, Upload, Download, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Trash2, Tag, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
@@ -196,6 +196,17 @@ const ImportarProdutosPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+
+// Interface para erros de validação
+interface ValidationError {
+  linha: number;
+  coluna: string;
+  valor: string;
+  erro: string;
+  tipo: 'obrigatorio' | 'formato' | 'tamanho' | 'invalido';
+}
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     itemId: string;
@@ -417,22 +428,47 @@ const ImportarProdutosPage: React.FC = () => {
         throw new Error('Planilha está vazia ou não contém dados válidos');
       }
 
-      // 4. Atualizar total de linhas
+      // 4. Validar dados da planilha
+      setProcessingMessage('Validando dados da planilha...');
+
       await supabase
         .from('importacao_produtos')
         .update({
           total_linhas: rows.length,
+          etapa_atual: 'validando_dados',
+          mensagem_atual: 'Validando dados da planilha...',
+          progresso_percentual: 15
+        })
+        .eq('id', importacaoId);
+
+      const { linhasValidas, erros } = validarDadosPlanilha(rows);
+
+      // Atualizar contadores de validação
+      await supabase
+        .from('importacao_produtos')
+        .update({
+          linhas_sucesso: linhasValidas.length,
+          linhas_erro: erros.length,
+          log_erros: erros.length > 0 ? erros : null,
           etapa_atual: 'processando_grupos',
-          mensagem_atual: 'Analisando e criando grupos de produtos...',
+          mensagem_atual: `Validação concluída. ${linhasValidas.length} linhas válidas, ${erros.length} com erro.`,
           progresso_percentual: 20
         })
         .eq('id', importacaoId);
 
-      // 5. Processar grupos únicos
+      // Se não há linhas válidas, parar o processamento
+      if (linhasValidas.length === 0) {
+        throw new Error(`Nenhuma linha válida encontrada. ${erros.length} erros de validação detectados.`);
+      }
+
+      // Usar apenas as linhas válidas para processamento
+      const rowsParaProcessar = linhasValidas;
+
+      // 5. Processar grupos únicos das linhas válidas
       setProcessingMessage('Analisando e criando grupos de produtos...');
 
       const gruposUnicos = new Set<string>();
-      rows.forEach(row => {
+      rowsParaProcessar.forEach(row => {
         if (row[0] && typeof row[0] === 'string') { // Coluna GRUPO*
           gruposUnicos.add(row[0].trim().toUpperCase());
         }
@@ -704,6 +740,99 @@ const ImportarProdutosPage: React.FC = () => {
       default:
         return 'Não informado';
     }
+  };
+
+  // Função para validar dados da planilha
+  const validarDadosPlanilha = (rows: any[][]): { linhasValidas: any[][], erros: ValidationError[] } => {
+    const erros: ValidationError[] = [];
+    const linhasValidas: any[][] = [];
+
+    // Definir campos obrigatórios e suas posições
+    const camposObrigatorios = [
+      { posicao: 0, nome: 'GRUPO', tipo: 'texto' },
+      { posicao: 1, nome: 'Código do Produto', tipo: 'numero' },
+      { posicao: 3, nome: 'Nome do Produto', tipo: 'texto' },
+      { posicao: 4, nome: 'Unidade de Medida', tipo: 'texto' },
+      { posicao: 6, nome: 'Preço Padrão', tipo: 'numero' }
+    ];
+
+    rows.forEach((row, index) => {
+      const numeroLinha = index + 2; // +2 porque começamos da linha 2 (após cabeçalho)
+      let linhaTemErro = false;
+
+      // Verificar se a linha não está completamente vazia
+      const linhaVazia = row.every(cell => !cell || cell.toString().trim() === '');
+      if (linhaVazia) {
+        return; // Ignorar linhas vazias
+      }
+
+      // Validar campos obrigatórios
+      camposObrigatorios.forEach(campo => {
+        const valor = row[campo.posicao];
+        const valorString = valor ? valor.toString().trim() : '';
+
+        // Verificar se campo obrigatório está vazio
+        if (!valorString) {
+          erros.push({
+            linha: numeroLinha,
+            coluna: campo.nome,
+            valor: '',
+            erro: 'Campo obrigatório não preenchido',
+            tipo: 'obrigatorio'
+          });
+          linhaTemErro = true;
+          return;
+        }
+
+        // Validações específicas por tipo
+        if (campo.tipo === 'numero') {
+          const numero = parseFloat(valorString.replace(',', '.'));
+          if (isNaN(numero) || numero < 0) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString,
+              erro: 'Deve ser um número válido maior ou igual a zero',
+              tipo: 'formato'
+            });
+            linhaTemErro = true;
+          }
+        }
+
+        if (campo.tipo === 'texto') {
+          // Validar tamanho mínimo
+          if (valorString.length < 1) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString,
+              erro: 'Texto muito curto',
+              tipo: 'tamanho'
+            });
+            linhaTemErro = true;
+          }
+
+          // Validar tamanho máximo
+          if (valorString.length > 255) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString.substring(0, 50) + '...',
+              erro: 'Texto muito longo (máximo 255 caracteres)',
+              tipo: 'tamanho'
+            });
+            linhaTemErro = true;
+          }
+        }
+      });
+
+      // Se a linha não tem erros, adicionar às linhas válidas
+      if (!linhaTemErro) {
+        linhasValidas.push(row);
+      }
+    });
+
+    return { linhasValidas, erros };
   };
 
   const getRegimeTributarioColor = (regime: number | null) => {
@@ -990,7 +1119,22 @@ const ImportarProdutosPage: React.FC = () => {
                       <div className="text-xs text-gray-400">Grupos Criados</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-red-400">{importacao.linhas_erro}</div>
+                      <button
+                        onClick={() => {
+                          if (importacao.log_erros && importacao.log_erros.length > 0) {
+                            setValidationErrors(importacao.log_erros);
+                            setShowErrorModal(true);
+                          }
+                        }}
+                        className={`text-lg font-semibold transition-colors ${
+                          importacao.linhas_erro > 0
+                            ? 'text-red-400 hover:text-red-300 cursor-pointer'
+                            : 'text-red-400 cursor-default'
+                        }`}
+                        disabled={!importacao.log_erros || importacao.log_erros.length === 0}
+                      >
+                        {importacao.linhas_erro}
+                      </button>
                       <div className="text-xs text-gray-400">Erros</div>
                     </div>
                   </div>
@@ -1142,6 +1286,101 @@ const ImportarProdutosPage: React.FC = () => {
           isOpen={showProcessingModal}
           message={processingMessage}
         />
+      </AnimatePresence>
+
+      {/* Modal de Erros de Validação */}
+      <AnimatePresence>
+        {showErrorModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowErrorModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="text-red-400" size={24} />
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">Erros de Validação</h3>
+                      <p className="text-gray-400">
+                        {validationErrors.length} erro{validationErrors.length !== 1 ? 's' : ''} encontrado{validationErrors.length !== 1 ? 's' : ''} na planilha
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowErrorModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="space-y-4">
+                  {validationErrors.map((erro, index) => (
+                    <div
+                      key={index}
+                      className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`p-1 rounded ${
+                          erro.tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
+                          erro.tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
+                          erro.tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-orange-500/20 text-orange-400'
+                        }`}>
+                          {erro.tipo === 'obrigatorio' ? <AlertCircle size={16} /> :
+                           erro.tipo === 'formato' ? <AlertTriangle size={16} /> :
+                           erro.tipo === 'tamanho' ? <FileText size={16} /> :
+                           <X size={16} />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-white font-medium">Linha {erro.linha}</span>
+                            <span className="text-gray-400">•</span>
+                            <span className="text-gray-300">{erro.coluna}</span>
+                          </div>
+                          <p className="text-red-400 text-sm mb-2">{erro.erro}</p>
+                          {erro.valor && (
+                            <div className="bg-gray-900/50 rounded px-3 py-2">
+                              <span className="text-gray-400 text-xs">Valor encontrado:</span>
+                              <p className="text-gray-300 text-sm font-mono">{erro.valor}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-800">
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-400">
+                    Corrija os erros na planilha e tente importar novamente
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => setShowErrorModal(false)}
+                  >
+                    Fechar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

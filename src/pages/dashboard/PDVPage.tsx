@@ -2419,7 +2419,7 @@ const PDVPage: React.FC = () => {
           observacao,
           total_itens,
           valor_total,
-          usuarios!inner(
+          usuarios:usuario_id (
             nome
           )
         `)
