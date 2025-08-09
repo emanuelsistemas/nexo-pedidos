@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Minus, RotateCcw, Search } from 'lucide-react';
 import { showMessage } from '../../utils/toast';
+import { supabase } from '../../lib/supabase';
 
 interface Insumo {
   produto_id: string;
@@ -41,6 +42,7 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
 }) => {
   const [insumosSelecionados, setInsumosSelecionados] = useState<InsumoSelecionado[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [precosInsumos, setPrecosInsumos] = useState<Record<string, number>>({});
   const [editandoQuantidade, setEditandoQuantidade] = useState<string | null>(null);
   const [quantidadeTemp, setQuantidadeTemp] = useState<string>('');
   const [filtroInsumos, setFiltroInsumos] = useState<string>(''); // ✅ NOVO: Estado para filtro de busca
@@ -64,17 +66,48 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     return nomeMatch || codigoMatch;
   }) || [];
 
-  // Inicializar com quantidades padrão dos insumos
+  // Inicializar com quantidades padrão dos insumos e buscar preços quando necessário
   useEffect(() => {
-    if (isOpen && produto.insumos) {
-      const insumosIniciais = produto.insumos.map(insumo => ({
-        insumo,
-        // Se o insumo exigir seleção manual, iniciar desabilitado (quantidade 0, removido)
-        quantidade: insumo.selecionar_manualmente_insumo ? 0 : insumo.quantidade,
-        removido: !!insumo.selecionar_manualmente_insumo
-      }));
-      setInsumosSelecionados(insumosIniciais);
-    }
+    const carregar = async () => {
+      if (isOpen && produto.insumos) {
+        const insumosIniciais = produto.insumos.map(insumo => ({
+          insumo,
+          // Se o insumo exigir seleção manual, iniciar desabilitado (quantidade 0, removido)
+          quantidade: insumo.selecionar_manualmente_insumo ? 0 : insumo.quantidade,
+          removido: !!insumo.selecionar_manualmente_insumo
+        }));
+        setInsumosSelecionados(insumosIniciais);
+
+        // Buscar preços dos insumos que podem incluir valor
+        const ids = produto.insumos
+          .filter(i => i.adicionar_valor_insumo)
+          .map(i => `'${i.produto_id}'`)
+          .join(',');
+
+        if (ids.length > 0) {
+          const { data, error } = await supabase
+            .from('produtos')
+            .select('id, preco, promocao, valor_desconto')
+            .filter('id', 'in', `(${ids})`);
+
+          if (!error && data) {
+            const mapa: Record<string, number> = {};
+            data.forEach((p: any) => {
+              let preco = p.preco || 0;
+              if (p.promocao && p.valor_desconto) {
+                // Preço promocional básico (produto do insumo)
+                preco = Math.max(0, preco - p.valor_desconto);
+              }
+              mapa[p.id] = preco;
+            });
+            setPrecosInsumos(mapa);
+          }
+        } else {
+          setPrecosInsumos({});
+        }
+      }
+    };
+    carregar();
   }, [isOpen, produto.insumos]);
 
   const getQuantidadeInsumo = (insumoId: string): number => {
@@ -330,6 +363,43 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
             <div className="bg-primary-600/20 border border-primary-500/30 rounded-full px-3 py-1 flex-shrink-0">
               <span className="text-sm font-medium text-primary-300 truncate">{produto.nome}</span>
             </div>
+            {/* Tag com o valor do produto (considerando promoção) + acréscimos habilitados */}
+            <div className="bg-green-600/20 border border-green-500/30 rounded-full px-3 py-1 flex items-center gap-2 flex-shrink-0">
+              {(() => {
+                // Preço base do produto (com promoção, se houver)
+                const precoBase = (produto as any).valor_promocional !== undefined
+                  ? (produto as any).valor_promocional
+                  : produto.preco;
+                const emPromocao = (produto as any).valor_promocional !== undefined && (produto as any).valor_promocional < produto.preco;
+
+                // Somar valores dos insumos habilitados e com adicionar_valor_insumo
+                const acrescimo = insumosSelecionados.reduce((acc, sel) => {
+                  const i = sel.insumo;
+                  if (i.adicionar_valor_insumo && sel.quantidade > 0) {
+                    const precoInsumo = precosInsumos[i.produto_id] || 0;
+                    const unidade = (i.unidade_medida || '').toUpperCase();
+                    const fator = unidade === 'UN' ? sel.quantidade : 1;
+                    return acc + (precoInsumo * fator);
+                  }
+                  return acc;
+                }, 0);
+
+                const total = (precoBase || 0) + acrescimo;
+
+                return (
+                  <span className="text-sm">
+                    {emPromocao ? (
+                      <>
+                        <span className="line-through text-gray-400 mr-2">{(produto.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <span className="text-green-400 font-semibold">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                      </>
+                    ) : (
+                      <span className="text-green-400 font-semibold">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    )}
+                  </span>
+                );
+              })()}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -405,6 +475,15 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                       <p className={`font-medium ${removido ? 'text-gray-400 line-through' : 'text-white'}`}>{insumo.nome} {removido && <span className="ml-2 text-xs text-red-400">(removido)</span>}</p>
                       <p className={`text-sm ${removido ? 'text-gray-500 line-through' : 'text-gray-400'}`}>
                         Padrão: {formatarQuantidadeDisplay(insumo.quantidade, insumo.unidade_medida)}
+                        {/* Mostrar preço do insumo quando a flag de incluir estiver ativa */}
+                        {insumo.adicionar_valor_insumo && (
+                          <span className="ml-2 text-green-400">
+                            {(() => {
+                              const preco = precosInsumos[insumo.produto_id] || 0;
+                              return `+ ${preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+                            })()}
+                          </span>
+                        )}
                         {produto.controlar_quantidades_insumo && (insumo.quantidade_minima || insumo.quantidade_maxima) && (
                           <span className="ml-2">
                             ({insumo.quantidade_minima && `mín: ${formatarQuantidadeDisplay(insumo.quantidade_minima, insumo.unidade_medida)}`}

@@ -10668,13 +10668,15 @@ const ProdutosPage: React.FC = () => {
                         const valorNum = parseFloat(valorStr.replace(',', '.'));
                         const isFracionado = !!produto.unidade_medida?.fracionado;
 
-                        // Validações específicas
-                        if (!valorStr || valorStr === '0' || valorStr === '0,000' || valorStr === '0.000') {
+                        // ✅ VALIDAÇÃO MAIS RIGOROSA: Verificar todos os casos de zero e vazio
+                        console.log(`Validando ${produto.nome}: valorStr="${valorStr}", valorNum=${valorNum}`); // Debug
+
+                        if (!valorStr || valorStr.trim() === '' || valorStr.trim() === '0' || valorStr.trim() === '0,0' || valorStr.trim() === '0,00' || valorStr.trim() === '0,000' || valorStr.trim() === '0.0' || valorStr.trim() === '0.00' || valorStr.trim() === '0.000') {
                           insumosInvalidos.push(`${produto.nome}: quantidade não pode estar vazia ou ser zero`);
                         } else if (isNaN(valorNum) || valorNum <= 0) {
-                          insumosInvalidos.push(`${produto.nome}: quantidade deve ser maior que zero`);
+                          insumosInvalidos.push(`${produto.nome}: quantidade deve ser maior que zero (valor atual: ${valorNum})`);
                         } else if (!isFracionado && !Number.isInteger(valorNum)) {
-                          insumosInvalidos.push(`${produto.nome}: deve usar números inteiros`);
+                          insumosInvalidos.push(`${produto.nome}: deve usar números inteiros (valor atual: ${valorNum})`);
                         }
                       });
 
