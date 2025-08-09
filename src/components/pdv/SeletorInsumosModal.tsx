@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, RotateCcw } from 'lucide-react';
+import { X, Plus, Minus, RotateCcw, Search } from 'lucide-react';
 import { showMessage } from '../../utils/toast';
 
 interface Insumo {
@@ -9,6 +9,7 @@ interface Insumo {
   unidade_medida: string;
   quantidade_minima?: number;
   quantidade_maxima?: number;
+  codigo?: string; // ✅ NOVO: Código do produto para busca
 }
 
 interface InsumoSelecionado {
@@ -40,13 +41,26 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [editandoQuantidade, setEditandoQuantidade] = useState<string | null>(null);
   const [quantidadeTemp, setQuantidadeTemp] = useState<string>('');
+  const [filtroInsumos, setFiltroInsumos] = useState<string>(''); // ✅ NOVO: Estado para filtro de busca
 
   // Limpar seleções quando o modal fechar
   useEffect(() => {
     if (!isOpen) {
       setInsumosSelecionados([]);
+      setFiltroInsumos(''); // ✅ NOVO: Limpar filtro ao fechar modal
     }
   }, [isOpen]);
+
+  // ✅ NOVO: Função para filtrar insumos por nome ou código
+  const insumosFiltrados = produto.insumos?.filter(insumo => {
+    if (!filtroInsumos.trim()) return true;
+
+    const termoBusca = filtroInsumos.toLowerCase().trim();
+    const nomeMatch = insumo.nome.toLowerCase().includes(termoBusca);
+    const codigoMatch = insumo.codigo?.toLowerCase().includes(termoBusca);
+
+    return nomeMatch || codigoMatch;
+  }) || [];
 
   // Inicializar com quantidades padrão dos insumos
   useEffect(() => {
@@ -313,6 +327,28 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
           </button>
         </div>
 
+        {/* ✅ NOVO: Campo de busca */}
+        <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Buscar insumo por nome ou código..."
+              value={filtroInsumos}
+              onChange={(e) => setFiltroInsumos(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            {filtroInsumos && (
+              <button
+                onClick={() => setFiltroInsumos('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Conteúdo com scroll interno */}
         <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {isLoading ? (
@@ -326,9 +362,25 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
                 <p className="text-sm">Este produto não possui insumos configurados</p>
               </div>
             </div>
+          ) : insumosFiltrados.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center text-gray-400">
+                <Search className="mx-auto mb-3 text-gray-500" size={48} />
+                <p className="text-lg font-medium mb-2">Nenhum insumo encontrado</p>
+                <p className="text-sm">Tente buscar por outro nome ou código</p>
+                {filtroInsumos && (
+                  <button
+                    onClick={() => setFiltroInsumos('')}
+                    className="mt-3 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                  >
+                    Limpar filtro
+                  </button>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="space-y-3">
-              {produto.insumos.map(insumo => {
+              {insumosFiltrados.map(insumo => {
                 const selecionado = insumosSelecionados.find(i => i.insumo.produto_id === insumo.produto_id);
                 const quantidade = selecionado ? selecionado.quantidade : getQuantidadeInsumo(insumo.produto_id);
                 const removido = selecionado?.removido || quantidade === 0;

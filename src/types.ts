@@ -55,8 +55,6 @@ export interface Produto {
   selecionar_insumos_venda?: boolean;
   // Campo para controlar quantidades no insumo
   controlar_quantidades_insumo?: boolean;
-  // Campo para selecionar manualmente insumo na venda
-  selecionar_manualmente_insumo?: boolean;
 }
 
 export interface ProdutoInsumo {
@@ -64,6 +62,8 @@ export interface ProdutoInsumo {
   nome: string;
   quantidade: number;
   unidade_medida: string;
+  selecionar_manualmente_insumo?: boolean;
+  adicionar_valor_insumo?: boolean;
 }
 
 export interface Grupo {
