@@ -34065,9 +34065,22 @@ const PDVPage: React.FC = () => {
                 marginBottom: '20px',
                 border: '1px solid #4b5563'
               }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: '#10b981' }}>
-                  📊 Status da Abertura
-                </h4>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <h4 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#10b981' }}>
+                    📊 Status da Abertura
+                  </h4>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    color: '#10b981',
+                    backgroundColor: '#065f46',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #10b981'
+                  }}>
+                    📈 ABERTO
+                  </span>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
                     <span style={{ fontSize: '14px', color: '#9ca3af' }}>👤 Operador: </span>
@@ -34091,17 +34104,14 @@ const PDVPage: React.FC = () => {
                     <span style={{ fontSize: '14px', color: '#9ca3af' }}>💰 Valor Total: </span>
                     <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>
                       R$ {(() => {
-                        const valorTotal = Object.values(formasPagamento).reduce((total, forma) => {
-                          return total + (forma.valorTotal || 0);
+                        const valorTotal = formasPagamentoCaixa.reduce((total, forma) => {
+                          const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
+                          const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
+                          const valorPagamentos = valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] || 0;
+                          return total + valorAtual + valorFiado + valorPagamentos;
                         }, 0);
                         return formatarValorMonetario(valorTotal.toString());
                       })()}
-                    </span>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '14px', color: '#9ca3af' }}>📈 Status: </span>
-                    <span style={{ fontWeight: 'bold', color: '#10b981' }}>
-                      ABERTO
                     </span>
                   </div>
                 </div>
