@@ -2109,16 +2109,8 @@ interface ValidationError {
                                 className="bg-gray-900/30 rounded-lg p-3 border-l-4 border-l-red-400"
                               >
                                 <div className="flex items-start gap-3">
-                                  <div className={`p-1.5 rounded ${
-                                    erro.tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
-                                    erro.tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
-                                    erro.tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
-                                    'bg-orange-500/20 text-orange-400'
-                                  }`}>
-                                    {erro.tipo === 'obrigatorio' ? <AlertCircle size={14} /> :
-                                     erro.tipo === 'formato' ? <AlertTriangle size={14} /> :
-                                     erro.tipo === 'tamanho' ? <FileText size={14} /> :
-                                     <X size={14} />}
+                                  <div className="bg-red-500/20 text-red-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                                    {index + 1}
                                   </div>
                                   <div className="flex-1">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
