@@ -1,6 +1,6 @@
 # Sistema de Importação de Produtos - Documentação Técnica
 
-## 📋 Status Atual: EDIÇÃO INLINE DE ERROS IMPLEMENTADA ✅
+## 📋 Status Atual: SISTEMA COMPLETO DE ERROS IMPLEMENTADO ✅
 
 ### 🎯 O que está funcionando:
 - ✅ Upload de planilhas Excel (.xlsx, .xls, .csv)
@@ -16,6 +16,9 @@
 - ✅ **NOVO**: Edição inline de erros diretamente no modal
 - ✅ **NOVO**: Salvamento automático das alterações na planilha
 - ✅ **NOVO**: Indicadores visuais de valores editados
+- ✅ **NOVO**: Remoção de linhas com erro da planilha
+- ✅ **NOVO**: Tags visuais com linha, coluna e nome do produto
+- ✅ **NOVO**: Reprocessamento automático após remoção de linha
 
 ### 🔧 Melhorias Recentes Implementadas:
 1. **Mensagens de Toast Amigáveis**: Substituídas mensagens técnicas por feedback humano com emojis
@@ -24,32 +27,47 @@
 4. **Edição Inline de Erros**: Permite corrigir valores diretamente no modal
 5. **Salvamento Automático**: Alterações são salvas automaticamente na planilha
 6. **Indicadores Visuais**: Check verde para valores editados, alerta para reprocessamento
+7. **Remoção de Linhas**: Botão lixeira para remover linhas com erro da planilha
+8. **Tags Visuais**: Exibição de linha, coluna e nome do produto em tags coloridas
+9. **Reprocessamento Automático**: Após remoção de linha, reprocessa automaticamente
 
-### 🚧 PROBLEMA ATUAL EM RESOLUÇÃO:
-**Modal de erros não está mostrando localização específica dos erros**
-- ❌ Ainda aparece mensagem genérica: "Nenhuma linha válida encontrada. 13 erros de validação detectados"
-- ❌ Não mostra detalhes individuais como "Coluna 2, Linha 6 - Campo obrigatório não preenchido"
-- ✅ Estrutura do modal está pronta para receber dados detalhados
-- ✅ Validação já gera erros com colunaNumero e mensagens específicas
+### ✅ PROBLEMAS RESOLVIDOS:
+- ✅ **Modal de erros agora mostra localização específica dos erros**
+- ✅ **Lista detalhada com "Coluna X, Linha Y" para cada erro**
+- ✅ **Tags visuais com linha (roxa), coluna (âmbar) e nome do produto (azul)**
+- ✅ **Funcionalidade de remoção de linhas problemáticas**
+- ✅ **Carregamento automático do nome do produto da planilha**
 
 ### 🚧 Próximos Passos Necessários:
-1. **URGENTE - Corrigir Modal de Erros**: Garantir que erros individuais apareçam no modal
-2. **Processamento de Produtos**: Após validação, inserir produtos na tabela `produtos`
-3. **Integração com Grupos**: Criar produtos vinculados aos grupos processados
-4. **Campos Fiscais**: Implementar NCM, CFOP, CEST, ST
-5. **Relatórios**: Exportar logs de importação
-6. **Limpeza Automática**: Rotina de manutenção de arquivos antigos
+1. **Processamento de Produtos**: Após validação, inserir produtos na tabela `produtos`
+2. **Integração com Grupos**: Criar produtos vinculados aos grupos processados
+3. **Campos Fiscais**: Implementar NCM, CFOP, CEST, ST
+4. **Relatórios**: Exportar logs de importação
+5. **Limpeza Automática**: Rotina de manutenção de arquivos antigos
 
 ---
 
-## ✏️ **FUNCIONALIDADE DE EDIÇÃO INLINE DE ERROS**
+## ✏️ **FUNCIONALIDADES DE CORREÇÃO DE ERROS**
 
-### 🎯 Como Funciona:
+### 🎯 1. Edição Inline de Erros:
 1. **Ícone de Lápis**: Aparece ao lado do "Valor encontrado" em cada erro
 2. **Clique para Editar**: Transforma o valor em campo de input editável
 3. **Salvamento**: Enter ou ícone de salvar confirma a alteração
 4. **Indicador Visual**: Check verde mostra valores editados
 5. **Alerta de Reprocessamento**: Aviso no cabeçalho quando há alterações pendentes
+
+### 🗑️ 2. Remoção de Linhas com Erro:
+1. **Ícone da Lixeira**: Aparece no canto superior direito de cada card de erro
+2. **Modal de Confirmação**: Confirma a remoção da linha da planilha
+3. **Remoção Física**: Remove a linha do arquivo .xlsx no servidor
+4. **Reprocessamento Automático**: Após remoção, reprocessa a importação automaticamente
+5. **Atualização de Status**: Status da importação é atualizado conforme resultado
+
+### 🏷️ 3. Tags Visuais de Identificação:
+1. **Tag Roxa**: "Linha X" - Identifica o número da linha com erro
+2. **Tag Âmbar**: "Coluna Y" - Mostra qual(is) coluna(s) têm erro
+3. **Tag Azul**: Nome do produto - Carregado automaticamente da coluna D da planilha
+4. **Layout Uniforme**: Todas as tags têm a mesma altura para visual limpo
 
 ### 🔧 Fluxo de Edição:
 ```
@@ -70,17 +88,23 @@
 
 ### 📁 Arquivos Envolvidos:
 - **Frontend**: `src/pages/dashboard/ImportarProdutosPage.tsx`
-  - Estados: `editingError`, `editedValues`, `hasEdits`
-  - Função: `salvarAlteracaoErro()`
-- **Backend**: `backend/public/editar-planilha.php`
-  - Edita células específicas da planilha Excel
-  - Log de alterações em `edit.log`
+  - Estados: `editingError`, `editedValues`, `hasEdits`, `produtoNomePorLinha`
+  - Funções: `salvarAlteracaoErro()`, `removerLinhaErro()`, `carregarNomesProdutos()`
+- **Backend**:
+  - `backend/public/editar-planilha.php` - Edita células específicas da planilha Excel
+  - `backend/public/remover-linha-planilha.php` - Remove linhas da planilha
+  - `backend/public/download-planilha.php` - Download para leitura de nomes de produtos
+  - Log de alterações em `edit.log` e `delete.log`
 
 ### 🎨 Indicadores Visuais:
 - **🖊️ Lápis Azul**: Valor pode ser editado
 - **💾 Save Verde**: Confirmar alteração
 - **✅ Check Verde**: Valor foi alterado
 - **⚠️ Alerta Amarelo**: "Reprocesse a importação para aplicar"
+- **🗑️ Lixeira Vermelha**: Remover linha da planilha
+- **🏷️ Tag Roxa**: Número da linha com erro
+- **🏷️ Tag Âmbar**: Número da coluna com erro
+- **🏷️ Tag Azul**: Nome do produto da linha
 
 ### 🔄 Integração com Reprocessamento:
 - Valores editados ficam salvos na planilha
@@ -215,6 +239,8 @@ Todas as mensagens agora incluem localização exata:
 - `POST /backend/public/upload-planilha.php`: Upload de arquivos
 - `POST /backend/public/delete-planilha.php`: Exclusão de arquivos
 - `GET /backend/public/download-planilha.php`: Download de arquivos
+- `POST /backend/public/editar-planilha.php`: Edição de células específicas
+- `POST /backend/public/remover-linha-planilha.php`: Remoção de linhas da planilha
 
 ---
 
@@ -231,37 +257,29 @@ Todas as mensagens agora incluem localização exata:
 
 ---
 
-## 🚨 PROBLEMA ATUAL: MODAL DE ERROS NÃO MOSTRA DETALHES
+## ✅ SISTEMA DE ERROS COMPLETAMENTE IMPLEMENTADO
 
-### 🔍 Situação Atual:
-- **Problema**: Modal de erros mostra apenas "1 erro encontrado" com mensagem genérica
-- **Esperado**: Lista detalhada com "Coluna X, Linha Y" para cada erro
-- **Status**: Estrutura implementada, mas dados não chegam ao modal corretamente
+### 🎯 Funcionalidades Implementadas:
+1. **Modal de Erros Detalhado**: Lista completa de erros com localização específica
+2. **Tags Visuais**: Linha (roxa), Coluna (âmbar), Nome do Produto (azul)
+3. **Edição Inline**: Correção de valores diretamente no modal
+4. **Remoção de Linhas**: Exclusão de linhas problemáticas da planilha
+5. **Reprocessamento Automático**: Após correções, reprocessa automaticamente
+6. **Carregamento de Nomes**: Busca automática do nome do produto da planilha
 
-### 🛠️ Implementações Feitas:
-1. **Interface ValidationError** atualizada com `colunaNumero`
-2. **Função validarDadosPlanilha()** gera erros com localização específica
-3. **Modal melhorado** com badges "Coluna X" e "Linha Y"
-4. **Mensagens específicas** incluem coordenadas do erro
-5. **Resumo visual** por tipo de erro no topo do modal
-
-### 🔧 O que foi tentado:
-1. ✅ Corrigir ordem dos parâmetros em `showMessage(tipo, mensagem)`
-2. ✅ Adicionar `setValidationErrors(erros)` antes do throw
-3. ✅ Melhorar estrutura do modal com seções organizadas
-4. ✅ Implementar mapeamento de colunas para números
-5. ✅ Adicionar `colunaNumero` em todos os erros de validação
-
-### 🎯 Próximo Passo para Resolver:
-**Investigar por que o modal não recebe a lista de erros detalhada**
-- Verificar se `validationErrors` está sendo populado corretamente
-- Confirmar se o modal está renderizando a lista quando há erros
-- Testar se o problema é no fluxo de dados ou na renderização
+### 🛠️ Implementações Técnicas:
+1. **Interface ValidationError** com `colunaNumero` para localização
+2. **Função validarDadosPlanilha()** gera erros com coordenadas específicas
+3. **Modal responsivo** com seções organizadas e tags coloridas
+4. **Backend PhpSpreadsheet** para manipulação de planilhas Excel
+5. **Sistema de logs** para rastreamento de alterações
+6. **Estados React** para controle de edição e reprocessamento
 
 ### 📍 Localização do Código:
 - **Validação**: `src/pages/dashboard/ImportarProdutosPage.tsx` linha ~850
-- **Modal**: `src/pages/dashboard/ImportarProdutosPage.tsx` linha ~1900
-- **Estado**: `const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);`
+- **Modal**: `src/pages/dashboard/ImportarProdutosPage.tsx` linha ~2170
+- **Estados**: `validationErrors`, `produtoNomePorLinha`, `editingError`, `hasEdits`
+- **Backend**: `backend/public/editar-planilha.php`, `backend/public/remover-linha-planilha.php`
 
 ---
 
@@ -332,6 +350,8 @@ await supabase
 - `backend/public/upload-planilha.php`: Upload de arquivos
 - `backend/public/delete-planilha.php`: Exclusão de arquivos
 - `backend/public/download-planilha.php`: Download de arquivos
+- `backend/public/editar-planilha.php`: Edição de células específicas
+- `backend/public/remover-linha-planilha.php`: Remoção de linhas da planilha
 
 ### Banco:
 - Tabela `importacao_produtos`: Controle completo
@@ -355,12 +375,12 @@ npm run build && nexo-dev
 
 ### Teste Completo:
 1. Upload de planilha com dados válidos/inválidos
-2. ❌ **PROBLEMA**: Modal de erros não mostra lista detalhada
+2. ✅ **RESOLVIDO**: Modal de erros mostra lista detalhada com tags visuais
 3. Verificar mensagens de toast (✅ funcionando)
-4. Corrigir dados no sistema (ex: cadastrar unidade)
-5. Usar botão reprocessar
-6. Verificar processamento de grupos (já funciona)
-7. **URGENTE**: Corrigir exibição de erros no modal
+4. Testar edição inline de erros (✅ funcionando)
+5. Testar remoção de linhas com erro (✅ funcionando)
+6. Usar botão reprocessar (✅ funcionando)
+7. Verificar processamento de grupos (✅ funcionando)
 8. **PRÓXIMO**: Implementar processamento de produtos
 
 ---
@@ -400,60 +420,55 @@ npm run build && nexo-dev
 - ✅ Modal com resumo visual por tipo de erro
 - ✅ Badges coloridos para identificação rápida
 - ✅ Orientações práticas para correção
-- ❌ **PENDENTE**: Lista detalhada de erros no modal
+- ✅ **IMPLEMENTADO**: Lista detalhada de erros no modal
+- ✅ **IMPLEMENTADO**: Tags visuais com linha, coluna e nome do produto
+- ✅ **IMPLEMENTADO**: Edição inline de valores com erro
+- ✅ **IMPLEMENTADO**: Remoção de linhas problemáticas
 
 ---
 
-## 🔍 ONDE PARAMOS - PARA PRÓXIMO CHAT
+## 🎯 ONDE PARAMOS - PARA PRÓXIMO CHAT
 
-### 🚨 PROBLEMA ESPECÍFICO:
-**Modal de erros não exibe lista detalhada de erros individuais**
+### ✅ SISTEMA DE ERROS COMPLETAMENTE IMPLEMENTADO:
+**Todas as funcionalidades de tratamento de erros estão funcionando perfeitamente**
 
-### 📸 Evidência do Problema:
-- Modal mostra: "1 erro encontrado - Verifique as colunas e linhas indicadas"
-- Seção "Localização Exata dos Erros na Planilha" aparece vazia
-- Deveria mostrar: "Coluna 2, Linha 6 - Campo obrigatório não preenchido"
+### 🏆 Conquistas Alcançadas:
+1. ✅ **Modal de erros detalhado** - Lista completa com localização específica
+2. ✅ **Tags visuais** - Linha (roxa), Coluna (âmbar), Nome do Produto (azul)
+3. ✅ **Edição inline** - Correção de valores diretamente no modal
+4. ✅ **Remoção de linhas** - Exclusão de linhas problemáticas da planilha
+5. ✅ **Reprocessamento automático** - Após correções, reprocessa automaticamente
+6. ✅ **Carregamento de nomes** - Busca automática do nome do produto da planilha
+7. ✅ **Backend robusto** - PhpSpreadsheet para manipulação de Excel
+8. ✅ **UX aprimorada** - Interface intuitiva com feedback visual
 
-### 🔧 Implementações Feitas (Funcionando):
-1. ✅ **Mensagens de toast amigáveis** - Funcionando perfeitamente
-2. ✅ **Estrutura do modal** - Layout e design corretos
-3. ✅ **Validação com localização** - Gera erros com `colunaNumero`
-4. ✅ **Interface ValidationError** - Atualizada com campos corretos
+### 🚀 PRÓXIMA IMPLEMENTAÇÃO: PROCESSAMENTO DE PRODUTOS
 
-### 🔍 Investigações Necessárias:
-1. **Verificar se `validationErrors` está sendo populado**:
-   ```typescript
-   console.log('Erros gerados:', erros); // Na função validarDadosPlanilha
-   console.log('Erros no estado:', validationErrors); // Antes de abrir modal
-   ```
+### 🎯 O que implementar agora:
+1. **Processamento de Produtos**: Após validação bem-sucedida, inserir produtos na tabela `produtos`
+2. **Integração com Grupos**: Vincular produtos aos grupos já processados
+3. **Campos Fiscais**: Implementar NCM, CFOP, CEST, ST (futuro)
+4. **Relatórios**: Exportar logs de importação (futuro)
 
-2. **Confirmar se modal renderiza quando há dados**:
-   ```typescript
-   {validationErrors.map((erro, index) => (
-     // Verificar se este map está sendo executado
-   ))}
-   ```
+### 📍 Onde Continuar:
+- **Arquivo**: `src/pages/dashboard/ImportarProdutosPage.tsx`
+- **Função**: `handleImportarProdutos()` após linha ~520
+- **Contexto**: Usar `linhasValidas` para inserir produtos na tabela
+- **Status**: Validação completa, grupos processados, pronto para produtos
 
-3. **Testar fluxo completo**:
-   - Upload de planilha com erro conhecido
-   - Verificar se erro é gerado na validação
-   - Confirmar se `setValidationErrors(erros)` é chamado
-   - Verificar se modal abre com dados corretos
-
-### 📍 Arquivos para Investigar:
-- `src/pages/dashboard/ImportarProdutosPage.tsx`:
-  - Linha ~479: `setValidationErrors(erros)` antes do throw
-  - Linha ~850: Função `validarDadosPlanilha()`
-  - Linha ~1970: Renderização do modal com lista de erros
-
-### 🎯 Próximos Passos Sugeridos:
-1. **Debug do estado**: Adicionar console.log para rastrear dados
-2. **Teste isolado**: Criar erro manual para testar modal
-3. **Verificar renderização**: Confirmar se lista está sendo renderizada
-4. **Corrigir fluxo**: Ajustar onde necessário para dados chegarem ao modal
+### 🔧 Implementação Sugerida:
+```typescript
+// Após validação bem-sucedida (linha ~520)
+// Para cada linha válida:
+// 1. Buscar grupo_id pelo nome
+// 2. Inserir produto na tabela produtos
+// 3. Atualizar contadores (produtos_criados, produtos_atualizados)
+// 4. Tratar erros de inserção
+// 5. Atualizar progresso em tempo real
+```
 
 ### 💻 Ambiente Atual:
 - **URL**: `http://nexodev.emasoftware.app`
 - **Branch**: `dev`
 - **Deploy**: `nexo-dev`
-- **Status**: Build funcionando, problema específico no modal de erros
+- **Status**: Sistema de erros 100% funcional, pronto para processamento de produtos
