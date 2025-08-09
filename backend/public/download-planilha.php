@@ -26,8 +26,8 @@ try {
         throw new Exception('ID da empresa inválido');
     }
 
-    // Validar formato do caminho
-    if (!preg_match('/^empresa_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[a-zA-Z0-9_\-\.]+$/i', $filePath)) {
+    // Validar formato do caminho (permitir espaços e parênteses no nome do arquivo)
+    if (!preg_match('/^empresa_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[a-zA-Z0-9 _\-\.\(\)]+$/i', $filePath)) {
         throw new Exception('Caminho do arquivo inválido');
     }
 

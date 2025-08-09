@@ -2383,43 +2383,8 @@ const PDVPage: React.FC = () => {
           setTotalVendasCanceladasCaixa(totalVendasCanceladas);
         }
 
-        // ✅ NOVO: Buscar itens cancelados (soft delete) para este caixa
-        const { data: itensCanceladosData, error: itensCanceladosError } = await supabase
-          .from('pdv_itens')
-          .select(`
-            id,
-            nome_produto,
-            quantidade,
-            valor_unitario,
-            valor_total_real_deletado,
-            valor_adicionais_deletado,
-            quantidade_adicionais_deletado,
-            deletado_em,
-            snapshot_item_deletado,
-            pdv:pdv_id (
-              id,
-              numero_venda,
-              nome_cliente,
-              caixa_id
-            ),
-            usuarios:deletado_por (
-              nome
-            )
-          `)
-          .eq('pdv.caixa_id', caixaData.id)
-          .eq('deletado', true)
-          .not('valor_total_real_deletado', 'is', null)
-          .order('deletado_em', { ascending: false });
-
-        if (itensCanceladosError) {
-          console.error('❌ Erro ao buscar itens cancelados:', itensCanceladosError);
-        } else {
-          setItensCanceladosCaixaModal(itensCanceladosData || []);
-          const totalItensCancelados = (itensCanceladosData || []).reduce((total, item) => {
-            return total + (parseFloat(item.valor_total_real_deletado) || 0);
-          }, 0);
-          setTotalItensCanceladosCaixa(totalItensCancelados);
-        }
+        // ✅ NOVO: Buscar itens cancelados será feito pela função específica
+        // após dadosCaixa ser definido
       }
 
       // ✅ NOVO: Buscar pagamentos do caixa
@@ -2694,6 +2659,12 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Armazenar valores reais calculados em estado separado
       setValoresReaisCaixa(valoresReais);
+
+      // ✅ NOVO: Carregar itens cancelados após dadosCaixa ser definido
+      // Usar setTimeout para garantir que dadosCaixa foi atualizado
+      setTimeout(() => {
+        atualizarItensCanceladosCaixa();
+      }, 100);
 
     } catch (error) {
       console.error('❌ Erro inesperado ao carregar dados do caixa:', error);
@@ -11372,20 +11343,20 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Função para atualizar itens cancelados do caixa
   const atualizarItensCanceladosCaixa = async () => {
-    if (!caixaAberto || !caixaAberto.id) {
-      console.log('⚠️ Caixa não está aberto ou ID não disponível');
+    if (!dadosCaixa || !dadosCaixa.id) {
+      console.log('⚠️ dadosCaixa não está disponível ou ID não encontrado');
       return;
     }
 
     try {
-      console.log(`🔄 Atualizando lista de itens cancelados do caixa: ${caixaAberto.id}`);
+      console.log(`🔄 Atualizando lista de itens cancelados do caixa: ${dadosCaixa.id}`);
 
       // Buscar itens cancelados usando uma abordagem diferente
       // Primeiro buscar todas as vendas do caixa, depois os itens cancelados
       const { data: vendasCaixa, error: vendasError } = await supabase
         .from('pdv')
         .select('id')
-        .eq('caixa_id', caixaAberto.id);
+        .eq('caixa_id', dadosCaixa.id);
 
       if (vendasError) {
         console.error('❌ Erro ao buscar vendas do caixa:', vendasError);
@@ -11473,7 +11444,7 @@ const PDVPage: React.FC = () => {
         console.log(`✅ Soft delete realizado com sucesso para: ${itemRemovido.produto.nome}`);
 
         // ✅ NOVO: Atualizar lista de itens cancelados do caixa
-        if (caixaAberto) {
+        if (dadosCaixa) {
           await atualizarItensCanceladosCaixa();
         }
 
