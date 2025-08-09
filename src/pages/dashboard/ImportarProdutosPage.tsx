@@ -8,16 +8,38 @@ import * as XLSX from 'xlsx';
 
 interface ImportacaoHistorico {
   id: string;
-  nome_arquivo: string;
-  data_importacao: string;
-  usuario_nome: string;
-  status: 'processando' | 'concluida' | 'erro';
-  total_produtos: number;
-  produtos_importados: number;
-  produtos_com_erro: number;
-  observacoes?: string;
-  arquivo_url?: string;
   empresa_id: string;
+  usuario_id: string;
+  nome_arquivo: string;
+  arquivo_storage_path: string;
+  arquivo_url?: string;
+  arquivo_download_url?: string;
+  tamanho_arquivo?: number;
+  status: 'iniciado' | 'processando' | 'concluida' | 'erro' | 'cancelada';
+  total_linhas: number;
+  linhas_processadas: number;
+  linhas_sucesso: number;
+  linhas_erro: number;
+  linhas_ignoradas: number;
+  grupos_criados: number;
+  grupos_existentes: number;
+  produtos_criados: number;
+  produtos_atualizados: number;
+  etapa_atual: string;
+  progresso_percentual: number;
+  mensagem_atual?: string;
+  observacoes?: string;
+  log_erros?: any[];
+  log_alertas?: any[];
+  dados_validacao?: any;
+  iniciado_em: string;
+  finalizado_em?: string;
+  tempo_processamento?: string;
+  configuracoes?: any;
+  estatisticas?: any;
+  created_at: string;
+  updated_at: string;
+  usuario_nome?: string; // Para JOIN com tabela usuarios
 }
 
 interface DeleteConfirmationProps {
@@ -75,6 +97,92 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
   );
 };
 
+// Modal de processamento com animações
+interface ProcessingModalProps {
+  isOpen: boolean;
+  message: string;
+}
+
+const ProcessingModal: React.FC<ProcessingModalProps> = ({ isOpen, message }) => {
+  const [currentLogo, setCurrentLogo] = useState(true);
+
+  // Alternar entre logo e loading
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const interval = setInterval(() => {
+      setCurrentLogo(prev => !prev);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-background-card p-8 rounded-xl shadow-2xl max-w-md mx-4 w-full text-center"
+      >
+        {/* Logo/Loading alternado */}
+        <div className="mb-6 h-20 flex items-center justify-center">
+          <AnimatePresence mode="wait">
+            {currentLogo ? (
+              <motion.div
+                key="logo"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.5 }}
+                className="text-4xl font-bold text-primary"
+              >
+                NEXO
+              </motion.div>
+            ) : (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.5 }}
+                className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"
+              />
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Mensagem */}
+        <motion.p
+          key={message}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-white text-lg mb-4"
+        >
+          {message}
+        </motion.p>
+
+        {/* Barra de progresso animada */}
+        <div className="w-full bg-gray-700 rounded-full h-2">
+          <motion.div
+            className="bg-primary h-2 rounded-full"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const ImportarProdutosPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,6 +193,9 @@ const ImportarProdutosPage: React.FC = () => {
   const [regimeTributario, setRegimeTributario] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState('');
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     itemId: string;
@@ -151,38 +262,24 @@ const ImportarProdutosPage: React.FC = () => {
     try {
       setIsLoading(true);
 
-      // Buscar importações reais do banco de dados
-      // Por enquanto, como a tabela ainda não existe, vamos retornar array vazio
-      // Quando a tabela for criada, substituir por:
-      // const { data, error } = await supabase
-      //   .from('importacoes_produtos')
-      //   .select(`
-      //     id,
-      //     nome_arquivo,
-      //     data_importacao,
-      //     status,
-      //     total_produtos,
-      //     produtos_importados,
-      //     produtos_com_erro,
-      //     observacoes,
-      //     arquivo_url,
-      //     usuarios!inner(nome)
-      //   `)
-      //   .eq('empresa_id', empresaId)
-      //   .order('data_importacao', { ascending: false });
+      // Buscar importações da nova tabela
+      const { data, error } = await supabase
+        .from('importacao_produtos')
+        .select(`
+          *,
+          usuarios!inner(nome)
+        `)
+        .eq('empresa_id', empresaId)
+        .order('created_at', { ascending: false });
 
-      // if (error) throw error;
+      if (error) throw error;
 
-      // const importacoesFormatadas = data?.map(item => ({
-      //   ...item,
-      //   usuario_nome: item.usuarios.nome,
-      //   empresa_id: empresaId
-      // })) || [];
+      const importacoesFormatadas = data?.map(item => ({
+        ...item,
+        usuario_nome: (item as any).usuarios.nome
+      })) || [];
 
-      // setImportacoes(importacoesFormatadas);
-
-      // Por enquanto, retornar array vazio até a tabela ser criada
-      setImportacoes([]);
+      setImportacoes(importacoesFormatadas);
       setIsDataReady(true);
     } catch (error) {
       console.error('Erro ao buscar importações:', error);
@@ -221,28 +318,333 @@ const ImportarProdutosPage: React.FC = () => {
   const handleImportarProdutos = async () => {
     if (!selectedFile || !empresaId) return;
 
+    let importacaoId: string | null = null;
+
     try {
       setIsUploading(true);
+      setShowSidebar(false);
+      setShowProcessingModal(true);
+      setProcessingMessage('Aguarde processando...');
 
-      // Aqui será implementado o upload e processamento real do arquivo
-      // Por enquanto, apenas mostrar mensagem informativa
+      // 0. Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
 
-      showMessage('Funcionalidade de importação será implementada em breve. Backend em desenvolvimento.', 'info');
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // 1. Preparar dados para upload local
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${Date.now()}_${selectedFile.name}`;
+      const localPath = `empresa_${empresaId}/${fileName}`;
+
+      setProcessingMessage('Enviando planilha para o servidor...');
+
+      // Converter arquivo para base64 para envio
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+      // Enviar arquivo para backend salvar localmente
+      const uploadResponse = await fetch('/backend/public/upload-planilha.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName: fileName,
+          empresaId: empresaId,
+          fileData: base64Data,
+          originalName: selectedFile.name
+        })
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.message || 'Erro ao fazer upload do arquivo');
+      }
+
+      const uploadResult = await uploadResponse.json();
+
+      // 2. Criar registro de importação
+      const downloadUrl = `/backend/public/download-planilha.php?file=${encodeURIComponent(uploadResult.filePath)}&empresa=${empresaId}`;
+
+      const { data: importacaoData, error: importacaoError } = await supabase
+        .from('importacao_produtos')
+        .insert({
+          empresa_id: empresaId,
+          usuario_id: usuarioData.id,
+          nome_arquivo: selectedFile.name,
+          arquivo_storage_path: uploadResult.filePath, // Caminho local retornado pelo backend
+          arquivo_download_url: downloadUrl,
+          tamanho_arquivo: selectedFile.size,
+          status: 'processando',
+          etapa_atual: 'iniciando',
+          mensagem_atual: 'Processando arquivo...'
+        })
+        .select('id')
+        .single();
+
+      if (importacaoError) throw importacaoError;
+      importacaoId = importacaoData.id;
+
+      // 3. Atualizar progresso - lendo arquivo
+      await supabase
+        .from('importacao_produtos')
+        .update({
+          etapa_atual: 'lendo_arquivo',
+          mensagem_atual: 'Estamos fazendo todo ajuste para que seus produtos sejam importados ao nexo, aguarde mais um momento...',
+          progresso_percentual: 10
+        })
+        .eq('id', importacaoId);
+
+      setProcessingMessage('Estamos fazendo todo ajuste para que seus produtos sejam importados ao nexo, aguarde mais um momento...');
+
+      // Reutilizar o arrayBuffer já criado anteriormente
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      // Remover cabeçalho
+      const rows = data.slice(1) as any[][];
+
+      if (rows.length === 0) {
+        throw new Error('Planilha está vazia ou não contém dados válidos');
+      }
+
+      // 4. Atualizar total de linhas
+      await supabase
+        .from('importacao_produtos')
+        .update({
+          total_linhas: rows.length,
+          etapa_atual: 'processando_grupos',
+          mensagem_atual: 'Analisando e criando grupos de produtos...',
+          progresso_percentual: 20
+        })
+        .eq('id', importacaoId);
+
+      // 5. Processar grupos únicos
+      setProcessingMessage('Analisando e criando grupos de produtos...');
+
+      const gruposUnicos = new Set<string>();
+      rows.forEach(row => {
+        if (row[0] && typeof row[0] === 'string') { // Coluna GRUPO*
+          gruposUnicos.add(row[0].trim().toUpperCase());
+        }
+      });
+
+      // 4. Verificar grupos existentes e criar novos
+      const gruposArray = Array.from(gruposUnicos);
+      const gruposExistentes = new Map<string, string>(); // nome -> id
+
+      if (gruposArray.length > 0) {
+        const { data: gruposData, error: gruposError } = await supabase
+          .from('grupos')
+          .select('id, nome')
+          .eq('empresa_id', empresaId)
+          .eq('deletado', false);
+
+        if (gruposError) throw gruposError;
+
+        // Mapear grupos existentes (case-insensitive)
+        gruposData?.forEach(grupo => {
+          gruposExistentes.set(grupo.nome.toUpperCase(), grupo.id);
+        });
+
+        // Criar grupos que não existem (verificação case-insensitive)
+        const gruposParaCriar = gruposArray.filter(nome =>
+          !gruposExistentes.has(nome.toUpperCase())
+        );
+
+        if (gruposParaCriar.length > 0) {
+          setProcessingMessage(`Criando ${gruposParaCriar.length} novos grupos...`);
+
+          // Atualizar progresso
+          await supabase
+            .from('importacao_produtos')
+            .update({
+              mensagem_atual: `Criando ${gruposParaCriar.length} novos grupos...`,
+              progresso_percentual: 40
+            })
+            .eq('id', importacaoId);
+
+          const novosGrupos = gruposParaCriar.map(nome => ({
+            nome: nome,
+            empresa_id: empresaId
+          }));
+
+          let gruposCriados: any[] = [];
+
+          const { data: gruposCriadosData, error: criarGruposError } = await supabase
+            .from('grupos')
+            .insert(novosGrupos)
+            .select('id, nome');
+
+          if (criarGruposError) {
+            // Se for erro de duplicação, tentar criar grupos individualmente
+            if (criarGruposError.code === '23505') { // Unique constraint violation
+              console.warn('Detectada tentativa de criação de grupo duplicado, criando individualmente...');
+
+              for (const grupo of novosGrupos) {
+                try {
+                  const { data: grupoIndividual, error: erroIndividual } = await supabase
+                    .from('grupos')
+                    .insert(grupo)
+                    .select('id, nome')
+                    .single();
+
+                  if (!erroIndividual && grupoIndividual) {
+                    gruposCriados.push(grupoIndividual);
+                  }
+                } catch (erroGrupoIndividual) {
+                  // Ignorar erros de duplicação individual
+                  console.warn(`Grupo "${grupo.nome}" já existe, ignorando...`);
+                }
+              }
+            } else {
+              throw criarGruposError;
+            }
+          } else {
+            gruposCriados = gruposCriadosData || [];
+          }
+
+          // Adicionar novos grupos ao mapa
+          gruposCriados?.forEach(grupo => {
+            gruposExistentes.set(grupo.nome.toUpperCase(), grupo.id);
+          });
+
+          // Calcular contadores reais
+          const gruposRealmenteCriados = gruposCriados?.length || 0;
+          const gruposJaExistentes = gruposArray.length - gruposRealmenteCriados;
+
+          // Atualizar contadores
+          await supabase
+            .from('importacao_produtos')
+            .update({
+              grupos_criados: gruposRealmenteCriados,
+              grupos_existentes: gruposJaExistentes
+            })
+            .eq('id', importacaoId);
+        } else {
+          // Atualizar apenas grupos existentes
+          await supabase
+            .from('importacao_produtos')
+            .update({
+              grupos_criados: 0,
+              grupos_existentes: gruposArray.length
+            })
+            .eq('id', importacaoId);
+        }
+      }
+
+      // Finalizar com sucesso
+      setProcessingMessage('Grupos processados com sucesso! Preparando para importar produtos...');
+
+      await supabase
+        .from('importacao_produtos')
+        .update({
+          status: 'concluida',
+          etapa_atual: 'finalizado',
+          mensagem_atual: 'Importação concluída com sucesso!',
+          progresso_percentual: 100,
+          finalizado_em: new Date().toISOString(),
+          observacoes: `Processados ${gruposArray.length} grupos únicos. ${gruposCriados?.length || 0} grupos criados, ${gruposArray.length - (gruposCriados?.length || 0)} já existiam.`
+        })
+        .eq('id', importacaoId);
+
+      // Simular tempo de processamento
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      setProcessingMessage('Importação concluída com sucesso!');
+
+      // Aguardar um pouco antes de fechar
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       setSelectedFile(null);
-      setShowSidebar(false);
+      showMessage('Planilha enviada e grupos processados com sucesso!', 'success');
 
-    } catch (error) {
+      // Recarregar histórico
+      await fetchImportacoes();
+
+    } catch (error: any) {
       console.error('Erro ao importar produtos:', error);
-      showMessage('Erro ao processar arquivo', 'error');
+
+      // Registrar erro na tabela se o registro foi criado
+      if (importacaoId) {
+        try {
+          await supabase
+            .from('importacao_produtos')
+            .update({
+              status: 'erro',
+              etapa_atual: 'erro',
+              mensagem_atual: `Erro: ${error.message}`,
+              finalizado_em: new Date().toISOString(),
+              log_erros: [
+                {
+                  timestamp: new Date().toISOString(),
+                  erro: error.message,
+                  stack: error.stack
+                }
+              ],
+              observacoes: `Importação interrompida devido a erro: ${error.message}`
+            })
+            .eq('id', importacaoId);
+        } catch (updateError) {
+          console.error('Erro ao atualizar status de erro:', updateError);
+        }
+      }
+
+      showMessage(`Erro ao processar arquivo: ${error.message}`, 'error');
     } finally {
       setIsUploading(false);
+      setIsProcessing(false);
+      setShowProcessingModal(false);
     }
   };
 
   const handleDeleteImportacao = async (id: string) => {
     try {
-      // Aqui você implementaria a exclusão no banco
+      // Buscar dados da importação para remover arquivo local
+      const { data: importacao, error: fetchError } = await supabase
+        .from('importacao_produtos')
+        .select('arquivo_storage_path')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Remover arquivo local via backend
+      if (importacao?.arquivo_storage_path) {
+        try {
+          await fetch('/backend/public/delete-planilha.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              filePath: importacao.arquivo_storage_path
+            })
+          });
+        } catch (deleteFileError) {
+          console.warn('Erro ao deletar arquivo local:', deleteFileError);
+          // Não falhar aqui, continuar com a exclusão do registro
+        }
+      }
+
+      // Excluir registro da tabela
+      const { error: deleteError } = await supabase
+        .from('importacao_produtos')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) throw deleteError;
+
+      // Atualizar lista local
       setImportacoes(prev => prev.filter(imp => imp.id !== id));
       showMessage('Importação excluída com sucesso', 'success');
     } catch (error) {
@@ -259,6 +661,10 @@ const ImportarProdutosPage: React.FC = () => {
         return <AlertCircle className="text-red-400" size={20} />;
       case 'processando':
         return <Clock className="text-yellow-400" size={20} />;
+      case 'iniciado':
+        return <Clock className="text-blue-400" size={20} />;
+      case 'cancelada':
+        return <X className="text-gray-400" size={20} />;
       default:
         return <FileText className="text-gray-400" size={20} />;
     }
@@ -272,6 +678,10 @@ const ImportarProdutosPage: React.FC = () => {
         return 'Erro';
       case 'processando':
         return 'Processando';
+      case 'iniciado':
+        return 'Iniciado';
+      case 'cancelada':
+        return 'Cancelada';
       default:
         return 'Desconhecido';
     }
@@ -533,26 +943,54 @@ const ImportarProdutosPage: React.FC = () => {
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center gap-2 text-sm text-gray-400">
                     <Calendar size={14} />
-                    <span>{formatDate(importacao.data_importacao)}</span>
+                    <span>{formatDate(importacao.created_at)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-400">
                     <User size={14} />
                     <span>{importacao.usuario_nome}</span>
                   </div>
+                  {importacao.etapa_atual && (
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      <Tag size={14} />
+                      <span>Etapa: {importacao.etapa_atual}</span>
+                    </div>
+                  )}
                 </div>
 
-                {importacao.status !== 'processando' && (
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                {importacao.status === 'processando' && (
+                  <div className="mb-4">
+                    <div className="flex justify-between text-sm text-gray-400 mb-2">
+                      <span>Progresso</span>
+                      <span>{importacao.progresso_percentual}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${importacao.progresso_percentual}%` }}
+                      />
+                    </div>
+                    {importacao.mensagem_atual && (
+                      <p className="text-sm text-gray-300 mt-2">{importacao.mensagem_atual}</p>
+                    )}
+                  </div>
+                )}
+
+                {importacao.status !== 'processando' && importacao.status !== 'iniciado' && (
+                  <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-white">{importacao.total_produtos}</div>
-                      <div className="text-xs text-gray-400">Total</div>
+                      <div className="text-lg font-semibold text-white">{importacao.total_linhas}</div>
+                      <div className="text-xs text-gray-400">Total Linhas</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-green-400">{importacao.produtos_importados}</div>
-                      <div className="text-xs text-gray-400">Importados</div>
+                      <div className="text-lg font-semibold text-green-400">{importacao.linhas_sucesso}</div>
+                      <div className="text-xs text-gray-400">Sucesso</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-red-400">{importacao.produtos_com_erro}</div>
+                      <div className="text-lg font-semibold text-blue-400">{importacao.grupos_criados}</div>
+                      <div className="text-xs text-gray-400">Grupos Criados</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-red-400">{importacao.linhas_erro}</div>
                       <div className="text-xs text-gray-400">Erros</div>
                     </div>
                   </div>
@@ -564,16 +1002,16 @@ const ImportarProdutosPage: React.FC = () => {
                   </div>
                 )}
 
-                {importacao.arquivo_url && (
+                {importacao.arquivo_download_url && (
                   <div className="mt-4">
                     <Button
                       type="button"
                       variant="text"
                       className="text-primary-400 hover:text-primary-300"
-                      onClick={() => window.open(importacao.arquivo_url, '_blank')}
+                      onClick={() => window.open(importacao.arquivo_download_url, '_blank')}
                     >
                       <Download size={14} className="mr-2" />
-                      Baixar Arquivo
+                      Baixar Planilha
                     </Button>
                   </div>
                 )}
@@ -695,6 +1133,14 @@ const ImportarProdutosPage: React.FC = () => {
           }}
           title={deleteConfirmation.title}
           message={deleteConfirmation.message}
+        />
+      </AnimatePresence>
+
+      {/* Modal de Processamento */}
+      <AnimatePresence>
+        <ProcessingModal
+          isOpen={showProcessingModal}
+          message={processingMessage}
         />
       </AnimatePresence>
     </div>

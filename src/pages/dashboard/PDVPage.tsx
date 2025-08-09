@@ -466,6 +466,7 @@ const PDVPage: React.FC = () => {
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
   const [showConsumoInternoModal, setShowConsumoInternoModal] = useState(false);
+  const [observacaoConsumoInterno, setObservacaoConsumoInterno] = useState('');
 
   // ✅ NOVO: Estados para controle de caixa
   const [showAberturaCaixaModal, setShowAberturaCaixaModal] = useState(false);
@@ -15121,13 +15122,88 @@ const PDVPage: React.FC = () => {
     }
 
     try {
-      // Processar cada item do carrinho
-      for (const item of carrinho) {
-        // ✅ Pular itens sem controle de estoque
-        if (item.vendaSemProduto || item.produto?.codigo === '999999') {
-          continue;
-        }
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user?.id) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
 
+      // Obter dados do usuário e empresa
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      // Obter caixa ativo (se houver)
+      const { data: caixaAtivo } = await supabase
+        .from('caixa_controle')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('usuario_id', userData.user.id)
+        .eq('status', 'aberto')
+        .order('data_abertura', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // Calcular totais
+      const itensValidos = carrinho.filter(item =>
+        !item.vendaSemProduto && item.produto?.codigo !== '999999'
+      );
+
+      const totalItens = itensValidos.reduce((total, item) => total + item.quantidade, 0);
+      const valorTotal = itensValidos.reduce((total, item) => total + item.subtotal, 0);
+
+      // 1. Salvar o consumo interno principal
+      const { data: consumoInterno, error: consumoError } = await supabase
+        .from('consumo_interno')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          usuario_id: userData.user.id,
+          caixa_controle_id: caixaAtivo?.id || null,
+          observacao: observacaoConsumoInterno || 'Consumo interno da empresa',
+          total_itens: totalItens,
+          valor_total: valorTotal
+        })
+        .select()
+        .single();
+
+      if (consumoError) {
+        console.error('❌ Erro ao salvar consumo interno:', consumoError);
+        toast.error('Erro ao salvar consumo interno');
+        return;
+      }
+
+      // 2. Salvar os itens do consumo interno
+      const itensParaSalvar = itensValidos.map(item => ({
+        consumo_interno_id: consumoInterno.id,
+        produto_id: item.produto.id,
+        nome_produto: item.produto.nome,
+        codigo_produto: item.produto.codigo,
+        quantidade: item.quantidade,
+        unidade_medida: item.produto.unidade_medida?.nome || 'UN',
+        valor_unitario: item.produto.preco || 0,
+        valor_total: item.subtotal
+      }));
+
+      const { error: itensError } = await supabase
+        .from('consumo_interno_itens')
+        .insert(itensParaSalvar);
+
+      if (itensError) {
+        console.error('❌ Erro ao salvar itens do consumo interno:', itensError);
+        toast.error('Erro ao salvar itens do consumo interno');
+        return;
+      }
+
+      // 3. Dar baixa no estoque de cada item
+      for (const item of itensValidos) {
         try {
           // ✅ Ajustar quantidade conforme unidade de medida
           const fracionado = item?.produto?.unidade_medida?.fracionado || false;
@@ -15137,12 +15213,12 @@ const PDVPage: React.FC = () => {
             continue; // nada a baixar
           }
 
-          // ✅ Usar a mesma RPC da finalização de venda (sem p_empresa_id, com p_tipo_operacao)
+          // ✅ Usar a mesma RPC da finalização de venda
           const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
             p_produto_id: item.produto.id,
             p_quantidade: -quantidade, // Quantidade negativa para baixa
             p_tipo_operacao: 'consumo_interno',
-            p_observacao: 'Consumo interno da empresa'
+            p_observacao: `Consumo interno - ${observacaoConsumoInterno || 'Sem observação'}`
           });
 
           if (estoqueError) {
@@ -15157,8 +15233,9 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // Sucesso - limpar carrinho e fechar modal
+      // Sucesso - limpar carrinho, observação e fechar modal
       setCarrinho([]);
+      setObservacaoConsumoInterno('');
       setShowConsumoInternoModal(false);
       toast.success('Consumo interno registrado com sucesso!');
 
@@ -34969,7 +35046,10 @@ const PDVPage: React.FC = () => {
                     <h3 className="text-xl font-semibold text-white">Consumo Interno</h3>
                   </div>
                   <button
-                    onClick={() => setShowConsumoInternoModal(false)}
+                    onClick={() => {
+                      setObservacaoConsumoInterno('');
+                      setShowConsumoInternoModal(false);
+                    }}
                     className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
                   >
                     <X size={20} />
@@ -34986,7 +35066,7 @@ const PDVPage: React.FC = () => {
                 </div>
 
                 {/* Lista de produtos */}
-                <div className="space-y-3 max-h-60 overflow-y-auto">
+                <div className="space-y-3 max-h-40 overflow-y-auto">
                   {carrinho.map((item) => (
                     <div key={item.id} className="bg-gray-800/50 rounded-lg p-3 flex justify-between items-center">
                       <div className="flex-1">
@@ -35000,6 +35080,24 @@ const PDVPage: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+
+                {/* Campo de observação */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Observação (opcional)
+                  </label>
+                  <textarea
+                    value={observacaoConsumoInterno}
+                    onChange={(e) => setObservacaoConsumoInterno(e.target.value)}
+                    placeholder="Descreva o motivo do consumo interno..."
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                    rows={3}
+                    maxLength={500}
+                  />
+                  <div className="text-xs text-gray-400 mt-1">
+                    {observacaoConsumoInterno.length}/500 caracteres
+                  </div>
                 </div>
 
                 {/* Total de itens */}
@@ -35016,7 +35114,10 @@ const PDVPage: React.FC = () => {
               {/* Footer */}
               <div className="bg-gray-800/30 p-6 flex gap-3">
                 <button
-                  onClick={() => setShowConsumoInternoModal(false)}
+                  onClick={() => {
+                    setObservacaoConsumoInterno('');
+                    setShowConsumoInternoModal(false);
+                  }}
                   className="flex-1 px-4 py-3 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors font-medium"
                 >
                   Cancelar
