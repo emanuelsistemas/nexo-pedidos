@@ -3318,6 +3318,7 @@ const PDVPage: React.FC = () => {
       icon: ShoppingBag,
       label: 'Pedidos',
       color: 'primary',
+      loading: loadingPedidos, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         // Prevenir qualquer comportamento padrão
         if (e) {
@@ -3325,23 +3326,31 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingPedidos) return;
+
         try {
+          // ✅ NOVO: Ativar loading
+          setLoadingPedidos(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
+
+          // Abrir modal e carregar dados
+          setShowPedidosModal(true);
+          setSearchPedidos('');
+
+          // ✅ SEMPRE CARREGAR PEDIDOS QUANDO MODAL ABRIR (para garantir dados atualizados)
+          await loadPedidos();
         } catch (error) {
-          // Erro silencioso ao ativar fullscreen
+          console.error('❌ Erro ao abrir modal de pedidos:', error);
+          toast.error('Erro ao carregar pedidos');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingPedidos(false);
         }
-
-        // Abrir modal IMEDIATAMENTE sem loading
-        setShowPedidosModal(true);
-        setSearchPedidos('');
-
-        // ✅ SEMPRE CARREGAR PEDIDOS QUANDO MODAL ABRIR (para garantir dados atualizados)
-        setTimeout(() => {
-          loadPedidos();
-        }, 100);
       }
     },
     {
@@ -3349,12 +3358,27 @@ const PDVPage: React.FC = () => {
       icon: BookOpen,
       label: 'Cardápio Digital',
       color: 'primary',
-      onClick: (e?: React.MouseEvent) => {
+      loading: loadingCardapioDigital, // ✅ NOVO: Estado de loading
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        setShowCardapioDigitalModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingCardapioDigital) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingCardapioDigital(true);
+          setShowCardapioDigitalModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir cardápio digital:', error);
+          toast.error('Erro ao abrir cardápio digital');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingCardapioDigital(false);
+        }
       }
     },
     {
@@ -3377,13 +3401,28 @@ const PDVPage: React.FC = () => {
       label: 'Mesas',
       color: 'primary',
       count: contadorVendasMesas,
+      loading: loadingMesas, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        await carregarVendasMesas();
-        setShowMesasModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingMesas) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingMesas(true);
+          await carregarVendasMesas();
+          setShowMesasModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar mesas:', error);
+          toast.error('Erro ao carregar mesas');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingMesas(false);
+        }
       }
     },
     {
@@ -3392,13 +3431,28 @@ const PDVPage: React.FC = () => {
       label: 'Comandas',
       color: 'primary',
       count: contadorVendasComandas,
+      loading: loadingComandas, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        await carregarVendasComandas();
-        setShowComandasModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingComandas) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingComandas(true);
+          await carregarVendasComandas();
+          setShowComandasModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar comandas:', error);
+          toast.error('Erro ao carregar comandas');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingComandas(false);
+        }
       }
     },
     {
@@ -3407,12 +3461,19 @@ const PDVPage: React.FC = () => {
       label: 'Delivery Local',
       color: 'orange',
       count: contadorVendasDelivery,
+      loading: loadingDeliveryLocal, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingDeliveryLocal) return;
+
         try {
+          // ✅ NOVO: Ativar loading
+          setLoadingDeliveryLocal(true);
           console.log('🚚 [BOTÃO] Clicado no botão Delivery Local');
           await carregarVendasDelivery();
           console.log('✅ [BOTÃO] Vendas carregadas, abrindo modal...');
@@ -3421,6 +3482,9 @@ const PDVPage: React.FC = () => {
         } catch (error) {
           console.error('❌ [BOTÃO] Erro ao abrir modal de delivery:', error);
           toast.error('Erro ao carregar deliveries. Tente novamente.');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingDeliveryLocal(false);
         }
       }
     },
@@ -3429,14 +3493,29 @@ const PDVPage: React.FC = () => {
       icon: TrendingDown,
       label: 'Sangria',
       color: 'red',
+      loading: loadingSangriaModal, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
-        await carregarDadosCaixa();
-        setShowSangriaModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingSangriaModal) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingSangriaModal(true);
+          // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+          await carregarDadosCaixa();
+          setShowSangriaModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de sangria:', error);
+          toast.error('Erro ao carregar dados da sangria');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingSangriaModal(false);
+        }
       }
     },
     {
@@ -3444,14 +3523,29 @@ const PDVPage: React.FC = () => {
       icon: TrendingUp,
       label: 'Suprimento',
       color: 'green',
+      loading: loadingSuprimentoModal, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
-        await carregarDadosCaixa();
-        setShowSuprimentoModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingSuprimentoModal) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingSuprimentoModal(true);
+          // ✅ CORREÇÃO: Carregar dados do caixa antes de abrir o modal
+          await carregarDadosCaixa();
+          setShowSuprimentoModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de suprimento:', error);
+          toast.error('Erro ao carregar dados do suprimento');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingSuprimentoModal(false);
+        }
       }
     },
     {
@@ -3472,12 +3566,27 @@ const PDVPage: React.FC = () => {
       icon: Clock,
       label: 'Fiados',
       color: 'yellow',
-      onClick: (e?: React.MouseEvent) => {
+      loading: loadingFiadosModal, // ✅ NOVO: Estado de loading
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        setShowFiadosModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingFiadosModal) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingFiadosModal(true);
+          setShowFiadosModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de fiados:', error);
+          toast.error('Erro ao abrir fiados');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingFiadosModal(false);
+        }
       }
     },
     {
@@ -3511,26 +3620,38 @@ const PDVPage: React.FC = () => {
       icon: ArrowUpDown,
       label: 'Movimentos',
       color: 'purple',
+      loading: loadingMovimentos, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingMovimentos) return;
+
         try {
+          // ✅ NOVO: Ativar loading
+          setLoadingMovimentos(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
-        } catch (error) {
-          // Erro silencioso ao ativar fullscreen
-        }
 
-        setShowMovimentosModal(true);
-        // Carregar vendas apenas uma vez quando abrir o modal
-        loadVendas();
-        // Atualizar contador de NFC-e pendentes
-        loadContadorNfcePendentes();
+          setShowMovimentosModal(true);
+          // Carregar vendas e contador
+          await Promise.all([
+            loadVendas(),
+            loadContadorNfcePendentes()
+          ]);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de movimentos:', error);
+          toast.error('Erro ao carregar movimentos');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingMovimentos(false);
+        }
       }
     },
     {
@@ -3538,24 +3659,35 @@ const PDVPage: React.FC = () => {
       icon: RotateCcw,
       label: 'Devoluções',
       color: 'red',
+      loading: loadingDevolucoes, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingDevolucoes) return;
+
         try {
+          // ✅ NOVO: Ativar loading
+          setLoadingDevolucoes(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
-        } catch (error) {
-          // Erro silencioso ao ativar fullscreen
-        }
 
-        setShowDevolucoesModal(true);
-        // Carregar devoluções pendentes quando abrir o modal
-        loadDevolucoesPendentes();
+          setShowDevolucoesModal(true);
+          // Carregar devoluções pendentes quando abrir o modal
+          await loadDevolucoesPendentes();
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de devoluções:', error);
+          toast.error('Erro ao carregar devoluções');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingDevolucoes(false);
+        }
       }
     },
     // ✅ NOVO: Botão Caixa - só aparece quando caixa está aberto
@@ -3603,17 +3735,26 @@ const PDVPage: React.FC = () => {
       icon: Coffee,
       label: 'Consumo Interno',
       color: 'orange',
+      loading: loadingConsumoInterno, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingConsumoInterno) return;
+
         try {
+          // ✅ NOVO: Ativar loading
+          setLoadingConsumoInterno(true);
           setShowConsumoInternoModal(true);
         } catch (error) {
           console.error('❌ Erro ao abrir modal de consumo interno:', error);
           toast.error('Erro ao abrir consumo interno');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingConsumoInterno(false);
         }
       }
     }
