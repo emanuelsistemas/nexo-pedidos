@@ -639,7 +639,6 @@ const PDVPage: React.FC = () => {
   const [showDevolucoesModal, setShowDevolucoesModal] = useState(false);
   const [devolucoesPendentes, setDevolucoesPendentes] = useState<any[]>([]);
   const [searchDevolucoes, setSearchDevolucoes] = useState('');
-  const [loadingDevolucoes, setLoadingDevolucoes] = useState(false);
   const [showConfirmarDevolucaoModal, setShowConfirmarDevolucaoModal] = useState(false);
   const [devolucaoSelecionada, setDevolucaoSelecionada] = useState<any>(null);
 
@@ -921,7 +920,6 @@ const PDVPage: React.FC = () => {
 
   // Estados para o modal de Pedidos
   const [pedidos, setPedidos] = useState<any[]>([]);
-  const [loadingPedidos, setLoadingPedidos] = useState(false);
   const [searchPedidos, setSearchPedidos] = useState('');
   const [pedidosFiltrados, setPedidosFiltrados] = useState<any[]>([]);
   const [contadorPedidosPendentes, setContadorPedidosPendentes] = useState<number>(0);
