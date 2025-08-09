@@ -11391,27 +11391,7 @@ const PDVPage: React.FC = () => {
     try {
       console.log(`🔄 Atualizando lista de itens cancelados do caixa: ${caixaId}`);
 
-      // Buscar itens cancelados usando uma abordagem diferente
-      // Primeiro buscar todas as vendas do caixa, depois os itens cancelados
-      const { data: vendasCaixa, error: vendasError } = await supabase
-        .from('pdv')
-        .select('id')
-        .eq('caixa_id', caixaId);
-
-      if (vendasError) {
-        console.error('❌ Erro ao buscar vendas do caixa:', vendasError);
-        return;
-      }
-
-      if (!vendasCaixa || vendasCaixa.length === 0) {
-        console.log('ℹ️ Nenhuma venda encontrada para este caixa');
-        setItensCanceladosCaixaModal([]);
-        setTotalItensCanceladosCaixa(0);
-        return;
-      }
-
-      const idsVendas = vendasCaixa.map(venda => venda.id);
-
+      // Buscar itens cancelados do caixa diretamente pelo relacionamento com PDV
       const { data: itensCanceladosData, error: itensCanceladosError } = await supabase
         .from('pdv_itens')
         .select(`
@@ -11424,12 +11404,17 @@ const PDVPage: React.FC = () => {
           quantidade_adicionais_deletado,
           deletado_em,
           snapshot_item_deletado,
-          pdv_id,
+          pdv:pdv_id!inner (
+            id,
+            numero_venda,
+            nome_cliente,
+            caixa_id
+          ),
           usuarios:deletado_por (
             nome
           )
         `)
-        .in('pdv_id', idsVendas)
+        .eq('pdv.caixa_id', caixaId)
         .eq('deletado', true)
         .not('valor_total_real_deletado', 'is', null)
         .order('deletado_em', { ascending: false });
@@ -11437,13 +11422,17 @@ const PDVPage: React.FC = () => {
       if (itensCanceladosError) {
         console.error('❌ Erro ao buscar itens cancelados:', itensCanceladosError);
       } else {
-        setItensCanceladosCaixaModal(itensCanceladosData || []);
-        const totalItensCancelados = (itensCanceladosData || []).reduce((total, item) => {
-          return total + (parseFloat(item.valor_total_real_deletado) || 0);
+        const itens = itensCanceladosData || [];
+        setItensCanceladosCaixaModal(itens);
+        const totalItensCancelados = itens.reduce((total, item) => {
+          const v = (typeof item.valor_total_real_deletado === 'number')
+            ? item.valor_total_real_deletado
+            : parseFloat(item.valor_total_real_deletado || '0');
+          return total + (isNaN(v) ? 0 : v);
         }, 0);
         setTotalItensCanceladosCaixa(totalItensCancelados);
 
-        console.log(`✅ Lista atualizada: ${(itensCanceladosData || []).length} itens cancelados`);
+        console.log('✅ Lista atualizada:', itens.length, 'itens cancelados', { itens });
       }
     } catch (error) {
       console.error('❌ Erro ao atualizar itens cancelados:', error);
@@ -11464,6 +11453,49 @@ const PDVPage: React.FC = () => {
         if (!userData.user) {
           toast.error('Usuário não autenticado');
           return;
+        }
+
+        // ✅ NOVO: Garantir que a venda em andamento está vinculada ao caixa aberto
+        try {
+          if (pdvConfig?.controla_caixa) {
+            // Obter caixa aberto
+            let caixaId: string | null = null;
+            const { data: caixaByStatus } = await supabase
+              .from('caixa_controle')
+              .select('id')
+              .eq('usuario_id', userData.user.id)
+              .eq('status', 'aberto')
+              .order('data_abertura', { ascending: false })
+              .limit(1)
+              .single();
+            caixaId = caixaByStatus?.id || null;
+            if (!caixaId) {
+              const { data: userEmpresa } = await supabase
+                .from('usuarios')
+                .select('empresa_id')
+                .eq('id', userData.user.id)
+                .single();
+              const { data: caixaByFlag } = await supabase
+                .from('caixa_controle')
+                .select('id')
+                .eq('empresa_id', userEmpresa?.empresa_id)
+                .eq('usuario_id', userData.user.id)
+                .eq('status_caixa', true)
+                .order('data_abertura', { ascending: false })
+                .limit(1)
+                .single();
+              caixaId = caixaByFlag?.id || null;
+            }
+            if (caixaId) {
+              // Vincular caixa à venda (idempotente)
+              await supabase
+                .from('pdv')
+                .update({ caixa_id: caixaId })
+                .eq('id', vendaEmAndamento.id);
+            }
+          }
+        } catch (e) {
+          console.warn('⚠️ Não foi possível vincular venda ao caixa antes do soft delete:', e);
         }
 
         // Importar função de soft delete
@@ -14329,10 +14361,45 @@ const PDVPage: React.FC = () => {
       const numeroNfceReservado = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
       const serieUsuario = usuarioData.serie_nfce;
 
+      // ✅ NOVO: Identificar caixa aberto e vincular à venda (quando controle de caixa estiver ativo)
+      let caixaId: string | null = null;
+      try {
+        if (pdvConfig?.controla_caixa) {
+          // Tentar por status = 'aberto'
+          const { data: caixaByStatus } = await supabase
+            .from('caixa_controle')
+            .select('id')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .eq('usuario_id', userData.user.id)
+            .eq('status', 'aberto')
+            .order('data_abertura', { ascending: false })
+            .limit(1)
+            .single();
+          caixaId = caixaByStatus?.id || null;
+
+          // Fallback: tentar por status_caixa = true
+          if (!caixaId) {
+            const { data: caixaByFlag } = await supabase
+              .from('caixa_controle')
+              .select('id')
+              .eq('empresa_id', usuarioData.empresa_id)
+              .eq('usuario_id', userData.user.id)
+              .eq('status_caixa', true)
+              .order('data_abertura', { ascending: false })
+              .limit(1)
+              .single();
+            caixaId = caixaByFlag?.id || null;
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Não foi possível identificar caixa aberto ao criar venda. Prosseguindo sem caixa_id.', e);
+      }
+
       // Preparar dados da venda em andamento (similar ao rascunho NFe)
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
+        caixa_id: caixaId, // ✅ NOVO: Vincular venda ao caixa aberto (se houver)
         numero_venda: numeroVenda,
         status_venda: 'aberta', // ✅ Status para venda em andamento
         data_venda: new Date().toISOString(),

@@ -274,6 +274,21 @@ interface ValidationError {
       fetchImportacoes();
     }
   }, [empresaId]);
+  // Carregar nomes dos produtos quando abrir o modal de erros
+  useEffect(() => {
+    if (!showErrorModal || !importacaoParaReprocessar) return;
+    (async () => {
+      const { data } = await supabase
+        .from('importacao_produtos')
+        .select('arquivo_storage_path, empresa_id')
+        .eq('id', importacaoParaReprocessar)
+        .single();
+      if (data?.arquivo_storage_path && data?.empresa_id) {
+        await carregarNomesProdutos(data.arquivo_storage_path, data.empresa_id);
+      }
+    })();
+  }, [showErrorModal, importacaoParaReprocessar]);
+
 
   const fetchImportacoes = async () => {
     if (!empresaId) return;
@@ -1563,7 +1578,30 @@ interface ValidationError {
     }
   };
 
-      // Enviar alteração para o backend
+
+  // Carrega e mapeia Nome do Produto (coluna 4) por número de linha (1-based)
+  const carregarNomesProdutos = async (arquivoPath: string, empresaId: string) => {
+    try {
+      if (!arquivoPath || !empresaId) return;
+      const downloadUrl = `/backend/public/download-planilha.php?file=${encodeURIComponent(arquivoPath)}&empresa=${empresaId}`;
+      const resp = await fetch(downloadUrl);
+      if (!resp.ok) return;
+      const arrayBuffer = await resp.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      const rows = (data.slice(1) as any[][]);
+      const nomes: Record<number, string> = {};
+      rows.forEach((row, idx) => {
+        const nome = row?.[3] ? String(row[3]).trim() : '';
+        if (nome) nomes[idx + 2] = nome; // +2 por causa do cabeçalho
+      });
+      setProdutoNomePorLinha(nomes);
+    } catch (e) {
+      console.warn('Falha ao carregar nomes dos produtos:', e);
+    }
+  };
 
   // Remover uma linha inteira da planilha (servidor) e reprocessar
   const removerLinhaErro = async (linha: number) => {
@@ -1901,6 +1939,7 @@ interface ValidationError {
                 {importacao.status === 'processando' && (
                   <div className="mb-4">
                     <div className="flex justify-between text-sm text-gray-400 mb-2">
+
                       <span>Progresso</span>
                       <span>{importacao.progresso_percentual}%</span>
                     </div>
@@ -2212,10 +2251,14 @@ interface ValidationError {
                           </button>
 
                           <div className="flex items-center gap-3 mb-4">
-                            <div className="bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg font-mono font-semibold">
-                              Linha {linha}
+                            <div className="flex items-center gap-2">
+                              <div className="bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg font-mono font-semibold">
+                                Linha {linha}
+                              </div>
                               {produtoNomePorLinha[Number(linha)] && (
-                                <span className="ml-2 text-xs text-purple-300/90">— {produtoNomePorLinha[Number(linha)]}</span>
+                                <div className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs font-medium truncate max-w-[300px]">
+                                  {produtoNomePorLinha[Number(linha)]}
+                                </div>
                               )}
                             </div>
                             <div className="text-gray-400 text-sm">
