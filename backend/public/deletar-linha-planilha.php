@@ -5,10 +5,16 @@ header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-  exit(0);
+  http_response_code(200);
+  exit();
 }
 
-require_once __DIR__ . '/../vendor/autoload.php';
+// Garantir que warnings virem exceções para responder sempre em JSON
+set_error_handler(function ($severity, $message, $file, $line) {
+  throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -31,27 +37,32 @@ try {
     throw new Exception('Não é permitido deletar o cabeçalho (linha 1)');
   }
 
-  // Segurança básica: caminho precisa apontar para diretório permitido
-  $baseDir = realpath(__DIR__ . '/../storage/planilhas_importacoes');
-  $fullPath = realpath($baseDir . '/' . $arquivoPath);
-  if (!$fullPath || strpos($fullPath, $baseDir) !== 0) {
-    throw new Exception('Caminho do arquivo inválido');
+  // Base consistente com outros endpoints
+  $baseDir = realpath(dirname(__DIR__) . '/storage/planilhas_importacoes');
+  if ($baseDir === false) {
+    throw new Exception('Diretório base não encontrado');
   }
 
-  if (!file_exists($fullPath)) {
+  $caminhoCompleto = $baseDir . '/' . $arquivoPath;
+  // Segurança: impedir path traversal
+  $real = realpath($caminhoCompleto);
+  if ($real === false || strpos($real, $baseDir) !== 0) {
+    // se realpath falhar por o arquivo ainda não existir (não é o caso aqui), caímos no exists abaixo
+    $real = $caminhoCompleto;
+  }
+
+  if (!file_exists($real)) {
     throw new Exception('Arquivo não encontrado: ' . $arquivoPath);
   }
 
-  // Carregar
-  $spreadsheet = IOFactory::load($fullPath);
+  // Carregar e remover linha
+  $spreadsheet = IOFactory::load($real);
   $sheet = $spreadsheet->getSheet(0);
-
-  // Remover a linha (1-based no Excel)
   $sheet->removeRow($linha, 1);
 
   // Salvar
   $writer = new Xlsx($spreadsheet);
-  $writer->save($fullPath);
+  $writer->save($real);
 
   echo json_encode([
     'success' => true,
@@ -59,8 +70,7 @@ try {
     'linha' => $linha,
     'arquivo' => $arquivoPath,
   ]);
-} catch (Exception $e) {
+} catch (Throwable $e) {
   http_response_code(500);
   echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
-

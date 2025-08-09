@@ -11370,9 +11370,100 @@ const PDVPage: React.FC = () => {
     toast.success(`${quantidadeTrocasRemovidas} troca(s) removida(s) do carrinho`);
   };
 
-  const removerDoCarrinho = (itemId: string) => {
+  // ✅ NOVO: Função para atualizar itens cancelados do caixa
+  const atualizarItensCanceladosCaixa = async () => {
+    if (!caixaAberto) return;
+
+    try {
+      console.log('🔄 Atualizando lista de itens cancelados do caixa...');
+
+      const { data: itensCanceladosData, error: itensCanceladosError } = await supabase
+        .from('pdv_itens')
+        .select(`
+          id,
+          nome_produto,
+          quantidade,
+          valor_unitario,
+          valor_total_real_deletado,
+          valor_adicionais_deletado,
+          quantidade_adicionais_deletado,
+          deletado_em,
+          snapshot_item_deletado,
+          pdv:pdv_id (
+            id,
+            numero_venda,
+            nome_cliente,
+            caixa_id
+          ),
+          usuarios:deletado_por (
+            nome
+          )
+        `)
+        .eq('pdv.caixa_id', caixaAberto.id)
+        .eq('deletado', true)
+        .not('valor_total_real_deletado', 'is', null)
+        .order('deletado_em', { ascending: false });
+
+      if (itensCanceladosError) {
+        console.error('❌ Erro ao buscar itens cancelados:', itensCanceladosError);
+      } else {
+        setItensCanceladosCaixaModal(itensCanceladosData || []);
+        const totalItensCancelados = (itensCanceladosData || []).reduce((total, item) => {
+          return total + (parseFloat(item.valor_total_real_deletado) || 0);
+        }, 0);
+        setTotalItensCanceladosCaixa(totalItensCancelados);
+
+        console.log(`✅ Lista atualizada: ${(itensCanceladosData || []).length} itens cancelados`);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao atualizar itens cancelados:', error);
+    }
+  };
+
+  const removerDoCarrinho = async (itemId: string) => {
     // Encontrar o item antes de remover para mostrar no toast
     const itemRemovido = carrinho.find(item => item.id === itemId);
+
+    // ✅ NOVO: Se há venda em andamento e item foi salvo no banco, fazer soft delete
+    if (vendaEmAndamento && itemRemovido?.pdv_item_id) {
+      try {
+        console.log(`🗑️ Fazendo soft delete do item: ${itemRemovido.produto.nome}`);
+
+        // Obter dados do usuário
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) {
+          toast.error('Usuário não autenticado');
+          return;
+        }
+
+        // Importar função de soft delete
+        const { softDeleteItemPDV } = await import('../../utils/pdvSoftDeleteUtils');
+
+        // Fazer soft delete no banco
+        const sucesso = await softDeleteItemPDV(
+          itemRemovido.pdv_item_id,
+          userData.user.id,
+          'Removido pelo usuário no PDV'
+        );
+
+        if (!sucesso) {
+          toast.error('Erro ao remover item do banco. Tente novamente.');
+          return;
+        }
+
+        console.log(`✅ Soft delete realizado com sucesso para: ${itemRemovido.produto.nome}`);
+
+        // ✅ NOVO: Atualizar lista de itens cancelados do caixa
+        if (caixaAberto) {
+          await atualizarItensCanceladosCaixa();
+        }
+
+      } catch (error) {
+        console.error('❌ Erro no soft delete:', error);
+        toast.error('Erro ao remover item. Tente novamente.');
+        return;
+      }
+    }
 
     // Atualizar carrinho removendo o item
     const novoCarrinho = carrinho.filter(item => item.id !== itemId);
@@ -23851,7 +23942,7 @@ const PDVPage: React.FC = () => {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => itemParaRemover && removerDoCarrinho(itemParaRemover)}
+                  onClick={async () => itemParaRemover && await removerDoCarrinho(itemParaRemover)}
                   className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors"
                 >
                   Remover

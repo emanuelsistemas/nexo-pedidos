@@ -64,7 +64,7 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
@@ -1539,6 +1539,20 @@ interface ValidationError {
         })
       });
 
+
+      // Tratar resposta e finalizar função corretamente
+      const result = await response.json().catch(() => ({} as any));
+      if (!response.ok || !(result as any)?.success) {
+        throw new Error((result as any)?.error || 'Falha ao salvar alteração');
+      }
+
+      showMessage('success', '✅ Valor alterado com sucesso! Reprocesse a importação para aplicar as mudanças.');
+    } catch (e: any) {
+      console.error('Erro ao salvar alteração:', e);
+      showMessage('error', `❌ Erro ao salvar alteração: ${e.message}`);
+    }
+  };
+
       // Enviar alteração para o backend
 
   // Remover uma linha inteira da planilha (servidor) e reprocessar
@@ -1581,29 +1595,6 @@ interface ValidationError {
     } catch (e: any) {
       console.error('Erro ao remover linha:', e);
       showMessage('error', `❌ Erro ao remover linha: ${e.message}`);
-    }
-  };
-
-
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Marcar como editado
-        const key = `${linha}-${coluna}`;
-        setEditedValues(prev => ({
-          ...prev,
-          [key]: novoValor
-        }));
-        setHasEdits(true);
-        setEditingError(null);
-        showMessage('success', '✅ Valor alterado com sucesso! Reprocesse a importação para aplicar as mudanças.');
-      } else {
-        showMessage('error', `❌ Erro ao alterar valor: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Erro ao salvar alteração:', error);
-      showMessage('error', '❌ Erro ao salvar alteração na planilha');
     }
   };
 
@@ -2172,55 +2163,9 @@ interface ValidationError {
               </div>
 
               <div className="p-6 overflow-y-auto flex-1">
-                {/* Resumo dos tipos de erros */}
-                              {/* Remover linha (ícone lixeira) */}
-                              <button
-                                onClick={() => setDeleteConfirmation({
-                                  isOpen: true,
-                                  itemId: String(linha),
-                                  title: `Remover linha ${linha}`,
-                                  message: 'Essa linha será removida da planilha e a importação será reprocessada sem ela. Deseja continuar?'
-                                })}
-                                className="ml-auto text-red-400 hover:text-red-300 transition-colors"
-                                title="Remover esta linha da planilha"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-
-                <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {(() => {
-                    const tiposCount = validationErrors.reduce((acc, erro) => {
-                      acc[erro.tipo] = (acc[erro.tipo] || 0) + 1;
-                      return acc;
-                    }, {} as Record<string, number>);
-
-                    return Object.entries(tiposCount).map(([tipo, count]) => (
-                      <div key={tipo} className="bg-gray-800/30 rounded-lg p-3 text-center min-h-[90px]">
-                        <div className={`inline-flex p-2 rounded-full mb-2 ${
-                          tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
-                          tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
-                          tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-orange-500/20 text-orange-400'
-                        }`}>
-                          {tipo === 'obrigatorio' ? <AlertCircle size={16} /> :
-                           tipo === 'formato' ? <AlertTriangle size={16} /> :
-                           tipo === 'tamanho' ? <FileText size={16} /> :
-                           <X size={16} />}
-                        </div>
-                        <div className="text-white font-semibold text-lg">{count}</div>
-                        <div className="text-gray-400 text-xs">
-                          {tipo === 'obrigatorio' ? 'Campos Vazios' :
-                           tipo === 'formato' ? 'Formato Incorreto' :
-                           tipo === 'tamanho' ? 'Tamanho Incorreto' :
-                           'Valores Inválidos'}
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-
                 {/* Lista detalhada de erros agrupados por linha */}
                 <div className="space-y-4">
+
                   <h4 className="text-white font-medium mb-3 flex items-center gap-2">
                     <FileText size={16} />
                     Erros Encontrados na Planilha
@@ -2240,24 +2185,25 @@ interface ValidationError {
                       .map(([linha, erros]) => (
                         <div
                           key={linha}
-                          className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+                          className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 relative"
                         >
+                          {/* Botão de remover linha no canto superior direito */}
+                          <button
+                            onClick={() => setDeleteConfirmation({
+                              isOpen: true,
+                              itemId: String(linha),
+                              title: `Remover linha ${linha}`,
+                              message: 'Essa linha será removida da planilha e a importação será reprocessada sem ela. Deseja continuar?'
+                            })}
+                            className="absolute top-3 right-3 text-red-400 hover:text-red-300 transition-colors p-1 hover:bg-red-500/10 rounded"
+                            title="Remover esta linha da planilha"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+
                           <div className="flex items-center gap-3 mb-4">
                             <div className="bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg font-mono font-semibold">
                               Linha {linha}
-                              <button
-                                onClick={() => setDeleteConfirmation({
-                                  isOpen: true,
-                                  itemId: String(linha),
-                                  title: `Remover linha ${linha}`,
-                                  message: 'Essa linha será removida da planilha e a importação será reprocessada sem ela. Deseja continuar?'
-                                })}
-                                className="ml-auto text-red-400 hover:text-red-300 transition-colors"
-                                title="Remover esta linha da planilha"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-
                             </div>
                             <div className="text-gray-400 text-sm">
                               {erros.length} erro{erros.length !== 1 ? 's' : ''} encontrado{erros.length !== 1 ? 's' : ''}
