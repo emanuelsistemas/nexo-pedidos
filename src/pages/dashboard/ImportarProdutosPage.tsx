@@ -202,7 +202,7 @@ const ImportarProdutosPage: React.FC = () => {
   const [editingError, setEditingError] = useState<{linha: number, coluna: string} | null>(null);
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [hasEdits, setHasEdits] = useState(false);
-  const [unidadesMedida, setUnidadesMedida] = useState<Array<{id: string, nome: string, sigla: string}>>([]);
+  const [unidadesMedida, setUnidadesMedida] = useState<Array<{id: string, nome: string, sigla: string, fracionado: boolean}>>([]);
 
 // Interface para erros de validação
 interface ValidationError {
@@ -1467,7 +1467,7 @@ interface ValidationError {
 
       const { data, error } = await supabase
         .from('unidade_medida')
-        .select('id, nome, sigla')
+        .select('id, nome, sigla, fracionado')
         .eq('empresa_id', empresa)
         .order('sigla', { ascending: true });
 
@@ -2293,10 +2293,15 @@ interface ValidationError {
                                                             }, 100);
                                                           }
                                                         }}
-                                                        className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs transition-colors border border-blue-500/30 hover:border-blue-400/50"
+                                                        className="relative bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs transition-colors border border-blue-500/30 hover:border-blue-400/50"
                                                         title={`Usar \"${unidade.sigla || unidade.nome}\"`}
                                                       >
-                                                        {unidade.sigla ? `${unidade.sigla}` : unidade.nome}
+                                                        <span className="font-medium">{unidade.sigla ? `${unidade.sigla}` : unidade.nome}</span>
+                                                        {unidade.fracionado && (
+                                                          <span className="absolute -right-2 -top-2 bg-green-600 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm border border-green-400/60">
+                                                            fracionado
+                                                          </span>
+                                                        )}
                                                       </button>
                                                     ))}
                                                   </div>
