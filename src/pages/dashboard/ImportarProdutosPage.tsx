@@ -2293,12 +2293,12 @@ interface ValidationError {
                                                             }, 100);
                                                           }
                                                         }}
-                                                        className="relative bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs transition-colors border border-blue-500/30 hover:border-blue-400/50"
+                                                        className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs transition-colors border border-blue-500/30 hover:border-blue-400/50 flex items-center gap-1"
                                                         title={`Usar \"${unidade.sigla || unidade.nome}\"`}
                                                       >
                                                         <span className="font-medium">{unidade.sigla ? `${unidade.sigla}` : unidade.nome}</span>
                                                         {unidade.fracionado && (
-                                                          <span className="absolute -right-2 -top-2 bg-green-600 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-sm border border-green-400/60">
+                                                          <span className="bg-green-600/20 text-green-300 border border-green-500/30 px-1 rounded text-[10px] leading-none">
                                                             fracionado
                                                           </span>
                                                         )}

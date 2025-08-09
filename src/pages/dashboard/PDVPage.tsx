@@ -5810,6 +5810,17 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para calcular saldo devedor real (excluindo vendas canceladas)
+  const calcularSaldoDevedorReal = (vendasFiado: any[]) => {
+    const vendasValidas = vendasFiado.filter(venda => venda.tipo === 'venda' && !venda.cancelada);
+    const totalVendas = vendasValidas.reduce((total, venda) => total + venda.valor, 0);
+
+    const recebimentos = vendasFiado.filter(item => item.tipo === 'recebimento');
+    const totalRecebimentos = recebimentos.reduce((total, recebimento) => total + recebimento.valor, 0);
+
+    return totalVendas - totalRecebimentos;
+  };
+
   // ✅ NOVA: Função para carregar vendas fiado e recebimentos de um cliente específico
   const loadVendasFiadoCliente = async (clienteId: string) => {
     setLoadingVendasFiado(true);
@@ -5826,7 +5837,7 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Buscar vendas fiado do cliente
+      // Buscar vendas fiado do cliente (incluindo canceladas)
       const { data: vendasData, error: vendasError } = await supabase
         .from('pdv')
         .select(`
@@ -5835,7 +5846,10 @@ const PDVPage: React.FC = () => {
           valor_total,
           data_venda,
           created_at,
-          observacao_venda
+          observacao_venda,
+          status_venda,
+          cancelada_em,
+          motivo_cancelamento
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('cliente_id', clienteId)
@@ -5870,7 +5884,7 @@ const PDVPage: React.FC = () => {
 
       // Combinar vendas e recebimentos em um histórico unificado
       const historicoUnificado = [
-        // Vendas fiado (débito)
+        // Vendas fiado (débito) - incluindo canceladas
         ...(vendasData || []).map(venda => ({
           id: venda.id,
           tipo: 'venda',
@@ -5879,7 +5893,12 @@ const PDVPage: React.FC = () => {
           data: venda.created_at,
           data_venda: venda.data_venda,
           observacao: venda.observacao_venda,
-          descricao: `Venda #${venda.numero_venda}`
+          descricao: `Venda #${venda.numero_venda}`,
+          // ✅ NOVO: Campos de cancelamento
+          status_venda: venda.status_venda,
+          cancelada: venda.status_venda === 'cancelada',
+          cancelada_em: venda.cancelada_em,
+          motivo_cancelamento: venda.motivo_cancelamento
         })),
         // Recebimentos (crédito)
         ...(recebimentosData || []).map(recebimento => ({
@@ -26143,18 +26162,30 @@ const PDVPage: React.FC = () => {
                     <div>
                       <div className="text-sm text-gray-400 mb-1">Saldo Devedor</div>
                       <div className="flex items-center gap-3">
-                        <div className="text-xl font-bold text-yellow-400">
-                          R$ {clienteSelecionadoDetalhes.saldo_devedor.toFixed(2).replace('.', ',')}
-                        </div>
-                        {clienteSelecionadoDetalhes.saldo_devedor > 0 && (
-                          <button
-                            onClick={() => setShowRecebimentoFiadoModal(true)}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
-                          >
-                            <DollarSign size={16} />
-                            Receber
-                          </button>
-                        )}
+                        {(() => {
+                          const saldoReal = calcularSaldoDevedorReal(vendasFiadoCliente);
+                          return (
+                            <>
+                              <div className="text-xl font-bold text-yellow-400">
+                                R$ {saldoReal.toFixed(2).replace('.', ',')}
+                              </div>
+                              {saldoReal !== clienteSelecionadoDetalhes.saldo_devedor && (
+                                <div className="text-sm text-gray-500">
+                                  (Banco: R$ {clienteSelecionadoDetalhes.saldo_devedor.toFixed(2).replace('.', ',')})
+                                </div>
+                              )}
+                              {saldoReal > 0 && (
+                                <button
+                                  onClick={() => setShowRecebimentoFiadoModal(true)}
+                                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                                >
+                                  <DollarSign size={16} />
+                                  Receber
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -26258,22 +26289,38 @@ const PDVPage: React.FC = () => {
                               <>
                                 {/* Cabeçalho da Venda */}
                                 <div
-                                  className="flex justify-between items-center cursor-pointer hover:bg-gray-700/30 p-3 rounded-lg transition-colors"
+                                  className={`flex justify-between items-center cursor-pointer hover:bg-gray-700/30 p-3 rounded-lg transition-colors ${
+                                    item.cancelada ? 'bg-red-900/20 border border-red-800/50' : ''
+                                  }`}
                                   onClick={() => toggleVendaExpandida(item.id)}
                                 >
                                   <div className="flex-1">
                                     <div className="flex items-center gap-3">
-                                      <div className="font-semibold text-white">Venda #{item.numero_venda}</div>
+                                      <div className={`font-semibold ${item.cancelada ? 'text-red-400 line-through' : 'text-white'}`}>
+                                        Venda #{item.numero_venda}
+                                      </div>
+                                      {item.cancelada && (
+                                        <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full">
+                                          CANCELADA
+                                        </span>
+                                      )}
                                       <div className="text-sm text-gray-400">
                                         {new Date(item.data_venda || item.data).toLocaleDateString('pt-BR')}
                                       </div>
                                     </div>
+                                    {item.cancelada && item.motivo_cancelamento && (
+                                      <div className="text-sm text-red-400 mt-1">
+                                        Motivo: {item.motivo_cancelamento}
+                                      </div>
+                                    )}
                                     {item.observacao && (
-                                      <div className="text-sm text-gray-500 mt-1">{item.observacao}</div>
+                                      <div className={`text-sm mt-1 ${item.cancelada ? 'text-gray-600 line-through' : 'text-gray-500'}`}>
+                                        {item.observacao}
+                                      </div>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-3">
-                                    <div className="text-lg font-bold text-yellow-400">
+                                    <div className={`text-lg font-bold ${item.cancelada ? 'text-red-400 line-through' : 'text-yellow-400'}`}>
                                       R$ {item.valor.toFixed(2).replace('.', ',')}
                                     </div>
                                     {vendaExpandida === item.id ? (
