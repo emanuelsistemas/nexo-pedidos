@@ -11343,20 +11343,60 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Função para atualizar itens cancelados do caixa
   const atualizarItensCanceladosCaixa = async () => {
-    if (!dadosCaixa || !dadosCaixa.id) {
-      console.log('⚠️ dadosCaixa não está disponível ou ID não encontrado');
+    // Garantir que temos um caixa_id válido, mesmo fora do modal do caixa
+    let caixaId: string | null = null;
+    if (dadosCaixa?.id) {
+      caixaId = dadosCaixa.id;
+    } else {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (!authData.user) {
+          console.log('⚠️ Usuário não autenticado ao buscar itens cancelados');
+          return;
+        }
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', authData.user.id)
+          .single();
+        if (!usuarioData?.empresa_id) {
+          console.log('⚠️ Empresa não encontrada ao buscar itens cancelados');
+          return;
+        }
+        const { data: caixaAberto, error: caixaError } = await supabase
+          .from('caixa_controle')
+          .select('id')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('usuario_id', authData.user.id)
+          .eq('status', 'aberto')
+          .order('data_abertura', { ascending: false })
+          .limit(1)
+          .single();
+        if (caixaError || !caixaAberto) {
+          console.log('ℹ️ Nenhum caixa aberto encontrado ao buscar itens cancelados');
+          return;
+        }
+        caixaId = caixaAberto.id;
+      } catch (e) {
+        console.error('❌ Erro ao identificar caixa para itens cancelados:', e);
+        return;
+      }
+    }
+
+    if (!caixaId) {
+      console.log('⚠️ Caixa ID não disponível para buscar itens cancelados');
       return;
     }
 
     try {
-      console.log(`🔄 Atualizando lista de itens cancelados do caixa: ${dadosCaixa.id}`);
+      console.log(`🔄 Atualizando lista de itens cancelados do caixa: ${caixaId}`);
 
       // Buscar itens cancelados usando uma abordagem diferente
       // Primeiro buscar todas as vendas do caixa, depois os itens cancelados
       const { data: vendasCaixa, error: vendasError } = await supabase
         .from('pdv')
         .select('id')
-        .eq('caixa_id', dadosCaixa.id);
+        .eq('caixa_id', caixaId);
 
       if (vendasError) {
         console.error('❌ Erro ao buscar vendas do caixa:', vendasError);
@@ -11443,10 +11483,8 @@ const PDVPage: React.FC = () => {
 
         console.log(`✅ Soft delete realizado com sucesso para: ${itemRemovido.produto.nome}`);
 
-        // ✅ NOVO: Atualizar lista de itens cancelados do caixa
-        if (dadosCaixa) {
-          await atualizarItensCanceladosCaixa();
-        }
+        // ✅ NOVO: Atualizar lista de itens cancelados do caixa (mesmo fora do modal)
+        await atualizarItensCanceladosCaixa();
 
       } catch (error) {
         console.error('❌ Erro no soft delete:', error);

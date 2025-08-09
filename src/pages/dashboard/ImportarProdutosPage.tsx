@@ -204,6 +204,8 @@ const ImportarProdutosPage: React.FC = () => {
   const [hasEdits, setHasEdits] = useState(false);
   const [unidadesMedida, setUnidadesMedida] = useState<Array<{id: string, nome: string, sigla: string, fracionado: boolean}>>([]);
 
+  const [produtoNomePorLinha, setProdutoNomePorLinha] = useState<Record<number, string>>({});
+
 // Interface para erros de validação
 interface ValidationError {
   linha: number;
@@ -1378,6 +1380,14 @@ interface ValidationError {
       // Remover cabeçalho
       const rows = data.slice(1) as any[][];
 
+      // Mapear nome do produto (coluna 4 = índice 3) por número da linha (1-based)
+      const nomes: Record<number, string> = {};
+      rows.forEach((row, idx) => {
+        const nome = row[3] ? String(row[3]).trim() : '';
+        if (nome) nomes[idx + 2] = nome; // +2 para considerar cabeçalho
+      });
+      setProdutoNomePorLinha(nomes);
+
       if (rows.length === 0) {
         throw new Error('Planilha está vazia ou não contém dados válidos');
       }
@@ -2204,6 +2214,9 @@ interface ValidationError {
                           <div className="flex items-center gap-3 mb-4">
                             <div className="bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg font-mono font-semibold">
                               Linha {linha}
+                              {produtoNomePorLinha[Number(linha)] && (
+                                <span className="ml-2 text-xs text-purple-300/90">— {produtoNomePorLinha[Number(linha)]}</span>
+                              )}
                             </div>
                             <div className="text-gray-400 text-sm">
                               {erros.length} erro{erros.length !== 1 ? 's' : ''} encontrado{erros.length !== 1 ? 's' : ''}
