@@ -10497,7 +10497,7 @@ const ProdutosPage: React.FC = () => {
                                       [produto.id]: {
                                         ...prev[produto.id],
                                         selecionado: e.target.checked,
-                                        quantidade: e.target.checked ? prev[produto.id]?.quantidade || '' : ''
+                                        quantidade: e.target.checked ? prev[produto.id]?.quantidade || '1' : '' // ✅ NOVO: Valor padrão 1
                                       }
                                     }));
                                   }
@@ -10587,15 +10587,27 @@ const ProdutosPage: React.FC = () => {
                                       }));
                                     }}
                                     onBlur={() => {
-                                      if (isFracionado) {
-                                        setInsumosSelecionados(prev => ({
-                                          ...prev,
-                                          [produto.id]: {
-                                            ...prev[produto.id],
-                                            quantidade: padQuantidadeFracionada(prev[produto.id]?.quantidade || quantidade || '')
-                                          }
-                                        }));
+                                      // ✅ NOVO: Validar quantidade não vazia e > 0
+                                      const quantidadeAtual = quantidade.trim();
+                                      let quantidadeFinal = quantidadeAtual;
+
+                                      // Se vazio ou zero, forçar para 1
+                                      if (!quantidadeAtual || quantidadeAtual === '0' || quantidadeAtual === '0,000' || quantidadeAtual === '0.000') {
+                                        quantidadeFinal = '1';
                                       }
+
+                                      // Aplicar formatação para fracionados
+                                      if (isFracionado) {
+                                        quantidadeFinal = padQuantidadeFracionada(quantidadeFinal);
+                                      }
+
+                                      setInsumosSelecionados(prev => ({
+                                        ...prev,
+                                        [produto.id]: {
+                                          ...prev[produto.id],
+                                          quantidade: quantidadeFinal
+                                        }
+                                      }));
                                     }}
                                     placeholder={`Ex: ${isFracionado ? '0,250' : '1'}`}
                                     className="w-full bg-gray-900/50 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
@@ -10637,40 +10649,95 @@ const ProdutosPage: React.FC = () => {
                     variant="primary"
                     className="flex-1"
                     onClick={() => {
-                      // Processar insumos selecionados
-                      const novosInsumos: any[] = [];
+                      // ✅ NOVO: Validação rigorosa antes de processar
+                      const insumosSelecionadosArray = Object.entries(insumosSelecionados).filter(([_, config]) => config.selecionado);
 
-                      Object.entries(insumosSelecionados).forEach(([produtoId, config]) => {
+                      if (insumosSelecionadosArray.length === 0) {
+                        showMessage('warning', 'Selecione pelo menos um insumo para adicionar.');
+                        return;
+                      }
+
+                      // Validar quantidades de todos os selecionados
+                      const insumosInvalidos: string[] = [];
+
+                      insumosSelecionadosArray.forEach(([produtoId, config]) => {
                         const produto = materiasPrimas.find(p => p.id === produtoId);
                         if (!produto) return;
-                        const isFracionado = !!produto.unidade_medida?.fracionado;
-                        const valorStr = (config.quantidade || '').toString();
+
+                        const valorStr = (config.quantidade || '').toString().trim();
                         const valorNum = parseFloat(valorStr.replace(',', '.'));
-                        const valido = config.selecionado && !isNaN(valorNum) && valorNum > 0 && (
-                          isFracionado ? true : Number.isInteger(valorNum)
-                        );
-                        if (valido) {
-                          novosInsumos.push({
-                            produto_id: produtoId,
-                            nome: produto.nome,
-                            quantidade: valorNum,
-                            unidade_medida: produto.unidade_medida?.sigla || 'UN',
-                            selecionar_manualmente_insumo: false,
-                            adicionar_valor_insumo: false
-                          });
+                        const isFracionado = !!produto.unidade_medida?.fracionado;
+
+                        // Validações específicas
+                        if (!valorStr || valorStr === '0' || valorStr === '0,000' || valorStr === '0.000') {
+                          insumosInvalidos.push(`${produto.nome}: quantidade não pode estar vazia ou ser zero`);
+                        } else if (isNaN(valorNum) || valorNum <= 0) {
+                          insumosInvalidos.push(`${produto.nome}: quantidade deve ser maior que zero`);
+                        } else if (!isFracionado && !Number.isInteger(valorNum)) {
+                          insumosInvalidos.push(`${produto.nome}: deve usar números inteiros`);
                         }
                       });
 
-                      // Atualizar lista de insumos do produto
-                      setProdutoInsumos(novosInsumos);
+                      // Se há erros, mostrar e parar
+                      if (insumosInvalidos.length > 0) {
+                        showMessage('error', `Corrija os seguintes problemas:\n• ${insumosInvalidos.join('\n• ')}`);
+                        return;
+                      }
+
+                      // Processar insumos selecionados (todos válidos)
+                      const novosInsumos: any[] = [];
+
+                      insumosSelecionadosArray.forEach(([produtoId, config]) => {
+                        const produto = materiasPrimas.find(p => p.id === produtoId);
+                        if (!produto) return;
+
+                        const valorStr = (config.quantidade || '').toString();
+                        const valorNum = parseFloat(valorStr.replace(',', '.'));
+
+                        novosInsumos.push({
+                          produto_id: produtoId,
+                          nome: produto.nome,
+                          quantidade: valorNum,
+                          unidade_medida: produto.unidade_medida?.sigla || 'UN',
+                          selecionar_manualmente_insumo: false,
+                          adicionar_valor_insumo: false
+                        });
+                      });
+
+                      // ✅ CORREÇÃO: Adicionar novos insumos à lista existente, preservando os já configurados
+                      setProdutoInsumos(prev => {
+                        // Criar uma nova lista combinando insumos existentes + novos insumos
+                        const insumosExistentes = [...prev];
+
+                        // Adicionar apenas insumos que não existem ainda
+                        novosInsumos.forEach(novoInsumo => {
+                          const jaExiste = insumosExistentes.some(existente => existente.produto_id === novoInsumo.produto_id);
+                          if (!jaExiste) {
+                            insumosExistentes.push(novoInsumo);
+                          }
+                        });
+
+                        return insumosExistentes;
+                      });
+
+                      // ✅ NOVO: Limpar seleções após adicionar
+                      setInsumosSelecionados({});
 
                       // Fechar modal
                       setShowModalInsumos(false);
                       setEditingInsumo(null);
                       setPesquisaInsumo(''); // Limpar pesquisa ao confirmar
 
-                      // Mostrar mensagem de sucesso
-                      showMessage('success', `${novosInsumos.length} insumo(s) adicionado(s) com sucesso!`);
+                      // ✅ CORREÇÃO: Mostrar mensagem mais precisa
+                      const novosAdicionados = novosInsumos.filter(novoInsumo =>
+                        !produtoInsumos.some(existente => existente.produto_id === novoInsumo.produto_id)
+                      ).length;
+
+                      if (novosAdicionados > 0) {
+                        showMessage('success', `${novosAdicionados} insumo(s) adicionado(s) com sucesso!`);
+                      } else {
+                        showMessage('info', 'Nenhum insumo novo foi adicionado (produtos já estavam na lista).');
+                      }
                     }}
                     disabled={!Object.values(insumosSelecionados).some(config => config.selecionado && config.quantidade && parseFloat(config.quantidade) > 0)}
                   >
