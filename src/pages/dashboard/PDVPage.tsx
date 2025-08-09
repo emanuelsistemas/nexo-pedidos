@@ -33987,7 +33987,7 @@ const PDVPage: React.FC = () => {
               borderRadius: '12px',
               border: '2px solid #10b981',
               padding: '24px',
-              maxWidth: '600px',
+              maxWidth: '1000px',
               width: '100%',
               color: 'white',
               maxHeight: '90vh',
@@ -34125,7 +34125,7 @@ const PDVPage: React.FC = () => {
               </h4>
 
               {formasPagamentoCaixa.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
                   {formasPagamentoCaixa.map((forma) => {
                     // ✅ NOVO: Verificar se há algum valor para exibir o card
                     const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
@@ -34147,18 +34147,18 @@ const PDVPage: React.FC = () => {
                       key={forma.id}
                       style={{
                         backgroundColor: '#374151',
-                        borderRadius: '8px',
-                        padding: '12px',
+                        borderRadius: '6px',
+                        padding: '8px',
                         border: '1px solid #4b5563'
                       }}
                     >
-                      <div style={{ marginBottom: '8px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                      <div style={{ marginBottom: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#e5e7eb' }}>
                           {forma.forma_pagamento_opcoes?.nome || 'N/A'}
                         </span>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: '#9ca3af' }}>Valor Atual:</span>
                           <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#10b981' }}>
@@ -34249,30 +34249,43 @@ const PDVPage: React.FC = () => {
 
                         <div style={{ marginTop: '8px' }}>
                           <label style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px', display: 'block' }}>
-                            Informar Valor:
+                            Informar Valor de Fechamento:
                           </label>
-                          <input
-                            type="text"
-                            value={valoresCaixa[forma.id] || '0,00'}
-                            onChange={(e) => {
+                          <div style={{ position: 'relative' }}>
+                            <span style={{
+                              position: 'absolute',
+                              left: '8px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              color: '#9ca3af',
+                              fontSize: '12px',
+                              pointerEvents: 'none'
+                            }}>
+                              R$
+                            </span>
+                            <input
+                              type="text"
+                              value={valoresCaixa[forma.id] || '0,00'}
+                              onChange={(e) => {
                               const novoValor = formatarValorMonetario(e.target.value);
                               setValoresCaixa(prev => ({
                                 ...prev,
                                 [forma.id]: novoValor
                               }));
                             }}
-                            placeholder="0,00"
-                            style={{
-                              width: '100%',
-                              backgroundColor: '#1f2937',
-                              border: '1px solid #4b5563',
-                              borderRadius: '4px',
-                              padding: '6px 8px',
-                              color: 'white',
-                              fontSize: '12px',
-                              outline: 'none'
-                            }}
-                          />
+                              placeholder="0,00"
+                              style={{
+                                width: '100%',
+                                backgroundColor: '#1f2937',
+                                border: '1px solid #4b5563',
+                                borderRadius: '4px',
+                                padding: '6px 8px 6px 28px',
+                                color: 'white',
+                                fontSize: '12px',
+                                outline: 'none'
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
