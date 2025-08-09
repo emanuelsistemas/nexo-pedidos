@@ -23383,11 +23383,12 @@ const PDVPage: React.FC = () => {
                       <div className="space-y-2">
                         {/* Tag de origem */}
                         <div className="flex items-center gap-2 mb-2">
-                          {cliente.origem === 'cardapio_digital' ? (
+                          {cliente.origem === 'cardapio_digital' && pdvConfig?.cardapio_digital && (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
                               📱 Cardápio Digital
                             </span>
-                          ) : (
+                          )}
+                          {(!cliente.origem || cliente.origem === 'delivery_local') && pdvConfig?.delivery && (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">
                               🏪 Delivery Local
                             </span>

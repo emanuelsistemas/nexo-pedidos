@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, Download, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Trash2, Tag, AlertTriangle } from 'lucide-react';
+import { X, Upload, Download, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Trash2, Tag, AlertTriangle, Edit3, Check, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
@@ -1443,6 +1443,59 @@ interface ValidationError {
     }
   };
 
+  // Função para salvar alteração de erro na planilha
+  const salvarAlteracaoErro = async (linha: number, coluna: string, novoValor: string) => {
+    try {
+      if (!importacaoParaReprocessar) return;
+
+      // Buscar dados da importação
+      const { data: importacao } = await supabase
+        .from('importacao_produtos')
+        .select('arquivo_storage_path, empresa_id')
+        .eq('id', importacaoParaReprocessar)
+        .single();
+
+      if (!importacao) {
+        showMessage('error', '❌ Importação não encontrada');
+        return;
+      }
+
+      // Enviar alteração para o backend
+      const response = await fetch('/backend/public/editar-planilha.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          arquivo_path: importacao.arquivo_storage_path,
+          linha: linha,
+          coluna: coluna,
+          novo_valor: novoValor,
+          empresa_id: importacao.empresa_id
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Marcar como editado
+        const key = `${linha}-${coluna}`;
+        setEditedValues(prev => ({
+          ...prev,
+          [key]: novoValor
+        }));
+        setHasEdits(true);
+        setEditingError(null);
+        showMessage('success', '✅ Valor alterado com sucesso! Reprocesse a importação para aplicar as mudanças.');
+      } else {
+        showMessage('error', `❌ Erro ao alterar valor: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar alteração:', error);
+      showMessage('error', '❌ Erro ao salvar alteração na planilha');
+    }
+  };
+
   const gerarPlanilhaExemplo = () => {
     // Definir colunas baseadas no regime tributário
     const colunasGerais = [
@@ -1770,6 +1823,10 @@ interface ValidationError {
                         onClick={() => {
                           if (importacao.log_erros && importacao.log_erros.length > 0) {
                             setValidationErrors(importacao.log_erros);
+                            setImportacaoParaReprocessar(importacao.id);
+                            setEditedValues({});
+                            setHasEdits(false);
+                            setEditingError(null);
                             setShowErrorModal(true);
                           }
                         }}
@@ -1960,6 +2017,14 @@ interface ValidationError {
                       <h3 className="text-xl font-semibold text-white">
                         {validationErrors.length} Erro{validationErrors.length !== 1 ? 's' : ''} de Validação na Planilha
                       </h3>
+                      {hasEdits && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <AlertCircle size={16} className="text-yellow-400" />
+                          <span className="text-yellow-400 text-sm">
+                            Alterações feitas - Reprocesse a importação para aplicar
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <button
@@ -2066,12 +2131,96 @@ interface ValidationError {
                                         <p className="text-red-400 text-sm mt-1">{erro.erro}</p>
                                       </div>
                                     </div>
-                                    {erro.valor && (
+                                    {erro.valor !== undefined && (
                                       <div className="mt-3 bg-gray-800/50 rounded px-3 py-2">
-                                        <span className="text-gray-400 text-xs font-medium uppercase tracking-wide">Valor encontrado:</span>
-                                        <p className="text-gray-300 text-sm font-mono break-all mt-1">
-                                          {erro.valor || '[vazio]'}
-                                        </p>
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-gray-400 text-xs font-medium uppercase tracking-wide">Valor encontrado:</span>
+                                            {(() => {
+                                              const key = `${erro.linha}-${erro.coluna}`;
+                                              const isEdited = editedValues[key] !== undefined;
+                                              const isEditing = editingError?.linha === erro.linha && editingError?.coluna === erro.coluna;
+
+                                              if (isEdited) {
+                                                return (
+                                                  <div className="flex items-center gap-1">
+                                                    <Check size={14} className="text-green-400" />
+                                                    <span className="text-green-400 text-xs">Alterado</span>
+                                                  </div>
+                                                );
+                                              }
+
+                                              if (isEditing) {
+                                                return (
+                                                  <div className="flex items-center gap-1">
+                                                    <button
+                                                      onClick={() => {
+                                                        const input = document.getElementById(`edit-${erro.linha}-${erro.coluna}`) as HTMLInputElement;
+                                                        if (input) {
+                                                          salvarAlteracaoErro(erro.linha, erro.coluna, input.value);
+                                                        }
+                                                      }}
+                                                      className="text-green-400 hover:text-green-300 transition-colors"
+                                                      title="Salvar alteração"
+                                                    >
+                                                      <Save size={14} />
+                                                    </button>
+                                                    <button
+                                                      onClick={() => setEditingError(null)}
+                                                      className="text-red-400 hover:text-red-300 transition-colors"
+                                                      title="Cancelar edição"
+                                                    >
+                                                      <X size={14} />
+                                                    </button>
+                                                  </div>
+                                                );
+                                              }
+
+                                              return (
+                                                <button
+                                                  onClick={() => setEditingError({linha: erro.linha, coluna: erro.coluna})}
+                                                  className="text-blue-400 hover:text-blue-300 transition-colors"
+                                                  title="Editar valor"
+                                                >
+                                                  <Edit3 size={14} />
+                                                </button>
+                                              );
+                                            })()}
+                                          </div>
+                                        </div>
+                                        {(() => {
+                                          const key = `${erro.linha}-${erro.coluna}`;
+                                          const isEdited = editedValues[key] !== undefined;
+                                          const isEditing = editingError?.linha === erro.linha && editingError?.coluna === erro.coluna;
+                                          const displayValue = isEdited ? editedValues[key] : (erro.valor || '[vazio]');
+
+                                          if (isEditing) {
+                                            return (
+                                              <input
+                                                id={`edit-${erro.linha}-${erro.coluna}`}
+                                                type="text"
+                                                defaultValue={erro.valor || ''}
+                                                className="w-full max-w-xs bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-300 text-sm font-mono focus:border-blue-400 focus:outline-none mt-1"
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter') {
+                                                    salvarAlteracaoErro(erro.linha, erro.coluna, e.currentTarget.value);
+                                                  } else if (e.key === 'Escape') {
+                                                    setEditingError(null);
+                                                  }
+                                                }}
+                                              />
+                                            );
+                                          }
+
+                                          return (
+                                            <p className={`text-sm font-mono break-all mt-1 ${
+                                              isEdited ? 'text-green-300' : 'text-gray-300'
+                                            }`}>
+                                              {displayValue}
+                                            </p>
+                                          );
+                                        })()}
                                       </div>
                                     )}
                                   </div>

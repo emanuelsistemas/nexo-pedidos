@@ -1,6 +1,6 @@
 # Sistema de Importação de Produtos - Documentação Técnica
 
-## 📋 Status Atual: MODAL DE ERROS CORRIGIDO - FUNCIONANDO ✅
+## 📋 Status Atual: EDIÇÃO INLINE DE ERROS IMPLEMENTADA ✅
 
 ### 🎯 O que está funcionando:
 - ✅ Upload de planilhas Excel (.xlsx, .xls, .csv)
@@ -12,12 +12,18 @@
 - ✅ Mensagens de toast amigáveis e contextuais
 - ✅ Modal de erros com resumo visual por tipo
 - ✅ Orientações práticas para correção de erros
-- ✅ **CORRIGIDO**: Modal de erros mostra lista detalhada com localização específica
+- ✅ Modal de erros mostra lista detalhada com localização específica
+- ✅ **NOVO**: Edição inline de erros diretamente no modal
+- ✅ **NOVO**: Salvamento automático das alterações na planilha
+- ✅ **NOVO**: Indicadores visuais de valores editados
 
 ### 🔧 Melhorias Recentes Implementadas:
 1. **Mensagens de Toast Amigáveis**: Substituídas mensagens técnicas por feedback humano com emojis
 2. **Modal de Erros Melhorado**: Resumo visual, categorização por cores, orientações práticas
 3. **Localização de Erros**: Sistema para mostrar "Coluna X, Linha Y" nos erros
+4. **Edição Inline de Erros**: Permite corrigir valores diretamente no modal
+5. **Salvamento Automático**: Alterações são salvas automaticamente na planilha
+6. **Indicadores Visuais**: Check verde para valores editados, alerta para reprocessamento
 
 ### 🚧 PROBLEMA ATUAL EM RESOLUÇÃO:
 **Modal de erros não está mostrando localização específica dos erros**
@@ -33,6 +39,54 @@
 4. **Campos Fiscais**: Implementar NCM, CFOP, CEST, ST
 5. **Relatórios**: Exportar logs de importação
 6. **Limpeza Automática**: Rotina de manutenção de arquivos antigos
+
+---
+
+## ✏️ **FUNCIONALIDADE DE EDIÇÃO INLINE DE ERROS**
+
+### 🎯 Como Funciona:
+1. **Ícone de Lápis**: Aparece ao lado do "Valor encontrado" em cada erro
+2. **Clique para Editar**: Transforma o valor em campo de input editável
+3. **Salvamento**: Enter ou ícone de salvar confirma a alteração
+4. **Indicador Visual**: Check verde mostra valores editados
+5. **Alerta de Reprocessamento**: Aviso no cabeçalho quando há alterações pendentes
+
+### 🔧 Fluxo de Edição:
+```
+1. Modal de Erros Aberto
+   ↓
+2. Clique no ícone de lápis (Edit3)
+   ↓
+3. Campo se torna editável
+   ↓
+4. Digite novo valor + Enter (ou clique em Save)
+   ↓
+5. Valor salvo na planilha via API
+   ↓
+6. Check verde aparece + mensagem de sucesso
+   ↓
+7. Alerta no cabeçalho: "Reprocesse a importação"
+```
+
+### 📁 Arquivos Envolvidos:
+- **Frontend**: `src/pages/dashboard/ImportarProdutosPage.tsx`
+  - Estados: `editingError`, `editedValues`, `hasEdits`
+  - Função: `salvarAlteracaoErro()`
+- **Backend**: `backend/public/editar-planilha.php`
+  - Edita células específicas da planilha Excel
+  - Log de alterações em `edit.log`
+
+### 🎨 Indicadores Visuais:
+- **🖊️ Lápis Azul**: Valor pode ser editado
+- **💾 Save Verde**: Confirmar alteração
+- **✅ Check Verde**: Valor foi alterado
+- **⚠️ Alerta Amarelo**: "Reprocesse a importação para aplicar"
+
+### 🔄 Integração com Reprocessamento:
+- Valores editados ficam salvos na planilha
+- Botão "Reprocessar" usa a planilha com alterações
+- Validação roda novamente com novos valores
+- Erros corrigidos não aparecem mais
 
 ---
 
