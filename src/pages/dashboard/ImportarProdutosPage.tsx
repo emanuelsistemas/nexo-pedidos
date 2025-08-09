@@ -1445,16 +1445,31 @@ interface ValidationError {
   };
 
   // Função para buscar unidades de medida da empresa
-  const buscarUnidadesMedida = async () => {
+  const buscarUnidadesMedida = async (empresaIdParam?: string) => {
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.user?.user_metadata?.empresa_id) return;
+      // 1) Tentar usar o parâmetro recebido
+      let empresa = empresaIdParam || empresaId;
+
+      // 2) Se ainda não tiver, buscar pelo usuário na tabela usuarios
+      if (!empresa) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user?.id) {
+          const { data: usuario } = await supabase
+            .from('usuarios')
+            .select('empresa_id')
+            .eq('id', userData.user.id)
+            .single();
+          empresa = usuario?.empresa_id || null;
+        }
+      }
+
+      if (!empresa) return;
 
       const { data, error } = await supabase
         .from('unidade_medida')
         .select('id, nome, sigla')
-        .eq('empresa_id', session.session.user.user_metadata.empresa_id)
-        .order('nome');
+        .eq('empresa_id', empresa)
+        .order('sigla', { ascending: true });
 
       if (error) {
         console.error('Erro ao buscar unidades de medida:', error);
@@ -1858,8 +1873,7 @@ interface ValidationError {
                             );
                             console.log('Tem erro de unidade?', hasUnidadeError);
                             if (hasUnidadeError) {
-                              console.log('Buscando unidades de medida...');
-                              await buscarUnidadesMedida();
+                              await buscarUnidadesMedida(importacao.empresa_id);
                             }
 
                             setShowErrorModal(true);

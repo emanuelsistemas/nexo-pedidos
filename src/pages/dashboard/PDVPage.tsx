@@ -2348,6 +2348,37 @@ const PDVPage: React.FC = () => {
           }, 0);
           setTotalVendasFiadoCaixa(totalVendasFiado);
         }
+
+        // ✅ NOVO: Buscar vendas canceladas para este caixa
+        const { data: vendasCanceladasData, error: vendasCanceladasError } = await supabase
+          .from('pdv')
+          .select(`
+            id,
+            numero_venda,
+            valor_total,
+            cliente_nome:nome_cliente,
+            data_venda,
+            observacoes:observacao_venda,
+            status_fiscal,
+            cancelada_em,
+            motivo_cancelamento,
+            usuarios:usuario_id (
+              nome
+            )
+          `)
+          .eq('caixa_id', caixaData.id)
+          .eq('status_venda', 'cancelada')
+          .order('cancelada_em', { ascending: false });
+
+        if (vendasCanceladasError) {
+          console.error('❌ Erro ao buscar vendas canceladas:', vendasCanceladasError);
+        } else {
+          setVendasCanceladasCaixaModal(vendasCanceladasData || []);
+          const totalVendasCanceladas = (vendasCanceladasData || []).reduce((total, venda) => {
+            return total + (parseFloat(venda.valor_total) || 0);
+          }, 0);
+          setTotalVendasCanceladasCaixa(totalVendasCanceladas);
+        }
       }
 
       // ✅ NOVO: Buscar pagamentos do caixa
@@ -35414,18 +35445,49 @@ const PDVPage: React.FC = () => {
                         borderRadius: '8px',
                         border: '1px solid #374151'
                       }}>
-                        <div style={{
-                          padding: '16px',
-                          textAlign: 'center',
-                          color: '#9ca3af',
-                          fontSize: '14px'
-                        }}>
-                          Funcionalidade em desenvolvimento
-                          <br />
-                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                            Tabela de vendas canceladas será implementada
-                          </span>
-                        </div>
+                        {vendasCanceladasCaixaModal.map((venda, index) => (
+                          <div key={venda.id} style={{
+                            padding: '12px',
+                            borderBottom: index < vendasCanceladasCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start'
+                          }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                                  #{venda.numero_venda}
+                                </span>
+                                {venda.cliente_nome && (
+                                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                                    • {venda.cliente_nome}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '2px' }}>
+                                Cancelada em: {new Date(venda.cancelada_em || venda.data_venda).toLocaleString('pt-BR')}
+                              </div>
+                              {venda.usuarios?.nome && (
+                                <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '2px' }}>
+                                  Por: {venda.usuarios.nome}
+                                </div>
+                              )}
+                              {venda.motivo_cancelamento && (
+                                <div style={{ fontSize: '11px', color: '#f97316', marginTop: '4px' }}>
+                                  Motivo: {venda.motivo_cancelamento}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ textAlign: 'right', marginLeft: '12px' }}>
+                              <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#ef4444' }}>
+                                R$ {parseFloat(venda.valor_total).toLocaleString('pt-BR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>
