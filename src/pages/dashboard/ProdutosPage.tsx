@@ -4478,6 +4478,17 @@ const ProdutosPage: React.FC = () => {
       // Obter o próximo código disponível
       const nextCode = await getNextAvailableCode();
 
+      // ✅ NOVO: Log para debug da clonagem
+      console.log('🔍 Clonando produto - valores originais:', {
+        materia_prima: produtoOriginal.materia_prima,
+        promocao: produtoOriginal.promocao,
+        desconto_quantidade: produtoOriginal.desconto_quantidade,
+        pizza: produtoOriginal.pizza,
+        cardapio_digital: produtoOriginal.cardapio_digital,
+        selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda,
+        controlar_quantidades_insumo: produtoOriginal.controlar_quantidades_insumo
+      });
+
       // Criar uma cópia completa do produto com novo código e nome modificado
       const produtoClonado = {
         nome: `${produtoOriginal.nome} - COPIA`,
@@ -4485,21 +4496,21 @@ const ProdutosPage: React.FC = () => {
         descricao: produtoOriginal.descricao || '',
         codigo: nextCode,
         codigo_barras: '', // Limpar código de barras para evitar duplicatas
-        promocao: produtoOriginal.promocao || false,
+        promocao: produtoOriginal.promocao ?? false,
         tipo_desconto: produtoOriginal.tipo_desconto || 'percentual',
         valor_desconto: produtoOriginal.valor_desconto || 0,
         ativo: produtoOriginal.ativo !== false,
         unidade_medida_id: produtoOriginal.unidade_medida_id,
-        desconto_quantidade: produtoOriginal.desconto_quantidade || false,
+        desconto_quantidade: produtoOriginal.desconto_quantidade ?? false,
         quantidade_minima: produtoOriginal.quantidade_minima || 5,
         tipo_desconto_quantidade: produtoOriginal.tipo_desconto_quantidade || 'percentual',
         percentual_desconto_quantidade: produtoOriginal.percentual_desconto_quantidade || 10,
         valor_desconto_quantidade: produtoOriginal.valor_desconto_quantidade || 0,
         estoque_inicial: produtoOriginal.estoque_inicial || 0,
         estoque_minimo: produtoOriginal.estoque_minimo || 0,
-        estoque_minimo_ativo: produtoOriginal.estoque_minimo_ativo || false,
-        produto_alcoolico: produtoOriginal.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
-        exibir_desconto_qtd_minimo_no_cardapio_digital: produtoOriginal.exibir_desconto_qtd_minimo_no_cardapio_digital || false, // ✅ NOVO CAMPO: Exibir no cardápio digital
+        estoque_minimo_ativo: produtoOriginal.estoque_minimo_ativo ?? false,
+        produto_alcoolico: produtoOriginal.produto_alcoolico ?? false, // ✅ NOVO CAMPO: Produto Alcoólico
+        exibir_desconto_qtd_minimo_no_cardapio_digital: produtoOriginal.exibir_desconto_qtd_minimo_no_cardapio_digital ?? false, // ✅ NOVO CAMPO: Exibir no cardápio digital
         // Campos fiscais NFe
         ncm: produtoOriginal.ncm || '',
         cfop: produtoOriginal.cfop || '5102',
@@ -4517,17 +4528,17 @@ const ProdutosPage: React.FC = () => {
         peso_liquido: produtoOriginal.peso_liquido || 0,
         preco_custo: produtoOriginal.preco_custo || 0,
         margem_percentual: produtoOriginal.margem_percentual || 0,
-        pizza: produtoOriginal.pizza || false,
-        cardapio_digital: produtoOriginal.cardapio_digital || false,
-        exibir_promocao_cardapio: produtoOriginal.exibir_promocao_cardapio || false,
-        controla_estoque_cardapio: produtoOriginal.controla_estoque_cardapio || false,
+        pizza: produtoOriginal.pizza ?? false,
+        cardapio_digital: produtoOriginal.cardapio_digital ?? false,
+        exibir_promocao_cardapio: produtoOriginal.exibir_promocao_cardapio ?? false,
+        controla_estoque_cardapio: produtoOriginal.controla_estoque_cardapio ?? false,
         // ✅ NOVOS CAMPOS: Matéria prima, produção e insumos
-        materia_prima: produtoOriginal.materia_prima || false,
-        ocultar_visualizacao_pdv: produtoOriginal.ocultar_visualizacao_pdv || false,
-        producao: produtoOriginal.producao || false,
+        materia_prima: produtoOriginal.materia_prima ?? false,
+        ocultar_visualizacao_pdv: produtoOriginal.ocultar_visualizacao_pdv ?? false,
+        producao: produtoOriginal.producao ?? false,
         insumos: produtoOriginal.insumos || [],
-        selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda || false,
-        controlar_quantidades_insumo: produtoOriginal.controlar_quantidades_insumo || false,
+        selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda ?? false,
+        controlar_quantidades_insumo: produtoOriginal.controlar_quantidades_insumo ?? false,
         // Campos obrigatórios
         grupo_id: grupo.id,
         empresa_id: usuarioData.empresa_id,
@@ -4641,11 +4652,51 @@ const ProdutosPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: VERIFICAR E CLONAR INSUMOS DETALHADAMENTE
+      console.log('🔍 Verificando insumos para clonagem:', {
+        produtoOriginalId: produtoOriginal.id,
+        insumosOriginais: produtoOriginal.insumos,
+        produtoCriadoId: produtoCriado.id,
+        insumosCriado: produtoCriado.insumos
+      });
+
+      // Se o produto original tem insumos mas o produto criado não tem, fazer uma atualização
+      if (produtoOriginal.insumos && produtoOriginal.insumos.length > 0) {
+        if (!produtoCriado.insumos || produtoCriado.insumos.length === 0) {
+          console.log('⚠️ Insumos não foram clonados corretamente, fazendo clonagem manual...');
+
+          const { error: updateInsumosError } = await supabase
+            .from('produtos')
+            .update({
+              insumos: produtoOriginal.insumos,
+              selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda || false,
+              controlar_quantidades_insumo: produtoOriginal.controlar_quantidades_insumo || false
+            })
+            .eq('id', produtoCriado.id);
+
+          if (updateInsumosError) {
+            console.error('❌ Erro ao atualizar insumos clonados:', updateInsumosError);
+          } else {
+            console.log('✅ Insumos clonados manualmente com sucesso');
+          }
+        } else {
+          console.log('✅ Insumos já foram clonados corretamente');
+        }
+      }
+
       // Configurar para edição do produto criado
       setIsGrupoForm(false);
       setSelectedGrupo(grupo);
       setEditingProduto(produtoCriado);
       setSelectedOpcoes(opcoesOriginais?.map(o => o.opcao_id) || []);
+
+      // ✅ NOVO: Configurar insumos clonados no estado
+      if (produtoOriginal.insumos && produtoOriginal.insumos.length > 0) {
+        console.log('📋 Configurando insumos clonados no estado:', produtoOriginal.insumos);
+        setProdutoInsumos(produtoOriginal.insumos);
+      } else {
+        setProdutoInsumos([]);
+      }
 
       // ✅ CORREÇÃO: Copiar dados do produto criado para novoProduto (usado pelo formulário)
       setNovoProduto({
