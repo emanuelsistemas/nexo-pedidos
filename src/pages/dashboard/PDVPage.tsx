@@ -520,6 +520,21 @@ const PDVPage: React.FC = () => {
   const [totalProdutosVendidosCaixa, setTotalProdutosVendidosCaixa] = useState(0);
   const [produtosVendidosExpandido, setProdutosVendidosExpandido] = useState(false);
 
+  // ✅ NOVO: Estados para vendas canceladas do caixa
+  const [vendasCanceladasCaixaModal, setVendasCanceladasCaixaModal] = useState<any[]>([]);
+  const [totalVendasCanceladasCaixa, setTotalVendasCanceladasCaixa] = useState(0);
+  const [vendasCanceladasExpandido, setVendasCanceladasExpandido] = useState(true); // Expandido por padrão
+
+  // ✅ NOVO: Estados para itens cancelados do caixa
+  const [itensCanceladosCaixaModal, setItensCanceladosCaixaModal] = useState<any[]>([]);
+  const [totalItensCanceladosCaixa, setTotalItensCanceladosCaixa] = useState(0);
+  const [itensCanceladosExpandido, setItensCanceladosExpandido] = useState(true); // Expandido por padrão
+
+  // ✅ NOVO: Estados para vendas fiado do caixa
+  const [vendasFiadoCaixaModal, setVendasFiadoCaixaModal] = useState<any[]>([]);
+  const [totalVendasFiadoCaixa, setTotalVendasFiadoCaixa] = useState(0);
+  const [vendasFiadoExpandido, setVendasFiadoExpandido] = useState(false);
+
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
@@ -2288,6 +2303,34 @@ const PDVPage: React.FC = () => {
 
           console.log('💰 Valores de fiado por forma de pagamento:', valoresPorForma);
           setValoresFiadoPorForma(valoresPorForma);
+        }
+
+        // ✅ NOVO: Buscar vendas fiado para este caixa
+        console.log('💰 Buscando vendas fiado para o caixa...');
+        const { data: vendasFiadoData, error: vendasFiadoError } = await supabase
+          .from('vendas_pdv')
+          .select(`
+            id,
+            valor_total,
+            cliente_nome,
+            data_venda,
+            observacoes,
+            status_fiscal
+          `)
+          .eq('caixa_id', caixaData.id)
+          .eq('tipo_pagamento', 'fiado')
+          .in('status_fiscal', ['autorizada', 'nao_fiscal'])
+          .order('data_venda', { ascending: false });
+
+        if (vendasFiadoError) {
+          console.error('❌ Erro ao buscar vendas fiado:', vendasFiadoError);
+        } else {
+          console.log('✅ Vendas fiado carregadas:', vendasFiadoData?.length || 0);
+          setVendasFiadoCaixaModal(vendasFiadoData || []);
+          const totalVendasFiado = (vendasFiadoData || []).reduce((total, venda) => {
+            return total + (parseFloat(venda.valor_total) || 0);
+          }, 0);
+          setTotalVendasFiadoCaixa(totalVendasFiado);
         }
       }
 
@@ -34311,12 +34354,20 @@ const PDVPage: React.FC = () => {
               )}
             </div>
 
-            {/* ✅ NOVO: Seção de Recebimentos de Fiado (apenas se fiado estiver habilitado) */}
-            {pdvConfig?.fiado && (
-              <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#f59e0b' }}>
-                  💰 Recebimentos de Fiado
-                </h4>
+            {/* ✅ NOVO: Grid de 3 colunas para as seções */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px',
+              marginBottom: '24px'
+            }}>
+
+              {/* ✅ NOVO: Seção de Recebimentos de Fiado (apenas se fiado estiver habilitado) */}
+              {pdvConfig?.fiado && (
+                <div>
+                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#f59e0b' }}>
+                    💰 Recebimentos de Fiado
+                  </h4>
 
                 {recebimentosFiadoCaixa.length > 0 ? (
                   <>
@@ -34417,14 +34468,123 @@ const PDVPage: React.FC = () => {
                     </span>
                   </div>
                 )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* ✅ NOVO: Seção de Pagamentos */}
-            <div style={{ marginBottom: '24px' }}>
-              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#ef4444' }}>
-                💳 Pagamentos
-              </h4>
+              {/* ✅ NOVO: Seção de Vendas Fiado (apenas se fiado estiver habilitado) */}
+              {pdvConfig?.fiado && (
+                <div>
+                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#8b5cf6' }}>
+                    💜 Vendas Fiado
+                  </h4>
+
+                  {vendasFiadoCaixaModal.length > 0 ? (
+                    <>
+                      {/* Total das Vendas Fiado com botão de expand */}
+                      <div style={{
+                        backgroundColor: '#374151',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        border: '1px solid #4b5563',
+                        marginBottom: '12px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => setVendasFiadoExpandido(!vendasFiadoExpandido)}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                            Total Vendas Fiado
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#8b5cf6' }}>
+                              R$ {totalVendasFiadoCaixa.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                            <span style={{
+                              fontSize: '12px',
+                              color: '#9ca3af',
+                              transform: vendasFiadoExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.2s ease'
+                            }}>
+                              ▼
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Lista de Vendas Fiado - só aparece quando expandida */}
+                      {vendasFiadoExpandido && (
+                        <div style={{
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          backgroundColor: '#1f2937',
+                          borderRadius: '8px',
+                          border: '1px solid #374151'
+                        }}>
+                          {vendasFiadoCaixaModal.map((venda, index) => (
+                            <div
+                              key={venda.id}
+                              style={{
+                                padding: '8px 12px',
+                                borderBottom: index < vendasFiadoCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                                fontSize: '12px'
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                                  {venda.cliente_nome || 'Cliente não identificado'}
+                                </span>
+                                <span style={{ color: '#8b5cf6', fontWeight: 'bold' }}>
+                                  R$ {parseFloat(venda.valor_total).toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                                <span>Venda Fiado</span>
+                                <span>
+                                  {new Date(venda.data_venda).toLocaleString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              {venda.observacoes && (
+                                <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+                                  {venda.observacoes}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{
+                      backgroundColor: '#374151',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      border: '1px solid #4b5563',
+                      textAlign: 'center'
+                    }}>
+                      <span style={{ color: '#9ca3af', fontSize: '14px' }}>
+                        Nenhuma venda fiado neste caixa
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ✅ NOVO: Seção de Pagamentos */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#ef4444' }}>
+                  💳 Pagamentos
+                </h4>
 
               {pagamentosCaixa.length > 0 ? (
                 <>
@@ -34525,13 +34685,13 @@ const PDVPage: React.FC = () => {
                   Nenhum pagamento registrado neste caixa
                 </div>
               )}
-            </div>
+              </div>
 
-            {/* ✅ NOVO: Seção de Sangria */}
-            <div style={{ marginBottom: '24px' }}>
-              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#dc2626' }}>
-                📉 Sangria
-              </h4>
+              {/* ✅ NOVO: Seção de Sangria */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#dc2626' }}>
+                  📉 Sangria
+                </h4>
 
               {sangriasCaixaModal.length > 0 ? (
                 <>
@@ -34632,13 +34792,22 @@ const PDVPage: React.FC = () => {
                   Nenhuma sangria registrada neste caixa
                 </div>
               )}
+              </div>
             </div>
 
-            {/* ✅ NOVO: Seção de Suprimento */}
-            <div style={{ marginBottom: '24px' }}>
-              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#059669' }}>
-                📈 Suprimento
-              </h4>
+            {/* ✅ NOVO: Segunda linha do grid - 3 colunas */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px',
+              marginBottom: '24px'
+            }}>
+
+              {/* ✅ NOVO: Seção de Suprimento */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#059669' }}>
+                  📈 Suprimento
+                </h4>
 
               {suprimentosCaixaModal.length > 0 ? (
                 <>
@@ -34739,13 +34908,13 @@ const PDVPage: React.FC = () => {
                   Nenhum suprimento registrado neste caixa
                 </div>
               )}
-            </div>
+              </div>
 
-            {/* ✅ NOVO: Seção de Consumos Internos */}
-            <div style={{ marginBottom: '24px' }}>
-              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#f97316' }}>
-                ☕ Consumos Internos
-              </h4>
+              {/* ✅ NOVO: Seção de Consumos Internos */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#f97316' }}>
+                  ☕ Consumos Internos
+                </h4>
 
               {consumosInternosCaixaModal.length > 0 ? (
                 <>
@@ -34846,13 +35015,13 @@ const PDVPage: React.FC = () => {
                   Nenhum consumo interno registrado neste caixa
                 </div>
               )}
-            </div>
+              </div>
 
-            {/* ✅ NOVO: Seção de Produtos Vendidos */}
-            <div style={{ marginBottom: '24px' }}>
-              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#10b981' }}>
-                🛒 Produtos Vendidos
-              </h4>
+              {/* ✅ NOVO: Seção de Produtos Vendidos */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#10b981' }}>
+                  🛒 Produtos Vendidos
+                </h4>
 
               {produtosVendidosCaixaModal.length > 0 ? (
                 <>
@@ -34954,6 +35123,178 @@ const PDVPage: React.FC = () => {
                   Nenhum produto vendido neste caixa
                 </div>
               )}
+              </div>
+            </div>
+
+            {/* ✅ NOVO: Terceira linha do grid - 2 colunas para Vendas e Itens Cancelados */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '16px',
+              marginBottom: '24px'
+            }}>
+
+              {/* ✅ NOVO: Seção de Vendas Canceladas */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#ef4444' }}>
+                  ❌ Vendas Canceladas
+                </h4>
+
+                {vendasCanceladasCaixaModal.length > 0 ? (
+                  <>
+                    {/* Total das Vendas Canceladas com botão de expand */}
+                    <div style={{
+                      backgroundColor: '#374151',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      border: '1px solid #4b5563',
+                      marginBottom: '12px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setVendasCanceladasExpandido(!vendasCanceladasExpandido)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                          Total Vendas Canceladas
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#ef4444' }}>
+                            R$ {totalVendasCanceladasCaixa.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </span>
+                          <span style={{
+                            fontSize: '12px',
+                            color: '#9ca3af',
+                            transform: vendasCanceladasExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease'
+                          }}>
+                            ▼
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de Vendas Canceladas - expandida por padrão */}
+                    {vendasCanceladasExpandido && (
+                      <div style={{
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        backgroundColor: '#1f2937',
+                        borderRadius: '8px',
+                        border: '1px solid #374151'
+                      }}>
+                        <div style={{
+                          padding: '16px',
+                          textAlign: 'center',
+                          color: '#9ca3af',
+                          fontSize: '14px'
+                        }}>
+                          Funcionalidade em desenvolvimento
+                          <br />
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                            Tabela de vendas canceladas será implementada
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    border: '1px solid #4b5563',
+                    textAlign: 'center'
+                  }}>
+                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>
+                      Nenhuma venda cancelada neste caixa
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* ✅ NOVO: Seção de Itens Cancelados */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#f97316' }}>
+                  🗑️ Itens Cancelados
+                </h4>
+
+                {itensCanceladosCaixaModal.length > 0 ? (
+                  <>
+                    {/* Total dos Itens Cancelados com botão de expand */}
+                    <div style={{
+                      backgroundColor: '#374151',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      border: '1px solid #4b5563',
+                      marginBottom: '12px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setItensCanceladosExpandido(!itensCanceladosExpandido)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                          Total Itens Cancelados
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#f97316' }}>
+                            R$ {totalItensCanceladosCaixa.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </span>
+                          <span style={{
+                            fontSize: '12px',
+                            color: '#9ca3af',
+                            transform: itensCanceladosExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease'
+                          }}>
+                            ▼
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de Itens Cancelados - expandida por padrão */}
+                    {itensCanceladosExpandido && (
+                      <div style={{
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        backgroundColor: '#1f2937',
+                        borderRadius: '8px',
+                        border: '1px solid #374151'
+                      }}>
+                        <div style={{
+                          padding: '16px',
+                          textAlign: 'center',
+                          color: '#9ca3af',
+                          fontSize: '14px'
+                        }}>
+                          Funcionalidade em desenvolvimento
+                          <br />
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                            Tabela de itens cancelados será implementada
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    border: '1px solid #4b5563',
+                    textAlign: 'center'
+                  }}>
+                    <span style={{ color: '#9ca3af', fontSize: '14px' }}>
+                      Nenhum item cancelado neste caixa
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Botões */}
@@ -34979,6 +35320,12 @@ const PDVPage: React.FC = () => {
                   setTotalConsumosInternosCaixa(0);
                   setProdutosVendidosCaixaModal([]);
                   setTotalProdutosVendidosCaixa(0);
+                  setVendasCanceladasCaixaModal([]);
+                  setTotalVendasCanceladasCaixa(0);
+                  setItensCanceladosCaixaModal([]);
+                  setTotalItensCanceladosCaixa(0);
+                  setVendasFiadoCaixaModal([]);
+                  setTotalVendasFiadoCaixa(0);
                 }}
                 style={{
                   flex: 1,

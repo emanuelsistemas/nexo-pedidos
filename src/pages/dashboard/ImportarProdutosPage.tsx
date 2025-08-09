@@ -754,7 +754,19 @@ interface ValidationError {
       { posicao: 1, nome: 'Código do Produto', tipo: 'codigo' },
       { posicao: 3, nome: 'Nome do Produto', tipo: 'texto' },
       { posicao: 4, nome: 'Unidade de Medida', tipo: 'texto' },
-      { posicao: 6, nome: 'Preço Padrão', tipo: 'preco_obrigatorio' }
+      { posicao: 7, nome: 'Preço Padrão', tipo: 'preco_obrigatorio' },
+      { posicao: 10, nome: 'Produto Alcoólico', tipo: 'boolean' },
+      { posicao: 11, nome: 'Este produto é Pizza?', tipo: 'boolean' },
+      { posicao: 12, nome: 'Matéria prima', tipo: 'boolean' },
+      { posicao: 13, nome: 'Produção', tipo: 'boolean' },
+      { posicao: 14, nome: 'NCM', tipo: 'texto' },
+      { posicao: 15, nome: 'CFOP', tipo: 'cfop' },
+      { posicao: 16, nome: 'CSOSN/CST', tipo: 'csosn_cst' },
+      { posicao: 18, nome: 'Origem do Produto', tipo: 'numero' },
+      { posicao: 19, nome: 'Alíquota ICMS (%)', tipo: 'numero' },
+      { posicao: 20, nome: 'Alíquota PIS (%)', tipo: 'numero' },
+      { posicao: 21, nome: 'Alíquota COFINS (%)', tipo: 'numero' },
+      { posicao: 22, nome: 'Peso Líquido (kg)', tipo: 'numero' }
     ];
 
     // Buscar códigos de produtos e códigos de barras já existentes na empresa
@@ -993,6 +1005,80 @@ interface ValidationError {
             }
           }
         }
+
+        if (campo.tipo === 'boolean') {
+          // Validar se é true ou false (aceitar variações)
+          const valorLower = valorString.toLowerCase();
+          if (!['true', 'false', '1', '0', 'sim', 'não', 'nao', 's', 'n'].includes(valorLower)) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString,
+              erro: 'Deve ser: true/false, 1/0, sim/não, s/n',
+              tipo: 'formato'
+            });
+            linhaTemErro = true;
+          }
+        }
+
+        if (campo.tipo === 'cfop') {
+          // Validar CFOP: deve ter 4 dígitos e ser 5102 ou 5405
+          if (!/^\d{4}$/.test(valorString)) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString,
+              erro: 'CFOP deve ter exatamente 4 dígitos',
+              tipo: 'formato'
+            });
+            linhaTemErro = true;
+          } else if (!['5102', '5405'].includes(valorString)) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString,
+              erro: 'CFOP deve ser 5102 ou 5405',
+              tipo: 'invalido'
+            });
+            linhaTemErro = true;
+          }
+        }
+
+        if (campo.tipo === 'csosn_cst') {
+          // Obter CFOP da linha atual (posição 15)
+          const cfopAtual = row[15] ? row[15].toString().trim() : '';
+
+          // Validar CSOSN/CST baseado no CFOP e regime tributário
+          if (cfopAtual === '5102') {
+            // CFOP 5102: CSOSN = 102 (Simples Nacional) ou CST = 00 (Regime Normal)
+            const valorEsperado = regimeTributario === 1 ? '102' : '00';
+            if (valorString !== valorEsperado) {
+              const tipoTributo = regimeTributario === 1 ? 'CSOSN' : 'CST';
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: valorString,
+                erro: `Para CFOP 5102, ${tipoTributo} deve ser ${valorEsperado}`,
+                tipo: 'invalido'
+              });
+              linhaTemErro = true;
+            }
+          } else if (cfopAtual === '5405') {
+            // CFOP 5405: CSOSN = 500 (Simples Nacional) ou CST = 60 (Regime Normal)
+            const valorEsperado = regimeTributario === 1 ? '500' : '60';
+            if (valorString !== valorEsperado) {
+              const tipoTributo = regimeTributario === 1 ? 'CSOSN' : 'CST';
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: valorString,
+                erro: `Para CFOP 5405, ${tipoTributo} deve ser ${valorEsperado}`,
+                tipo: 'invalido'
+              });
+              linhaTemErro = true;
+            }
+          }
+        }
       });
 
       // Validação específica para código de barras (posição 2) - campo opcional
@@ -1037,8 +1123,21 @@ interface ValidationError {
         }
       }
 
-      // Validação específica para preço de custo (posição 5) - campo opcional
-      const precoCusto = row[5] ? row[5].toString().trim() : '';
+      // Validação específica para unidade fracionada (posição 5) - campo opcional
+      const unidadeFracionada = row[5] ? row[5].toString().trim().toLowerCase() : '';
+      if (unidadeFracionada && !['true', 'false', '1', '0', 'sim', 'não', 'nao', 's', 'n'].includes(unidadeFracionada)) {
+        erros.push({
+          linha: numeroLinha,
+          coluna: 'Unidade fracionada',
+          valor: row[5] ? row[5].toString() : '',
+          erro: 'Deve ser: true/false, 1/0, sim/não, s/n',
+          tipo: 'formato'
+        });
+        linhaTemErro = true;
+      }
+
+      // Validação específica para preço de custo (posição 6) - campo opcional
+      const precoCusto = row[6] ? row[6].toString().trim() : '';
       if (precoCusto) { // Só validar se foi preenchido
         const numero = parseFloat(precoCusto.replace(',', '.'));
         if (isNaN(numero) || numero < 0) {
@@ -1053,8 +1152,94 @@ interface ValidationError {
         }
       }
 
-      // Descrição Adicional (posição 7) - campo opcional, não precisa de validação
+      // Descrição Adicional (posição 8) - campo opcional, não precisa de validação
       // Pode ficar vazio ou conter qualquer texto
+
+      // Validação específica para estoque inicial (posição 9) - campo opcional
+      const estoqueInicial = row[9] ? row[9].toString().trim() : '';
+      if (estoqueInicial) { // Só validar se foi preenchido
+        // Obter valor da unidade fracionada (posição 5)
+        const unidadeFracionadaValor = row[5] ? row[5].toString().trim().toLowerCase() : '';
+        const isUnidadeFracionada = ['true', '1', 'sim', 's'].includes(unidadeFracionadaValor);
+
+        if (isUnidadeFracionada) {
+          // Para unidades fracionadas: aceitar decimais com até 3 casas decimais
+          const numeroFracionado = parseFloat(estoqueInicial.replace(',', '.'));
+          if (isNaN(numeroFracionado) || numeroFracionado < 0) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: 'Estoque Inicial',
+              valor: estoqueInicial,
+              erro: 'Para unidade fracionada, deve ser um número válido maior ou igual a zero (ex: 2.500)',
+              tipo: 'formato'
+            });
+            linhaTemErro = true;
+          } else {
+            // Verificar se tem mais de 3 casas decimais
+            const parteDecimal = estoqueInicial.replace(',', '.').split('.')[1];
+            if (parteDecimal && parteDecimal.length > 3) {
+              erros.push({
+                linha: numeroLinha,
+                coluna: 'Estoque Inicial',
+                valor: estoqueInicial,
+                erro: 'Para unidade fracionada, máximo 3 casas decimais (ex: 2.500)',
+                tipo: 'formato'
+              });
+              linhaTemErro = true;
+            }
+          }
+        } else {
+          // Para unidades não fracionadas: aceitar apenas números inteiros
+          const numeroInteiro = parseInt(estoqueInicial);
+          if (isNaN(numeroInteiro) || numeroInteiro < 0 || estoqueInicial.includes('.') || estoqueInicial.includes(',')) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: 'Estoque Inicial',
+              valor: estoqueInicial,
+              erro: 'Para unidade não fracionada, deve ser um número inteiro maior ou igual a zero (ex: 10)',
+              tipo: 'formato'
+            });
+            linhaTemErro = true;
+          }
+        }
+      }
+
+      // Validação específica para CEST (posição 17) - obrigatório apenas se CFOP = 5405
+      const cfopAtual = row[15] ? row[15].toString().trim() : '';
+      const cest = row[17] ? row[17].toString().trim() : '';
+
+      if (cfopAtual === '5405') {
+        // CEST é obrigatório para CFOP 5405
+        if (!cest) {
+          erros.push({
+            linha: numeroLinha,
+            coluna: 'CEST',
+            valor: '',
+            erro: 'CEST é obrigatório quando CFOP = 5405',
+            tipo: 'obrigatorio'
+          });
+          linhaTemErro = true;
+        } else if (!/^\d{7}$/.test(cest)) {
+          erros.push({
+            linha: numeroLinha,
+            coluna: 'CEST',
+            valor: cest,
+            erro: 'CEST deve ter exatamente 7 dígitos',
+            tipo: 'formato'
+          });
+          linhaTemErro = true;
+        }
+      } else if (cest && !/^\d{7}$/.test(cest)) {
+        // Se CEST foi preenchido mas CFOP não é 5405, ainda validar o formato
+        erros.push({
+          linha: numeroLinha,
+          coluna: 'CEST',
+          valor: cest,
+          erro: 'CEST deve ter exatamente 7 dígitos',
+          tipo: 'formato'
+        });
+        linhaTemErro = true;
+      }
 
       // Se a linha não tem erros, adicionar às linhas válidas
       if (!linhaTemErro) {
@@ -1200,14 +1385,15 @@ interface ValidationError {
       'Código de Barras',
       'Nome do Produto* (Evite: @#$%&*()+=[]{}|\\:";\'<>?,./)',
       'Unidade de Medida*',
+      'Unidade fracionada',
       'Preço de Custo',
       'Preço Padrão*',
       'Descrição Adicional',
       'Estoque Inicial',
-      'Produto Alcoólico',
-      'Este produto é Pizza?',
-      'Matéria prima',
-      'Produção'
+      'Produto Alcoólico*',
+      'Este produto é Pizza?*',
+      'Matéria prima*',
+      'Produção*'
     ];
 
     const colunasImpostos = [
@@ -1215,11 +1401,11 @@ interface ValidationError {
       'CFOP*',
       regimeTributario === 1 ? 'CSOSN* (Simples Nacional)' : 'CST* (Regime Normal)',
       'CEST (Obrigatório se CFOP = 5405)',
-      'Origem do Produto',
-      'Alíquota ICMS (%)',
-      'Alíquota PIS (%)',
-      'Alíquota COFINS (%)',
-      'Peso Líquido (kg)'
+      'Origem do Produto*',
+      'Alíquota ICMS (%)*',
+      'Alíquota PIS (%)*',
+      'Alíquota COFINS (%)*',
+      'Peso Líquido (kg)*'
     ];
 
     const todasColunas = [...colunasGerais, ...colunasImpostos];
@@ -1231,10 +1417,11 @@ interface ValidationError {
       '7891234567890',
       'Coca Cola Lata',
       'UN',
+      'false',
       '15.50',
       '35.90',
       '350ml',
-      '0',
+      '10',
       'false',
       'false',
       'false',
@@ -1260,10 +1447,11 @@ interface ValidationError {
       '7891234567891',
       'Banana prata',
       'KG',
+      'true',
       '3.20',
       '6.50',
       'Banana prata fresca',
-      '0',
+      '2.500',
       'false',
       'false',
       'false',
@@ -1282,14 +1470,46 @@ interface ValidationError {
       '0.2'
     ];
 
+    // Dados de exemplo - Linha 3 (Produto com CFOP 5405 - CEST obrigatório)
+    const exemploGeral3 = [
+      'COMBUSTÍVEIS',
+      '3',
+      '7891234567892',
+      'Gasolina Comum',
+      'L',
+      'true',
+      '4.50',
+      '5.80',
+      'Gasolina comum tipo C',
+      '100.000',
+      'false',
+      'false',
+      'false',
+      'false'
+    ];
+
+    const exemploImpostos3 = [
+      '27101259',
+      '5405',
+      regimeTributario === 1 ? '500' : '60',
+      '2800100', // CEST obrigatório para CFOP 5405
+      '0',
+      '25',
+      '10.2',
+      '47.04',
+      '0.75'
+    ];
+
     const exemploCompleto1 = [...exemploGeral1, ...exemploImpostos1];
     const exemploCompleto2 = [...exemploGeral2, ...exemploImpostos2];
+    const exemploCompleto3 = [...exemploGeral3, ...exemploImpostos3];
 
     // Criar dados para Excel
     const dadosExcel = [
       todasColunas,
       exemploCompleto1,
-      exemploCompleto2
+      exemploCompleto2,
+      exemploCompleto3
     ];
 
     // Criar workbook e worksheet
