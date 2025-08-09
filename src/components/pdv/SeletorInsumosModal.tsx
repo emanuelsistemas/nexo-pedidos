@@ -296,23 +296,25 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-gray-900 rounded-lg flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-gray-900 rounded-lg flex flex-col h-[95vh]">
         {/* Cabeçalho */}
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-white">Selecionar Insumos</h2>
-            <p className="text-sm text-gray-400">{produto.nome}</p>
+        <div className="p-4 border-b border-gray-800 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <h2 className="text-xl font-semibold text-white whitespace-nowrap">Selecionar Insumos</h2>
+            <div className="bg-primary-600/20 border border-primary-500/30 rounded-full px-3 py-1 flex-shrink-0">
+              <span className="text-sm font-medium text-primary-300 truncate">{produto.nome}</span>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-gray-800 text-gray-400 hover:text-white transition-colors"
+            className="p-2 rounded-full bg-gray-800 text-gray-400 hover:text-white transition-colors flex-shrink-0 ml-3"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Conteúdo */}
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* Conteúdo com scroll interno */}
+        <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-gray-400">Carregando insumos...</div>
@@ -445,8 +447,8 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
           )}
         </div>
 
-        {/* Rodapé */}
-        <div className="p-4 border-t border-gray-800 flex gap-3">
+        {/* Rodapé fixo */}
+        <div className="p-4 border-t border-gray-800 flex gap-3 flex-shrink-0">
           <button
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"

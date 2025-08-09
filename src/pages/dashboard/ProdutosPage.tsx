@@ -363,6 +363,8 @@ const ProdutosPage: React.FC = () => {
     selecionar_insumos_venda: false,
     // Campo para controlar quantidades no insumo
     controlar_quantidades_insumo: false,
+    // Campo para selecionar manualmente insumo na venda
+    selecionar_manualmente_insumo: false,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -2992,6 +2994,8 @@ const ProdutosPage: React.FC = () => {
       selecionar_insumos_venda: produto.selecionar_insumos_venda || false,
       // Campo para controlar quantidades no insumo
       controlar_quantidades_insumo: produto.controlar_quantidades_insumo || false,
+      // Campo para selecionar manualmente insumo na venda
+      selecionar_manualmente_insumo: produto.selecionar_manualmente_insumo || false,
     };
 
     // Definir o estado do novo produto
@@ -4172,6 +4176,8 @@ const ProdutosPage: React.FC = () => {
           selecionar_insumos_venda: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda) || false,
           // ✅ NOVO CAMPO: Controlar quantidades no insumo (só se houver insumos e selecionar_insumos_venda estiver ativo)
           controlar_quantidades_insumo: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda && novoProduto.controlar_quantidades_insumo) || false,
+          // ✅ NOVO CAMPO: Selecionar manualmente insumo na venda (só se houver insumos e selecionar_insumos_venda estiver ativo)
+          selecionar_manualmente_insumo: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda && novoProduto.selecionar_manualmente_insumo) || false,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -4256,6 +4262,8 @@ const ProdutosPage: React.FC = () => {
           selecionar_insumos_venda: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda) || false,
           // ✅ NOVO CAMPO: Controlar quantidades no insumo (só se houver insumos e selecionar_insumos_venda estiver ativo)
           controlar_quantidades_insumo: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda && novoProduto.controlar_quantidades_insumo) || false,
+          // ✅ NOVO CAMPO: Selecionar manualmente insumo na venda (só se houver insumos e selecionar_insumos_venda estiver ativo)
+          selecionar_manualmente_insumo: (produtoInsumos.length > 0 && novoProduto.selecionar_insumos_venda && novoProduto.selecionar_manualmente_insumo) || false,
         };
 
 
@@ -4528,6 +4536,7 @@ const ProdutosPage: React.FC = () => {
         insumos: produtoOriginal.insumos || [],
         selecionar_insumos_venda: produtoOriginal.selecionar_insumos_venda || false,
         controlar_quantidades_insumo: produtoOriginal.controlar_quantidades_insumo || false,
+        selecionar_manualmente_insumo: produtoOriginal.selecionar_manualmente_insumo || false,
         // Campos obrigatórios
         grupo_id: grupo.id,
         empresa_id: usuarioData.empresa_id,
@@ -9644,6 +9653,31 @@ const ProdutosPage: React.FC = () => {
                                   </div>
                                 </label>
 
+                                {/* Nova subopção - Selecionar manualmente insumo */}
+                                <div className="mt-4">
+                                  <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={novoProduto.selecionar_manualmente_insumo || false}
+                                      onChange={(e) => {
+                                        const isChecked = e.target.checked;
+                                        setNovoProduto(prev => ({
+                                          ...prev,
+                                          selecionar_manualmente_insumo: isChecked
+                                        }));
+                                      }}
+                                      className="w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                                    />
+                                    <div className="flex-1">
+                                      <span className="text-gray-300 font-medium text-sm">
+                                        Selecionar insumo na venda
+                                      </span>
+                                      <p className="text-gray-400 text-xs mt-1">
+                                        Permitirá escolher manualmente quais insumos usar durante a venda no PDV
+                                      </p>
+                                    </div>
+                                  </label>
+                                </div>
 
                               </div>
                             )}

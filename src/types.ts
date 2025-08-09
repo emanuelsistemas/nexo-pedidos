@@ -51,6 +51,12 @@ export interface Produto {
   materia_prima?: boolean;
   // Campo para insumos do produto
   insumos?: ProdutoInsumo[];
+  // Campo para selecionar insumos na venda
+  selecionar_insumos_venda?: boolean;
+  // Campo para controlar quantidades no insumo
+  controlar_quantidades_insumo?: boolean;
+  // Campo para selecionar manualmente insumo na venda
+  selecionar_manualmente_insumo?: boolean;
 }
 
 export interface ProdutoInsumo {
