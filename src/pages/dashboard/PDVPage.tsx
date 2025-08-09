@@ -10235,7 +10235,10 @@ const PDVPage: React.FC = () => {
     }
 
     // ✅ CORRIGIDO: Calcular o preço final considerando promoções E desconto por quantidade
-    const precoFinal = calcularPrecoModalQuantidade(produto, quantidadeParaAdicionar);
+    const precoFinalBase = calcularPrecoModalQuantidade(produto, quantidadeParaAdicionar);
+    // ✅ NOVO: Somar acréscimo de insumos (quando selecionados manualmente e marcados para incluir valor)
+    const acrescimoInsumosUnitario = calcularAcrescimoInsumosUnitario((produto as any).insumosSelecionados);
+    const precoFinal = precoFinalBase + acrescimoInsumosUnitario;
 
     // Criar o item do carrinho
     const novoItem: ItemCarrinho = {

@@ -302,7 +302,16 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
     }
 
     // Enviar apenas os insumos com quantidade > 0
-    const ativos = insumosSelecionados.filter(i => (i.quantidade || 0) > 0);
+    const ativos = insumosSelecionados.filter(i => (i.quantidade || 0) > 0)
+      .map(i => ({
+        ...i,
+        // Propagar flags por insumo para o PDV calcular preço
+        insumo: {
+          ...i.insumo,
+          selecionar_manualmente_insumo: i.insumo.selecionar_manualmente_insumo,
+          adicionar_valor_insumo: i.insumo.adicionar_valor_insumo
+        }
+      }));
     onConfirm(ativos);
     onClose();
   };
