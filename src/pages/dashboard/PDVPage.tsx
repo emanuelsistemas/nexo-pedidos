@@ -510,6 +510,11 @@ const PDVPage: React.FC = () => {
   const [totalSuprimentosCaixa, setTotalSuprimentosCaixa] = useState(0);
   const [suprimentosExpandido, setSuprimentosExpandido] = useState(false);
 
+  // ✅ NOVO: Estados para consumos internos do caixa
+  const [consumosInternosCaixaModal, setConsumosInternosCaixaModal] = useState<any[]>([]);
+  const [totalConsumosInternosCaixa, setTotalConsumosInternosCaixa] = useState(0);
+  const [consumosInternosExpandido, setConsumosInternosExpandido] = useState(false);
+
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
@@ -2402,6 +2407,34 @@ const PDVPage: React.FC = () => {
           return total + (parseFloat(suprimento.valor) || 0);
         }, 0);
         setTotalSuprimentosCaixa(totalSuprimentos);
+      }
+
+      // ✅ NOVO: Buscar consumos internos do caixa
+      console.log('☕ Buscando consumos internos do caixa...');
+      const { data: consumosInternosData, error: consumosInternosError } = await supabase
+        .from('consumo_interno')
+        .select(`
+          id,
+          data_consumo,
+          observacao,
+          total_itens,
+          valor_total,
+          usuarios!inner(
+            nome
+          )
+        `)
+        .eq('caixa_controle_id', caixaData.id)
+        .order('data_consumo', { ascending: false });
+
+      if (consumosInternosError) {
+        console.error('❌ Erro ao buscar consumos internos do caixa:', consumosInternosError);
+      } else {
+        console.log('✅ Consumos internos do caixa carregados:', consumosInternosData?.length || 0);
+        setConsumosInternosCaixaModal(consumosInternosData || []);
+        const totalConsumosInternos = (consumosInternosData || []).reduce((total, consumo) => {
+          return total + (parseFloat(consumo.valor_total) || 0);
+        }, 0);
+        setTotalConsumosInternosCaixa(totalConsumosInternos);
       }
 
       // ✅ NOVO: Calcular valores reais das formas de pagamento baseado nas vendas do caixa
@@ -34601,6 +34634,113 @@ const PDVPage: React.FC = () => {
               )}
             </div>
 
+            {/* ✅ NOVO: Seção de Consumos Internos */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#f97316' }}>
+                ☕ Consumos Internos
+              </h4>
+
+              {consumosInternosCaixaModal.length > 0 ? (
+                <>
+                  {/* Total dos Consumos Internos com botão de expand */}
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    border: '1px solid #4b5563',
+                    marginBottom: '12px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setConsumosInternosExpandido(!consumosInternosExpandido)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                        Total Consumos Internos
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#f97316' }}>
+                          R$ {totalConsumosInternosCaixa.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: '#9ca3af',
+                          transform: consumosInternosExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
+                        }}>
+                          ▼
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Consumos Internos - só aparece quando expandida */}
+                  {consumosInternosExpandido && (
+                    <div style={{
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      backgroundColor: '#1f2937',
+                      borderRadius: '8px',
+                      border: '1px solid #374151'
+                    }}>
+                      {consumosInternosCaixaModal.map((consumo, index) => (
+                        <div
+                          key={consumo.id}
+                          style={{
+                            padding: '8px 12px',
+                            borderBottom: index < consumosInternosCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                              {consumo.usuarios?.nome || 'Usuário não identificado'}
+                            </span>
+                            <span style={{ color: '#f97316', fontWeight: 'bold' }}>
+                              R$ {parseFloat(consumo.valor_total).toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                            <span>{consumo.total_itens} item(s)</span>
+                            <span>
+                              {new Date(consumo.data_consumo).toLocaleString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          {consumo.observacao && (
+                            <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+                              {consumo.observacao}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{
+                  backgroundColor: '#374151',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  color: '#9ca3af',
+                  fontSize: '14px',
+                  border: '1px solid #4b5563'
+                }}>
+                  Nenhum consumo interno registrado neste caixa
+                </div>
+              )}
+            </div>
+
             {/* Botões */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -34620,6 +34760,8 @@ const PDVPage: React.FC = () => {
                   setTotalSangriasCaixa(0);
                   setSuprimentosCaixaModal([]);
                   setTotalSuprimentosCaixa(0);
+                  setConsumosInternosCaixaModal([]);
+                  setTotalConsumosInternosCaixa(0);
                 }}
                 style={{
                   flex: 1,
