@@ -79,28 +79,50 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
         setInsumosSelecionados(insumosIniciais);
 
         // Buscar preços dos insumos que podem incluir valor
-        const ids = produto.insumos
+        const idsArray = produto.insumos
           .filter(i => i.adicionar_valor_insumo)
-          .map(i => `'${i.produto_id}'`)
-          .join(',');
+          .map(i => i.produto_id);
 
-        if (ids.length > 0) {
-          const { data, error } = await supabase
-            .from('produtos')
-            .select('id, preco, promocao, valor_desconto')
-            .filter('id', 'in', `(${ids})`);
+        if (idsArray.length > 0) {
+          try {
+            // Descobrir empresa_id do usuário logado (RLS multi-tenant)
+            const { data: authData } = await supabase.auth.getUser();
+            const userId = authData.user?.id;
+            let empresaId: string | null = null;
+            if (userId) {
+              const { data: usuarioRow } = await supabase
+                .from('usuarios')
+                .select('empresa_id')
+                .eq('id', userId)
+                .single();
+              empresaId = usuarioRow?.empresa_id || null;
+            }
 
-          if (!error && data) {
-            const mapa: Record<string, number> = {};
-            data.forEach((p: any) => {
-              let preco = p.preco || 0;
-              if (p.promocao && p.valor_desconto) {
-                // Preço promocional básico (produto do insumo)
-                preco = Math.max(0, preco - p.valor_desconto);
-              }
-              mapa[p.id] = preco;
-            });
-            setPrecosInsumos(mapa);
+            let query = supabase
+              .from('produtos')
+              .select('id, preco, promocao, valor_desconto');
+
+            if (empresaId) query = query.eq('empresa_id', empresaId);
+
+            const { data, error } = await query.in('id', idsArray);
+
+            if (error) {
+              console.error('Erro ao buscar preços dos insumos:', error);
+              setPrecosInsumos({});
+            } else if (data) {
+              const mapa: Record<string, number> = {};
+              data.forEach((p: any) => {
+                let preco = p.preco || 0;
+                if (p.promocao && p.valor_desconto) {
+                  preco = Math.max(0, (p.preco || 0) - (p.valor_desconto || 0));
+                }
+                mapa[p.id] = preco;
+              });
+              setPrecosInsumos(mapa);
+            }
+          } catch (e) {
+            console.error('Exceção ao carregar preços de insumos', e);
+            setPrecosInsumos({});
           }
         } else {
           setPrecosInsumos({});
