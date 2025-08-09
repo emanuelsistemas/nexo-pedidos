@@ -20679,7 +20679,7 @@ const PDVPage: React.FC = () => {
                     fontSize: '16px'
                   }}
                 >
-                  Cancelar
+                  Sair
                 </button>
                 <button
                   onClick={() => {
