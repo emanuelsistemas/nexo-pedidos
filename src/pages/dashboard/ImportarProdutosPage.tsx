@@ -202,6 +202,7 @@ const ImportarProdutosPage: React.FC = () => {
   const [editingError, setEditingError] = useState<{linha: number, coluna: string} | null>(null);
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [hasEdits, setHasEdits] = useState(false);
+  const [unidadesMedida, setUnidadesMedida] = useState<Array<{id: string, nome: string}>>([]);
 
 // Interface para erros de validação
 interface ValidationError {
@@ -1443,6 +1444,40 @@ interface ValidationError {
     }
   };
 
+  // Função para buscar unidades de medida da empresa
+  const buscarUnidadesMedida = async () => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      console.log('Session para unidades:', session?.session?.user?.user_metadata);
+
+      if (!session?.session?.user?.user_metadata?.empresa_id) {
+        console.log('Empresa ID não encontrado na sessão');
+        return;
+      }
+
+      const empresaId = session.session.user.user_metadata.empresa_id;
+      console.log('Buscando unidades para empresa:', empresaId);
+
+      const { data, error } = await supabase
+        .from('unidades_medida')
+        .select('id, nome')
+        .eq('empresa_id', empresaId)
+        .order('nome');
+
+      console.log('Resultado da busca unidades:', { data, error });
+
+      if (error) {
+        console.error('Erro ao buscar unidades de medida:', error);
+        return;
+      }
+
+      console.log('Unidades encontradas:', data?.length || 0);
+      setUnidadesMedida(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar unidades de medida:', error);
+    }
+  };
+
   // Função para salvar alteração de erro na planilha
   const salvarAlteracaoErro = async (linha: number, coluna: string, novoValor: string) => {
     try {
@@ -1820,13 +1855,22 @@ interface ValidationError {
                     </div>
                     <div className="text-center">
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (importacao.log_erros && importacao.log_erros.length > 0) {
                             setValidationErrors(importacao.log_erros);
                             setImportacaoParaReprocessar(importacao.id);
                             setEditedValues({});
                             setHasEdits(false);
                             setEditingError(null);
+
+                            // Buscar unidades de medida se houver erro relacionado
+                            const hasUnidadeError = importacao.log_erros.some(erro =>
+                              erro.coluna === 'Unidade de Medida'
+                            );
+                            if (hasUnidadeError) {
+                              await buscarUnidadesMedida();
+                            }
+
                             setShowErrorModal(true);
                           }
                         }}
@@ -2206,11 +2250,64 @@ interface ValidationError {
                                           }
 
                                           return (
-                                            <p className={`text-sm font-mono break-all mt-1 ${
-                                              isEdited ? 'text-green-300' : 'text-gray-300'
-                                            }`}>
-                                              {displayValue}
-                                            </p>
+                                            <div>
+                                              <p className={`text-sm font-mono break-all mt-1 ${
+                                                isEdited ? 'text-green-300' : 'text-gray-300'
+                                              }`}>
+                                                {displayValue}
+                                              </p>
+
+                                              {/* Mostrar unidades de medida disponíveis se o erro for sobre unidade */}
+                                              {(() => {
+                                                console.log('Verificando condições:', {
+                                                  coluna: erro.coluna,
+                                                  isUnidadeMedida: erro.coluna === 'Unidade de Medida',
+                                                  unidadesLength: unidadesMedida.length,
+                                                  unidades: unidadesMedida
+                                                });
+                                                return erro.coluna === 'Unidade de Medida' && unidadesMedida.length > 0;
+                                              })() && (
+                                                <div className="mt-3 bg-blue-900/20 border border-blue-700/30 rounded-lg p-3">
+                                                  <div className="flex items-center gap-2 mb-2">
+                                                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                                    <span className="text-blue-400 text-xs font-medium uppercase tracking-wide">
+                                                      Unidades disponíveis na empresa:
+                                                    </span>
+                                                  </div>
+                                                  <div className="flex flex-wrap gap-1">
+                                                    {unidadesMedida.map((unidade) => (
+                                                      <button
+                                                        key={unidade.id}
+                                                        onClick={() => {
+                                                          const input = document.getElementById(`edit-${erro.linha}-${erro.coluna}`) as HTMLInputElement;
+                                                          if (input) {
+                                                            input.value = unidade.nome;
+                                                            input.focus();
+                                                          } else {
+                                                            // Se não está editando, iniciar edição com o valor
+                                                            setEditingError({linha: erro.linha, coluna: erro.coluna});
+                                                            setTimeout(() => {
+                                                              const newInput = document.getElementById(`edit-${erro.linha}-${erro.coluna}`) as HTMLInputElement;
+                                                              if (newInput) {
+                                                                newInput.value = unidade.nome;
+                                                                newInput.focus();
+                                                              }
+                                                            }, 100);
+                                                          }
+                                                        }}
+                                                        className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs transition-colors border border-blue-500/30 hover:border-blue-400/50"
+                                                        title={`Usar "${unidade.nome}"`}
+                                                      >
+                                                        {unidade.nome}
+                                                      </button>
+                                                    ))}
+                                                  </div>
+                                                  <p className="text-blue-300/70 text-xs mt-2">
+                                                    💡 Clique em uma unidade para usar automaticamente
+                                                  </p>
+                                                </div>
+                                              )}
+                                            </div>
                                           );
                                         })()}
                                       </div>
