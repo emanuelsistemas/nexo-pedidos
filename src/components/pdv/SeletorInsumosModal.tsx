@@ -518,29 +518,6 @@ const SeletorInsumosModal: React.FC<SeletorInsumosModalProps> = ({
 
                     <div className="flex items-center gap-2">
                       {/* Checkbox para habilitar/desabilitar quando exigir seleção manual */}
-                      {insumo.selecionar_manualmente_insumo && (
-                        <label className="flex items-center gap-2 mr-2">
-                          <input
-                            type="checkbox"
-                            checked={!removido}
-                            onChange={(e) => {
-                              const habilitar = e.target.checked;
-                              setInsumosSelecionados(prev => {
-                                const existente = prev.find(i => i.insumo.produto_id === insumo.produto_id);
-                                if (!existente) {
-                                  return [...prev, { insumo, quantidade: habilitar ? insumo.quantidade : 0, removido: !habilitar }];
-                                }
-                                return prev.map(i => i.insumo.produto_id === insumo.produto_id
-                                  ? { ...i, quantidade: habilitar ? (i.quantidade > 0 ? i.quantidade : insumo.quantidade) : 0, removido: !habilitar }
-                                  : i
-                                );
-                              });
-                            }}
-                            className="w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
-                          />
-                          <span className="text-xs text-gray-300 whitespace-nowrap">Habilitar</span>
-                        </label>
-                      )}
 
                       {/* Botão X para remover/restaurar */}
                       <button

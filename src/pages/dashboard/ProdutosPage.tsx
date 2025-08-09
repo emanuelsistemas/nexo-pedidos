@@ -4011,6 +4011,23 @@ const ProdutosPage: React.FC = () => {
       console.log('✅ VALIDAÇÃO PASSOU - POSIÇÃO DISPONÍVEL NO GRUPO');
     }
 
+
+    // ✅ VALIDAÇÃO: Insumos não podem ter quantidade vazia ou zero
+    if (produtoInsumos && produtoInsumos.length > 0) {
+      const invalidos = produtoInsumos.filter((ins: any) => {
+        const q = typeof ins.quantidade === 'string'
+          ? parseFloat((ins.quantidade as string).toString().replace(',', '.'))
+          : Number(ins.quantidade);
+        return !q || isNaN(q) || q <= 0;
+      });
+      if (invalidos.length > 0) {
+        const nomes = invalidos.slice(0, 5).map((i: any) => i.nome || i.produto_id).join(', ');
+        showMessage('error', `Existem insumos com quantidade vazia ou zero. Corrija antes de salvar.${nomes ? ` Ex.: ${nomes}` : ''}`);
+        setActiveTab('insumos');
+        return;
+      }
+    }
+
     setIsLoading(true);
     const startTime = performance.now(); // ✅ Medir performance
 
@@ -10741,7 +10758,11 @@ const ProdutosPage: React.FC = () => {
                         showMessage('info', 'Nenhum insumo novo foi adicionado (produtos já estavam na lista).');
                       }
                     }}
-                    disabled={!Object.values(insumosSelecionados).some(config => config.selecionado && config.quantidade && parseFloat(config.quantidade) > 0)}
+                    disabled={!Object.values(insumosSelecionados).some(config => {
+                        const s = (config.quantidade || '').toString().trim();
+                        const n = parseFloat(s.replace(',', '.'));
+                        return config.selecionado && s !== '' && !isNaN(n) && n > 0;
+                      })}
                   >
                     Adicionar Selecionados
                   </Button>

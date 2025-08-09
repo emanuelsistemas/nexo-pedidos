@@ -169,6 +169,8 @@ interface ItemCarrinho {
       unidade_medida: string;
       quantidade_minima?: number;
       quantidade_maxima?: number;
+      selecionar_manualmente_insumo?: boolean; // ✅ NOVO: flag para seleção manual
+      adicionar_valor_insumo?: boolean; // ✅ NOVO: incluir valor no preço do item
     };
     quantidade: number;
   }> | null;
@@ -21553,6 +21555,22 @@ const PDVPage: React.FC = () => {
                                         <span className="text-orange-300 text-sm font-medium min-w-[4rem] text-right">
                                           {formatarQtdUnidade(insumoSelecionado.quantidade * item.quantidade, insumoSelecionado.insumo.unidade_medida)} {insumoSelecionado.insumo.unidade_medida || 'UN'}
                                         </span>
+                                        {/* ✅ NOVO: Preço do insumo quando deve incluir valor na venda */}
+                                        {insumoSelecionado.insumo.adicionar_valor_insumo && (
+                                          <span className="text-green-400 text-sm font-semibold min-w-[4.5rem] text-right">
+                                            {(() => {
+                                              const prodInsumo = produtos.find(p => p.id === insumoSelecionado.insumo.produto_id);
+                                              let preco = prodInsumo?.preco || 0;
+                                              if (prodInsumo?.promocao && prodInsumo?.valor_desconto) {
+                                                preco = Math.max(0, (prodInsumo.preco || 0) - (prodInsumo.valor_desconto || 0));
+                                              }
+                                              const unidade = (insumoSelecionado.insumo.unidade_medida || '').toUpperCase();
+                                              const fator = unidade === 'UN' ? insumoSelecionado.quantidade : 1;
+                                              const total = preco * fator;
+                                              return `+ ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+                                            })()}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   ))}

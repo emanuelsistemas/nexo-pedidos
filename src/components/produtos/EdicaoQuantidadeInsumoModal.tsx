@@ -149,6 +149,12 @@ const EdicaoQuantidadeInsumoModal: React.FC<EdicaoQuantidadeInsumoModalProps> = 
 
   // ✅ Confirmar alterações
   const handleConfirmar = () => {
+    // Bloquear confirmação com quantidade vazia ou zero
+    if (quantidade <= 0 || isNaN(Number(quantidade))) {
+      showMessage('error', 'Quantidade deve ser maior que zero');
+      return;
+    }
+
     onConfirm(quantidade);
     onClose();
   };
