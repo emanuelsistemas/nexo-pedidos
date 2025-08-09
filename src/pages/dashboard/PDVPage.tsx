@@ -11372,10 +11372,34 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Função para atualizar itens cancelados do caixa
   const atualizarItensCanceladosCaixa = async () => {
-    if (!caixaAberto) return;
+    if (!caixaAberto || !caixaAberto.id) {
+      console.log('⚠️ Caixa não está aberto ou ID não disponível');
+      return;
+    }
 
     try {
-      console.log('🔄 Atualizando lista de itens cancelados do caixa...');
+      console.log(`🔄 Atualizando lista de itens cancelados do caixa: ${caixaAberto.id}`);
+
+      // Buscar itens cancelados usando uma abordagem diferente
+      // Primeiro buscar todas as vendas do caixa, depois os itens cancelados
+      const { data: vendasCaixa, error: vendasError } = await supabase
+        .from('pdv')
+        .select('id')
+        .eq('caixa_id', caixaAberto.id);
+
+      if (vendasError) {
+        console.error('❌ Erro ao buscar vendas do caixa:', vendasError);
+        return;
+      }
+
+      if (!vendasCaixa || vendasCaixa.length === 0) {
+        console.log('ℹ️ Nenhuma venda encontrada para este caixa');
+        setItensCanceladosCaixaModal([]);
+        setTotalItensCanceladosCaixa(0);
+        return;
+      }
+
+      const idsVendas = vendasCaixa.map(venda => venda.id);
 
       const { data: itensCanceladosData, error: itensCanceladosError } = await supabase
         .from('pdv_itens')
@@ -11389,17 +11413,12 @@ const PDVPage: React.FC = () => {
           quantidade_adicionais_deletado,
           deletado_em,
           snapshot_item_deletado,
-          pdv:pdv_id (
-            id,
-            numero_venda,
-            nome_cliente,
-            caixa_id
-          ),
+          pdv_id,
           usuarios:deletado_por (
             nome
           )
         `)
-        .eq('pdv.caixa_id', caixaAberto.id)
+        .in('pdv_id', idsVendas)
         .eq('deletado', true)
         .not('valor_total_real_deletado', 'is', null)
         .order('deletado_em', { ascending: false });
@@ -35843,13 +35862,8 @@ const PDVPage: React.FC = () => {
                                 {item.nome_produto}
                               </div>
                               <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '2px' }}>
-                                Venda: #{item.pdv?.numero_venda} • Qtd: {item.quantidade}
+                                Qtd: {item.quantidade} • ID: {item.pdv_id?.substring(0, 8)}...
                               </div>
-                              {item.pdv?.nome_cliente && (
-                                <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '2px' }}>
-                                  Cliente: {item.pdv.nome_cliente}
-                                </div>
-                              )}
                               {item.quantidade_adicionais_deletado > 0 && (
                                 <div style={{ fontSize: '11px', color: '#60a5fa', marginBottom: '2px' }}>
                                   🍕 {item.quantidade_adicionais_deletado} adicionais (R$ {(item.valor_adicionais_deletado || 0).toLocaleString('pt-BR', {
