@@ -515,6 +515,11 @@ const PDVPage: React.FC = () => {
   const [totalConsumosInternosCaixa, setTotalConsumosInternosCaixa] = useState(0);
   const [consumosInternosExpandido, setConsumosInternosExpandido] = useState(false);
 
+  // ✅ NOVO: Estados para produtos vendidos do caixa
+  const [produtosVendidosCaixaModal, setProdutosVendidosCaixaModal] = useState<any[]>([]);
+  const [totalProdutosVendidosCaixa, setTotalProdutosVendidosCaixa] = useState(0);
+  const [produtosVendidosExpandido, setProdutosVendidosExpandido] = useState(false);
+
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
@@ -2435,6 +2440,68 @@ const PDVPage: React.FC = () => {
           return total + (parseFloat(consumo.valor_total) || 0);
         }, 0);
         setTotalConsumosInternosCaixa(totalConsumosInternos);
+      }
+
+      // ✅ NOVO: Buscar produtos vendidos do caixa (agrupados)
+      console.log('🛒 Buscando produtos vendidos do caixa...');
+      const { data: produtosVendidosData, error: produtosVendidosError } = await supabase
+        .from('pdv_itens')
+        .select(`
+          produto_id,
+          nome_produto,
+          codigo_produto,
+          quantidade,
+          valor_unitario,
+          valor_total_item,
+          pdv!inner(
+            caixa_id,
+            status_fiscal
+          )
+        `)
+        .eq('pdv.caixa_id', caixaData.id)
+        .in('pdv.status_fiscal', ['autorizada', 'nao_fiscal'])
+        .order('nome_produto');
+
+      if (produtosVendidosError) {
+        console.error('❌ Erro ao buscar produtos vendidos do caixa:', produtosVendidosError);
+      } else {
+        console.log('✅ Produtos vendidos do caixa carregados:', produtosVendidosData?.length || 0);
+
+        // Agrupar produtos por nome/código
+        const produtosAgrupados = (produtosVendidosData || []).reduce((acc, item) => {
+          const chave = `${item.produto_id}-${item.nome_produto}`;
+
+          if (!acc[chave]) {
+            acc[chave] = {
+              produto_id: item.produto_id,
+              nome_produto: item.nome_produto,
+              codigo_produto: item.codigo_produto,
+              quantidade_total: 0,
+              valor_total: 0,
+              valor_unitario_medio: 0
+            };
+          }
+
+          acc[chave].quantidade_total += parseFloat(item.quantidade) || 0;
+          acc[chave].valor_total += parseFloat(item.valor_total_item) || 0;
+
+          return acc;
+        }, {});
+
+        // Converter para array e calcular valor unitário médio
+        const produtosArray = Object.values(produtosAgrupados).map((produto: any) => ({
+          ...produto,
+          valor_unitario_medio: produto.quantidade_total > 0 ? produto.valor_total / produto.quantidade_total : 0
+        }));
+
+        // Ordenar por valor total (maior primeiro)
+        produtosArray.sort((a: any, b: any) => b.valor_total - a.valor_total);
+
+        setProdutosVendidosCaixaModal(produtosArray);
+        const totalProdutosVendidos = produtosArray.reduce((total: number, produto: any) => {
+          return total + produto.valor_total;
+        }, 0);
+        setTotalProdutosVendidosCaixa(totalProdutosVendidos);
       }
 
       // ✅ NOVO: Calcular valores reais das formas de pagamento baseado nas vendas do caixa
@@ -34741,6 +34808,114 @@ const PDVPage: React.FC = () => {
               )}
             </div>
 
+            {/* ✅ NOVO: Seção de Produtos Vendidos */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#10b981' }}>
+                🛒 Produtos Vendidos
+              </h4>
+
+              {produtosVendidosCaixaModal.length > 0 ? (
+                <>
+                  {/* Total dos Produtos Vendidos com botão de expand */}
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    border: '1px solid #4b5563',
+                    marginBottom: '12px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setProdutosVendidosExpandido(!produtosVendidosExpandido)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                        Total Produtos Vendidos
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#10b981' }}>
+                          R$ {totalProdutosVendidosCaixa.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: '#9ca3af',
+                          transform: produtosVendidosExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
+                        }}>
+                          ▼
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Produtos Vendidos - só aparece quando expandida */}
+                  {produtosVendidosExpandido && (
+                    <div style={{
+                      maxHeight: '300px',
+                      overflowY: 'auto',
+                      backgroundColor: '#1f2937',
+                      borderRadius: '8px',
+                      border: '1px solid #374151'
+                    }}>
+                      {produtosVendidosCaixaModal.map((produto, index) => (
+                        <div
+                          key={`${produto.produto_id}-${index}`}
+                          style={{
+                            padding: '10px 12px',
+                            borderBottom: index < produtosVendidosCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ color: '#e5e7eb', fontWeight: 'bold', flex: 1 }}>
+                              {produto.nome_produto}
+                            </span>
+                            <span style={{ color: '#10b981', fontWeight: 'bold', marginLeft: '8px' }}>
+                              R$ {produto.valor_total.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                            <span>
+                              {produto.codigo_produto ? `Cód: ${produto.codigo_produto}` : 'Sem código'}
+                            </span>
+                            <span>
+                              Qtd: {produto.quantidade_total.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 3
+                              })}
+                            </span>
+                          </div>
+                          <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px', textAlign: 'right' }}>
+                            Valor médio: R$ {produto.valor_unitario_medio.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{
+                  backgroundColor: '#374151',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  color: '#9ca3af',
+                  fontSize: '14px',
+                  border: '1px solid #4b5563'
+                }}>
+                  Nenhum produto vendido neste caixa
+                </div>
+              )}
+            </div>
+
             {/* Botões */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -34762,6 +34937,8 @@ const PDVPage: React.FC = () => {
                   setTotalSuprimentosCaixa(0);
                   setConsumosInternosCaixaModal([]);
                   setTotalConsumosInternosCaixa(0);
+                  setProdutosVendidosCaixaModal([]);
+                  setTotalProdutosVendidosCaixa(0);
                 }}
                 style={{
                   flex: 1,

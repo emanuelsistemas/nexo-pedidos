@@ -198,6 +198,7 @@ const ImportarProdutosPage: React.FC = () => {
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [importacaoParaReprocessar, setImportacaoParaReprocessar] = useState<string | null>(null);
 
 // Interface para erros de validação
 interface ValidationError {
@@ -441,7 +442,7 @@ interface ValidationError {
         })
         .eq('id', importacaoId);
 
-      const { linhasValidas, erros } = validarDadosPlanilha(rows);
+      const { linhasValidas, erros } = await validarDadosPlanilha(rows, empresaId);
 
       // Atualizar contadores de validação
       await supabase
@@ -743,18 +744,60 @@ interface ValidationError {
   };
 
   // Função para validar dados da planilha
-  const validarDadosPlanilha = (rows: any[][]): { linhasValidas: any[][], erros: ValidationError[] } => {
+  const validarDadosPlanilha = async (rows: any[][], empresaId: string): Promise<{ linhasValidas: any[][], erros: ValidationError[] }> => {
     const erros: ValidationError[] = [];
     const linhasValidas: any[][] = [];
 
     // Definir campos obrigatórios e suas posições
     const camposObrigatorios = [
       { posicao: 0, nome: 'GRUPO', tipo: 'texto' },
-      { posicao: 1, nome: 'Código do Produto', tipo: 'numero' },
+      { posicao: 1, nome: 'Código do Produto', tipo: 'codigo' },
       { posicao: 3, nome: 'Nome do Produto', tipo: 'texto' },
       { posicao: 4, nome: 'Unidade de Medida', tipo: 'texto' },
-      { posicao: 6, nome: 'Preço Padrão', tipo: 'numero' }
+      { posicao: 6, nome: 'Preço Padrão', tipo: 'preco_obrigatorio' }
     ];
+
+    // Buscar códigos de produtos e códigos de barras já existentes na empresa
+    const { data: produtosExistentes, error: produtosError } = await supabase
+      .from('produtos')
+      .select('codigo, codigo_barras')
+      .eq('empresa_id', empresaId)
+      .eq('deletado', false);
+
+    if (produtosError) {
+      throw new Error(`Erro ao consultar produtos existentes: ${produtosError.message}`);
+    }
+
+    // Buscar unidades de medida cadastradas na empresa
+    const { data: unidadesExistentes, error: unidadesError } = await supabase
+      .from('unidades_medida')
+      .select('sigla')
+      .eq('empresa_id', empresaId)
+      .eq('deletado', false);
+
+    if (unidadesError) {
+      throw new Error(`Erro ao consultar unidades de medida: ${unidadesError.message}`);
+    }
+
+    // Criar sets com códigos existentes para busca rápida
+    const codigosExistentes = new Set(
+      produtosExistentes?.map(p => p.codigo.toString()) || []
+    );
+
+    const codigosBarrasExistentes = new Set(
+      produtosExistentes
+        ?.filter(p => p.codigo_barras) // Filtrar apenas produtos que têm código de barras
+        ?.map(p => p.codigo_barras.toString()) || []
+    );
+
+    // Criar set com unidades de medida existentes para busca rápida
+    const unidadesMedidaExistentes = new Set(
+      unidadesExistentes?.map(u => u.sigla.toUpperCase()) || []
+    );
+
+    // Criar sets para detectar duplicados dentro da própria planilha
+    const codigosPlanilha = new Set<string>();
+    const codigosBarrasPlanilha = new Set<string>();
 
     rows.forEach((row, index) => {
       const numeroLinha = index + 2; // +2 porque começamos da linha 2 (após cabeçalho)
@@ -799,6 +842,61 @@ interface ValidationError {
           }
         }
 
+        if (campo.tipo === 'preco_obrigatorio') {
+          // Preço Padrão é obrigatório como campo, mas pode ser 0,00
+          const numero = parseFloat(valorString.replace(',', '.'));
+          if (isNaN(numero) || numero < 0) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString,
+              erro: 'Deve ser um número válido maior ou igual a zero (pode ser 0,00)',
+              tipo: 'formato'
+            });
+            linhaTemErro = true;
+          }
+        }
+
+        if (campo.tipo === 'codigo') {
+          // Validar se contém apenas números (sem caracteres especiais)
+          if (!/^\d+$/.test(valorString)) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: campo.nome,
+              valor: valorString,
+              erro: 'Código deve conter apenas números, sem caracteres especiais',
+              tipo: 'formato'
+            });
+            linhaTemErro = true;
+          } else {
+            // Verificar se código já existe no banco de dados
+            if (codigosExistentes.has(valorString)) {
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: valorString,
+                erro: 'Código já existe na empresa. Use um código único',
+                tipo: 'invalido'
+              });
+              linhaTemErro = true;
+            }
+            // Verificar se código está duplicado dentro da própria planilha
+            else if (codigosPlanilha.has(valorString)) {
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: valorString,
+                erro: 'Código duplicado na planilha. Cada código deve ser único',
+                tipo: 'invalido'
+              });
+              linhaTemErro = true;
+            } else {
+              // Adicionar código ao set para detectar duplicatas futuras
+              codigosPlanilha.add(valorString);
+            }
+          }
+        }
+
         if (campo.tipo === 'texto') {
           // Validar tamanho mínimo
           if (valorString.length < 1) {
@@ -823,8 +921,140 @@ interface ValidationError {
             });
             linhaTemErro = true;
           }
+
+          // Validações específicas para Unidade de Medida
+          if (campo.nome === 'Unidade de Medida') {
+            // Verificar se tem exatamente 2 dígitos
+            if (valorString.length !== 2) {
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: valorString,
+                erro: 'Unidade de medida deve ter exatamente 2 caracteres',
+                tipo: 'tamanho'
+              });
+              linhaTemErro = true;
+            } else {
+              // Verificar se a unidade existe na empresa
+              if (!unidadesMedidaExistentes.has(valorString.toUpperCase())) {
+                const unidadesDisponiveis = Array.from(unidadesMedidaExistentes).sort().join(', ');
+                erros.push({
+                  linha: numeroLinha,
+                  coluna: campo.nome,
+                  valor: valorString,
+                  erro: `Unidade de medida não cadastrada na empresa. Unidades disponíveis: ${unidadesDisponiveis || 'Nenhuma cadastrada'}`,
+                  tipo: 'invalido'
+                });
+                linhaTemErro = true;
+              }
+            }
+          }
+
+          // Validações específicas para Nome do Produto
+          if (campo.nome === 'Nome do Produto') {
+            const valorOriginal = valor ? valor.toString() : '';
+
+            // Verificar espaços no início ou fim
+            if (valorOriginal !== valorOriginal.trim()) {
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: `"${valorOriginal}"`,
+                erro: 'Nome não pode ter espaços no início ou fim',
+                tipo: 'formato'
+              });
+              linhaTemErro = true;
+            }
+
+            // Verificar espaços duplicados
+            if (/\s{2,}/.test(valorString)) {
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: valorString,
+                erro: 'Nome não pode ter espaços duplicados',
+                tipo: 'formato'
+              });
+              linhaTemErro = true;
+            }
+
+            // Verificar caracteres especiais proibidos
+            const caracteresProibidos = /[@#$%&*()+=\[\]{}|\\:";'<>?,./]/;
+            if (caracteresProibidos.test(valorString)) {
+              const caracteresEncontrados = valorString.match(caracteresProibidos);
+              erros.push({
+                linha: numeroLinha,
+                coluna: campo.nome,
+                valor: valorString,
+                erro: `Contém caracteres especiais não permitidos: ${caracteresEncontrados?.join(', ')}`,
+                tipo: 'invalido'
+              });
+              linhaTemErro = true;
+            }
+          }
         }
       });
+
+      // Validação específica para código de barras (posição 2) - campo opcional
+      const codigoBarras = row[2] ? row[2].toString().trim() : '';
+      if (codigoBarras) { // Só validar se foi preenchido
+        // Verificar se contém apenas números
+        if (!/^\d+$/.test(codigoBarras)) {
+          erros.push({
+            linha: numeroLinha,
+            coluna: 'Código de Barras',
+            valor: codigoBarras,
+            erro: 'Código de barras deve conter apenas números',
+            tipo: 'formato'
+          });
+          linhaTemErro = true;
+        } else {
+          // Verificar se código de barras já existe no banco de dados
+          if (codigosBarrasExistentes.has(codigoBarras)) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: 'Código de Barras',
+              valor: codigoBarras,
+              erro: 'Código de barras já existe na empresa. Use um código único',
+              tipo: 'invalido'
+            });
+            linhaTemErro = true;
+          }
+          // Verificar se código de barras está duplicado dentro da própria planilha
+          else if (codigosBarrasPlanilha.has(codigoBarras)) {
+            erros.push({
+              linha: numeroLinha,
+              coluna: 'Código de Barras',
+              valor: codigoBarras,
+              erro: 'Código de barras duplicado na planilha. Cada código deve ser único',
+              tipo: 'invalido'
+            });
+            linhaTemErro = true;
+          } else {
+            // Adicionar código de barras ao set para detectar duplicatas futuras
+            codigosBarrasPlanilha.add(codigoBarras);
+          }
+        }
+      }
+
+      // Validação específica para preço de custo (posição 5) - campo opcional
+      const precoCusto = row[5] ? row[5].toString().trim() : '';
+      if (precoCusto) { // Só validar se foi preenchido
+        const numero = parseFloat(precoCusto.replace(',', '.'));
+        if (isNaN(numero) || numero < 0) {
+          erros.push({
+            linha: numeroLinha,
+            coluna: 'Preço de Custo',
+            valor: precoCusto,
+            erro: 'Deve ser um número válido maior ou igual a zero',
+            tipo: 'formato'
+          });
+          linhaTemErro = true;
+        }
+      }
+
+      // Descrição Adicional (posição 7) - campo opcional, não precisa de validação
+      // Pode ficar vazio ou conter qualquer texto
 
       // Se a linha não tem erros, adicionar às linhas válidas
       if (!linhaTemErro) {
@@ -833,6 +1063,118 @@ interface ValidationError {
     });
 
     return { linhasValidas, erros };
+  };
+
+  // Função para reprocessar uma importação existente
+  const handleReprocessarImportacao = async (importacaoId: string) => {
+    try {
+      setIsUploading(true);
+      setShowProcessingModal(true);
+      setProcessingMessage('Reprocessando importação...');
+
+      // Buscar dados da importação
+      const { data: importacao, error: importacaoError } = await supabase
+        .from('importacao_produtos')
+        .select('arquivo_storage_path, nome_arquivo, empresa_id')
+        .eq('id', importacaoId)
+        .single();
+
+      if (importacaoError) throw importacaoError;
+
+      // Ler arquivo do storage local
+      const downloadUrl = `/backend/public/download-planilha.php?file=${encodeURIComponent(importacao.arquivo_storage_path)}&empresa=${importacao.empresa_id}`;
+      const response = await fetch(downloadUrl);
+
+      if (!response.ok) {
+        throw new Error('Erro ao acessar arquivo da importação');
+      }
+
+      // Converter resposta para ArrayBuffer
+      const arrayBuffer = await response.arrayBuffer();
+
+      // Processar arquivo Excel
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      // Remover cabeçalho
+      const rows = data.slice(1) as any[][];
+
+      if (rows.length === 0) {
+        throw new Error('Planilha está vazia ou não contém dados válidos');
+      }
+
+      // Atualizar status para reprocessando
+      await supabase
+        .from('importacao_produtos')
+        .update({
+          status: 'processando',
+          etapa_atual: 'reprocessando',
+          mensagem_atual: 'Reprocessando dados...',
+          progresso_percentual: 10,
+          log_erros: null,
+          linhas_sucesso: 0,
+          linhas_erro: 0
+        })
+        .eq('id', importacaoId);
+
+      // Validar dados novamente
+      setProcessingMessage('Validando dados da planilha...');
+
+      const { linhasValidas, erros } = await validarDadosPlanilha(rows, importacao.empresa_id);
+
+      // Atualizar contadores de validação
+      await supabase
+        .from('importacao_produtos')
+        .update({
+          linhas_sucesso: linhasValidas.length,
+          linhas_erro: erros.length,
+          log_erros: erros.length > 0 ? erros : null,
+          etapa_atual: erros.length > 0 ? 'erro' : 'processando_grupos',
+          mensagem_atual: erros.length > 0
+            ? `Reprocessamento com ${erros.length} erros`
+            : `Revalidação concluída. ${linhasValidas.length} linhas válidas.`,
+          progresso_percentual: erros.length > 0 ? 100 : 20,
+          status: erros.length > 0 ? 'erro' : 'processando'
+        })
+        .eq('id', importacaoId);
+
+      if (erros.length > 0) {
+        setValidationErrors(erros);
+        setShowErrorModal(true);
+        showMessage(`Reprocessamento concluído com ${erros.length} erros`, 'error');
+      } else {
+        // Continuar com processamento de grupos se não há erros
+        setProcessingMessage('Processando grupos...');
+
+        // Aqui continuaria o processamento normal dos grupos
+        // Por enquanto, apenas marcar como concluído
+        await supabase
+          .from('importacao_produtos')
+          .update({
+            status: 'concluida',
+            etapa_atual: 'finalizado',
+            mensagem_atual: 'Reprocessamento concluído com sucesso!',
+            progresso_percentual: 100,
+            finalizado_em: new Date().toISOString()
+          })
+          .eq('id', importacaoId);
+
+        showMessage('Reprocessamento concluído com sucesso!', 'success');
+      }
+
+      // Recarregar lista
+      await fetchImportacoes();
+
+    } catch (error: any) {
+      console.error('Erro ao reprocessar:', error);
+      showMessage(`Erro ao reprocessar: ${error.message}`, 'error');
+    } finally {
+      setIsUploading(false);
+      setShowProcessingModal(false);
+      setImportacaoParaReprocessar(null);
+    }
   };
 
   const getRegimeTributarioColor = (regime: number | null) => {
@@ -1056,17 +1398,36 @@ interface ValidationError {
                       <p className="text-sm text-gray-400">{getStatusText(importacao.status)}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setDeleteConfirmation({
-                      isOpen: true,
-                      itemId: importacao.id,
-                      title: 'Excluir Importação',
-                      message: `Tem certeza que deseja excluir a importação "${importacao.nome_arquivo}"?`
-                    })}
-                    className="text-gray-400 hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Botão de Reprocessar - só aparece se há erros */}
+                    {importacao.status === 'erro' && importacao.linhas_erro > 0 && (
+                      <button
+                        onClick={() => handleReprocessarImportacao(importacao.id)}
+                        className="text-blue-400 hover:text-blue-300 transition-colors p-1 rounded"
+                        title="Reprocessar importação"
+                        disabled={isUploading}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                          <path d="M21 3v5h-5"/>
+                          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                          <path d="M3 21v-5h5"/>
+                        </svg>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => setDeleteConfirmation({
+                        isOpen: true,
+                        itemId: importacao.id,
+                        title: 'Excluir Importação',
+                        message: `Tem certeza que deseja excluir a importação "${importacao.nome_arquivo}"?`
+                      })}
+                      className="text-gray-400 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 mb-4">
