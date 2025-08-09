@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import KeepAlive from '../../components/comum/KeepAlive';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
@@ -35985,7 +35986,7 @@ const PDVPage: React.FC = () => {
       </AnimatePresence>
 
       {/* ✅ NOVO: Modal de Informação sobre Vendas Fiado */}
-      {showInfoVendasFiadoModal && (
+      {showInfoVendasFiadoModal && createPortal(
         <div style={{
           position: 'fixed',
           top: 0,
@@ -35996,7 +35997,7 @@ const PDVPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 9999
+          zIndex: 100000000
         }}>
           <div style={{
             backgroundColor: '#1f2937',
@@ -36102,10 +36103,10 @@ const PDVPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* ✅ NOVO: Modal de Informação sobre Consumos Internos */}
-      {showInfoConsumosInternosModal && (
+      {showInfoConsumosInternosModal && createPortal(
         <div style={{
           position: 'fixed',
           top: 0,
@@ -36116,7 +36117,7 @@ const PDVPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 9999
+          zIndex: 100000000
         }}>
           <div style={{
             backgroundColor: '#1f2937',
@@ -36209,7 +36210,7 @@ const PDVPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 };

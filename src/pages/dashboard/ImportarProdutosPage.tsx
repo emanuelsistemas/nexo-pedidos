@@ -204,6 +204,7 @@ const ImportarProdutosPage: React.FC = () => {
 interface ValidationError {
   linha: number;
   coluna: string;
+  colunaNumero?: number; // número da coluna na planilha (1-based)
   valor: string;
   erro: string;
   tipo: 'obrigatorio' | 'formato' | 'tamanho' | 'invalido';
@@ -331,6 +332,8 @@ interface ValidationError {
     if (!selectedFile || !empresaId) return;
 
     let importacaoId: string | null = null;
+    // Armazena os últimos erros de validação para exibir no modal e salvar no log
+    let lastValidationErrors: ValidationError[] = [];
 
     try {
       setIsUploading(true);
@@ -457,6 +460,7 @@ interface ValidationError {
         .eq('id', importacaoId);
 
       const { linhasValidas, erros } = await validarDadosPlanilha(rows, empresaId);
+      lastValidationErrors = erros;
 
       // Atualizar contadores de validação
       await supabase
@@ -473,6 +477,9 @@ interface ValidationError {
 
       // Se não há linhas válidas, parar o processamento
       if (linhasValidas.length === 0) {
+        // Disparar modal com lista de erros detalhada
+        setValidationErrors(erros);
+        setShowErrorModal(true);
         throw new Error(`Nenhuma linha válida encontrada. ${erros.length} erros de validação detectados.`);
       }
 
@@ -635,7 +642,7 @@ interface ValidationError {
               etapa_atual: 'erro',
               mensagem_atual: `Erro: ${error.message}`,
               finalizado_em: new Date().toISOString(),
-              log_erros: [
+              log_erros: lastValidationErrors.length ? lastValidationErrors : [
                 {
                   timestamp: new Date().toISOString(),
                   erro: error.message,
@@ -846,14 +853,16 @@ interface ValidationError {
       camposObrigatorios.forEach(campo => {
         const valor = row[campo.posicao];
         const valorString = valor ? valor.toString().trim() : '';
+        const numeroColuna = campo.posicao + 1; // 1-based para o usuário
 
         // Verificar se campo obrigatório está vazio
         if (!valorString) {
           erros.push({
             linha: numeroLinha,
             coluna: campo.nome,
+            colunaNumero: numeroColuna,
             valor: '',
-            erro: 'Campo obrigatório não preenchido',
+            erro: `Campo obrigatório não preenchido (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
             tipo: 'obrigatorio'
           });
           linhaTemErro = true;
@@ -867,8 +876,9 @@ interface ValidationError {
             erros.push({
               linha: numeroLinha,
               coluna: campo.nome,
+              colunaNumero: numeroColuna,
               valor: valorString,
-              erro: 'Deve ser um número válido maior ou igual a zero',
+              erro: `Deve ser um número válido maior ou igual a zero (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
               tipo: 'formato'
             });
             linhaTemErro = true;
@@ -882,8 +892,9 @@ interface ValidationError {
             erros.push({
               linha: numeroLinha,
               coluna: campo.nome,
+              colunaNumero: numeroColuna,
               valor: valorString,
-              erro: 'Deve ser um número válido maior ou igual a zero (pode ser 0,00)',
+              erro: `Deve ser um número válido maior ou igual a zero (pode ser 0,00) (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
               tipo: 'formato'
             });
             linhaTemErro = true;
@@ -896,8 +907,9 @@ interface ValidationError {
             erros.push({
               linha: numeroLinha,
               coluna: campo.nome,
+              colunaNumero: numeroColuna,
               valor: valorString,
-              erro: 'Código deve conter apenas números, sem caracteres especiais',
+              erro: `Código deve conter apenas números, sem caracteres especiais (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
               tipo: 'formato'
             });
             linhaTemErro = true;
@@ -907,8 +919,9 @@ interface ValidationError {
               erros.push({
                 linha: numeroLinha,
                 coluna: campo.nome,
+                colunaNumero: numeroColuna,
                 valor: valorString,
-                erro: 'Código já existe na empresa. Use um código único',
+                erro: `Código já existe na empresa. Use um código único (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
                 tipo: 'invalido'
               });
               linhaTemErro = true;
@@ -918,8 +931,9 @@ interface ValidationError {
               erros.push({
                 linha: numeroLinha,
                 coluna: campo.nome,
+                colunaNumero: numeroColuna,
                 valor: valorString,
-                erro: 'Código duplicado na planilha. Cada código deve ser único',
+                erro: `Código duplicado na planilha. Cada código deve ser único (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
                 tipo: 'invalido'
               });
               linhaTemErro = true;
@@ -936,8 +950,9 @@ interface ValidationError {
             erros.push({
               linha: numeroLinha,
               coluna: campo.nome,
+              colunaNumero: numeroColuna,
               valor: valorString,
-              erro: 'Texto muito curto',
+              erro: `Texto muito curto (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
               tipo: 'tamanho'
             });
             linhaTemErro = true;
@@ -948,8 +963,9 @@ interface ValidationError {
             erros.push({
               linha: numeroLinha,
               coluna: campo.nome,
+              colunaNumero: numeroColuna,
               valor: valorString.substring(0, 50) + '...',
-              erro: 'Texto muito longo (máximo 255 caracteres)',
+              erro: `Texto muito longo (máximo 255 caracteres) (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
               tipo: 'tamanho'
             });
             linhaTemErro = true;
@@ -962,8 +978,9 @@ interface ValidationError {
               erros.push({
                 linha: numeroLinha,
                 coluna: campo.nome,
+                colunaNumero: numeroColuna,
                 valor: valorString,
-                erro: 'Unidade de medida deve ter exatamente 2 caracteres',
+                erro: `Unidade de medida deve ter exatamente 2 caracteres (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
                 tipo: 'tamanho'
               });
               linhaTemErro = true;
@@ -974,8 +991,9 @@ interface ValidationError {
                 erros.push({
                   linha: numeroLinha,
                   coluna: campo.nome,
+                  colunaNumero: numeroColuna,
                   valor: valorString,
-                  erro: `Unidade de medida não cadastrada na empresa. Unidades disponíveis: ${unidadesDisponiveis || 'Nenhuma cadastrada'}`,
+                  erro: `Unidade de medida não cadastrada na empresa. Unidades disponíveis: ${unidadesDisponiveis || 'Nenhuma cadastrada'} (Coluna ${numeroColuna}, Linha ${numeroLinha})`,
                   tipo: 'invalido'
                 });
                 linhaTemErro = true;
@@ -1937,7 +1955,7 @@ interface ValidationError {
                     }, {} as Record<string, number>);
 
                     return Object.entries(tiposCount).map(([tipo, count]) => (
-                      <div key={tipo} className="bg-gray-800/30 rounded-lg p-3 text-center">
+                      <div key={tipo} className="bg-gray-800/30 rounded-lg p-3 text-center min-h-[90px]">
                         <div className={`inline-flex p-2 rounded-full mb-2 ${
                           tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
                           tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
@@ -1965,7 +1983,7 @@ interface ValidationError {
                 <div className="space-y-4">
                   <h4 className="text-white font-medium mb-3 flex items-center gap-2">
                     <FileText size={16} />
-                    Detalhes dos Erros
+                    Localização Exata dos Erros na Planilha
                   </h4>
                   {validationErrors.map((erro, index) => (
                     <div
