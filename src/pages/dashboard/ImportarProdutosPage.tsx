@@ -2260,6 +2260,16 @@ interface ValidationError {
                                   {produtoNomePorLinha[Number(linha)]}
                                 </div>
                               )}
+                              {(() => {
+                                const cols = Array.from(new Set(erros.map((e:any) => e.colunaNumero).filter((n:any) => typeof n === 'number')));
+                                if (!cols.length) return null;
+                                const label = cols.length === 1 ? `Coluna ${cols[0]}` : `Colunas ${cols.slice(0,3).join(', ')}${cols.length>3 ? '…' : ''}`;
+                                return (
+                                  <div className="bg-amber-500/20 text-amber-300 px-2 py-1 rounded text-xs font-medium">
+                                    {label}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <div className="text-gray-400 text-sm">
                               {erros.length} erro{erros.length !== 1 ? 's' : ''} encontrado{erros.length !== 1 ? 's' : ''}
