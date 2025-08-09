@@ -254,7 +254,7 @@ interface ValidationError {
         }
       } catch (error) {
         console.error('Erro ao buscar dados do usuário:', error);
-        showMessage('🔐 Ops! Não conseguimos carregar seus dados. Tente fazer login novamente.', 'error');
+        showMessage('error', '🔐 Ops! Não conseguimos carregar seus dados. Tente fazer login novamente.');
       }
     };
 
@@ -295,7 +295,7 @@ interface ValidationError {
       setIsDataReady(true);
     } catch (error) {
       console.error('Erro ao buscar importações:', error);
-      showMessage('📋 Não conseguimos carregar o histórico de importações. Tente atualizar a página.', 'error');
+      showMessage('error', '📋 Não conseguimos carregar o histórico de importações. Tente atualizar a página.');
     } finally {
       setIsLoading(false);
     }
@@ -312,14 +312,14 @@ interface ValidationError {
       ];
 
       if (!allowedTypes.includes(file.type)) {
-        showMessage('📄 Arquivo não suportado! Por favor, use apenas planilhas Excel (.xlsx, .xls) ou CSV (.csv)', 'error');
+        showMessage('error', '📄 Arquivo não suportado! Por favor, use apenas planilhas Excel (.xlsx, .xls) ou CSV (.csv)');
         return;
       }
 
       // Validar tamanho (máximo 25MB - otimizado para ~25.000 produtos)
       const maxSize = 25 * 1024 * 1024; // 25MB - limite técnico otimizado
       if (file.size > maxSize) {
-        showMessage('📦 Arquivo muito grande! O limite é 25MB (aproximadamente 25.000 produtos). Tente dividir em planilhas menores.', 'error');
+        showMessage('error', '📦 Arquivo muito grande! O limite é 25MB (aproximadamente 25.000 produtos). Tente dividir em planilhas menores.');
         return;
       }
 
@@ -617,7 +617,7 @@ interface ValidationError {
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       setSelectedFile(null);
-      showMessage('🎉 Perfeito! Sua planilha foi importada e os grupos de produtos foram criados com sucesso!', 'success');
+      showMessage('success', '🎉 Perfeito! Sua planilha foi importada e os grupos de produtos foram criados com sucesso!');
 
       // Recarregar histórico
       await fetchImportacoes();
@@ -653,7 +653,7 @@ interface ValidationError {
         await fetchImportacoes();
       }
 
-      showMessage(`❌ Ops! Algo deu errado durante a importação: ${error.message}. Verifique sua planilha e tente novamente.`, 'error');
+      showMessage('error', `❌ Ops! Algo deu errado durante a importação: ${error.message}. Verifique sua planilha e tente novamente.`);
     } finally {
       setIsUploading(false);
       setIsProcessing(false);
@@ -700,10 +700,10 @@ interface ValidationError {
 
       // Atualizar lista local
       setImportacoes(prev => prev.filter(imp => imp.id !== id));
-      showMessage('🗑️ Importação removida com sucesso! O histórico foi atualizado.', 'success');
+      showMessage('success', '🗑️ Importação removida com sucesso! O histórico foi atualizado.');
     } catch (error) {
       console.error('Erro ao excluir importação:', error);
-      showMessage('❌ Não conseguimos excluir esta importação. Tente novamente em alguns instantes.', 'error');
+      showMessage('error', '❌ Não conseguimos excluir esta importação. Tente novamente em alguns instantes.');
     }
   };
 
@@ -1349,7 +1349,7 @@ interface ValidationError {
       if (erros.length > 0) {
         setValidationErrors(erros);
         setShowErrorModal(true);
-        showMessage(`⚠️ Reprocessamento finalizado, mas encontramos ${erros.length} erro(s). Verifique os detalhes e corrija sua planilha.`, 'error');
+        showMessage('error', `⚠️ Reprocessamento finalizado, mas encontramos ${erros.length} erro(s). Verifique os detalhes e corrija sua planilha.`);
       } else {
         // Continuar com processamento de grupos se não há erros
         setProcessingMessage('Processando grupos...');
@@ -1367,7 +1367,7 @@ interface ValidationError {
           })
           .eq('id', importacaoId);
 
-        showMessage('✅ Excelente! O reprocessamento foi concluído com sucesso. Todos os dados estão corretos!', 'success');
+        showMessage('success', '✅ Excelente! O reprocessamento foi concluído com sucesso. Todos os dados estão corretos!');
       }
 
       // Recarregar lista
@@ -1375,7 +1375,7 @@ interface ValidationError {
 
     } catch (error: any) {
       console.error('Erro ao reprocessar:', error);
-      showMessage(`❌ Falha no reprocessamento: ${error.message}. Verifique sua conexão e tente novamente.`, 'error');
+      showMessage('error', `❌ Falha no reprocessamento: ${error.message}. Verifique sua conexão e tente novamente.`);
     } finally {
       setIsUploading(false);
       setShowProcessingModal(false);
@@ -1543,7 +1543,7 @@ interface ValidationError {
     // Gerar e baixar arquivo Excel
     XLSX.writeFile(workbook, 'planilha_exemplo_produtos_nexo.xlsx');
 
-    showMessage('📥 Perfeito! Sua planilha de exemplo foi baixada. Use-a como modelo para importar seus produtos!', 'success');
+    showMessage('success', '📥 Perfeito! Sua planilha de exemplo foi baixada. Use-a como modelo para importar seus produtos!');
   };
 
   const renderSkeletonCards = () => {

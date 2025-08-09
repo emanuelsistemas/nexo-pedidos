@@ -535,6 +535,12 @@ const PDVPage: React.FC = () => {
   const [totalVendasFiadoCaixa, setTotalVendasFiadoCaixa] = useState(0);
   const [vendasFiadoExpandido, setVendasFiadoExpandido] = useState(false);
 
+  // ✅ NOVO: Estado para modal de informação sobre consumos internos
+  const [showInfoConsumosInternosModal, setShowInfoConsumosInternosModal] = useState(false);
+
+  // ✅ NOVO: Estado para modal de informação sobre vendas fiado
+  const [showInfoVendasFiadoModal, setShowInfoVendasFiadoModal] = useState(false);
+
   // ✅ NOVO: Estados para fechamento de caixa
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [loadingFecharCaixa, setLoadingFecharCaixa] = useState(false);
@@ -34476,9 +34482,34 @@ const PDVPage: React.FC = () => {
               {/* ✅ NOVO: Seção de Vendas Fiado (apenas se fiado estiver habilitado) */}
               {pdvConfig?.fiado && (
                 <div>
-                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#8b5cf6' }}>
-                    📋 Vendas Fiado
-                  </h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#8b5cf6' }}>
+                      📋 Vendas Fiado
+                    </h4>
+                    <button
+                      onClick={() => setShowInfoVendasFiadoModal(true)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        color: '#9ca3af',
+                        padding: '2px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '16px',
+                        height: '16px',
+                        transition: 'color 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => e.target.style.color = '#8b5cf6'}
+                      onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+                      title="Informações sobre Vendas Fiado"
+                    >
+                      ❓
+                    </button>
+                  </div>
 
                   {vendasFiadoCaixaModal.length > 0 ? (
                     <>
@@ -34914,9 +34945,34 @@ const PDVPage: React.FC = () => {
 
               {/* ✅ NOVO: Seção de Consumos Internos */}
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#f97316' }}>
-                  ☕ Consumos Internos
-                </h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 'bold', margin: 0, color: '#f97316' }}>
+                    ☕ Consumos Internos
+                  </h4>
+                  <button
+                    onClick={() => setShowInfoConsumosInternosModal(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      color: '#9ca3af',
+                      padding: '2px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '16px',
+                      height: '16px',
+                      transition: 'color 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => e.target.style.color = '#f97316'}
+                    onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+                    title="Informações sobre Consumos Internos"
+                  >
+                    ❓
+                  </button>
+                </div>
 
               {consumosInternosCaixaModal.length > 0 ? (
                 <>
@@ -35927,6 +35983,233 @@ const PDVPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Informação sobre Vendas Fiado */}
+      {showInfoVendasFiadoModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: '#1f2937',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '550px',
+            width: '90%',
+            border: '1px solid #374151',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            {/* Cabeçalho */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                backgroundColor: '#8b5cf6',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px'
+              }}>
+                📋
+              </div>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'white', margin: 0 }}>
+                  Vendas Fiado
+                </h3>
+                <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>
+                  Como funciona no caixa
+                </p>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{
+                backgroundColor: '#374151',
+                borderRadius: '8px',
+                padding: '16px',
+                border: '1px solid #4b5563',
+                marginBottom: '16px'
+              }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#8b5cf6', margin: '0 0 8px 0' }}>
+                  💰 Vendas Fiado vs Recebimentos
+                </h4>
+                <p style={{ fontSize: '14px', color: '#e5e7eb', margin: 0, lineHeight: '1.5' }}>
+                  As <strong>Vendas Fiado</strong> não entram dinheiro no caixa no momento da venda,
+                  pois são vendas a prazo. Apenas os <strong>Recebimentos de Fiado</strong> são contabilizados no valor total do caixa.
+                </p>
+              </div>
+
+              <div style={{
+                backgroundColor: '#1e40af20',
+                borderRadius: '8px',
+                padding: '16px',
+                border: '1px solid #3b82f6',
+                marginBottom: '16px'
+              }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#3b82f6', margin: '0 0 8px 0' }}>
+                  📊 Diferença no Caixa
+                </h4>
+                <ul style={{ fontSize: '14px', color: '#e5e7eb', margin: 0, paddingLeft: '20px', lineHeight: '1.5' }}>
+                  <li><strong>Vendas Fiado:</strong> Apenas para controle e histórico</li>
+                  <li><strong>Recebimentos de Fiado:</strong> Contabilizados no valor total</li>
+                  <li>Fiado é uma modalidade de crédito, não entrada imediata</li>
+                  <li>O dinheiro só entra quando o cliente paga a dívida</li>
+                </ul>
+              </div>
+
+              <div style={{
+                backgroundColor: '#059669',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                border: '1px solid #10b981'
+              }}>
+                <p style={{ fontSize: '13px', color: 'white', margin: 0, fontWeight: 'bold', textAlign: 'center' }}>
+                  ✅ Resumo: Vendas Fiado = Controle | Recebimentos = Dinheiro no Caixa
+                </p>
+              </div>
+            </div>
+
+            {/* Botão */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowInfoVendasFiadoModal(false)}
+                style={{
+                  backgroundColor: '#8b5cf6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#7c3aed'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#8b5cf6'}
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NOVO: Modal de Informação sobre Consumos Internos */}
+      {showInfoConsumosInternosModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: '#1f2937',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            border: '1px solid #374151',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            {/* Cabeçalho */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                backgroundColor: '#f97316',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px'
+              }}>
+                ☕
+              </div>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'white', margin: 0 }}>
+                  Consumos Internos
+                </h3>
+                <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>
+                  Informações importantes
+                </p>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{
+                backgroundColor: '#374151',
+                borderRadius: '8px',
+                padding: '16px',
+                border: '1px solid #4b5563',
+                marginBottom: '16px'
+              }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 'bold', color: '#f97316', margin: '0 0 8px 0' }}>
+                  ⚠️ Valor não contabilizado no caixa
+                </h4>
+                <p style={{ fontSize: '14px', color: '#e5e7eb', margin: 0, lineHeight: '1.5' }}>
+                  Os valores de <strong>Consumos Internos</strong> são exibidos apenas para <strong>demonstração e controle</strong> do que foi consumido durante o expediente.
+                </p>
+              </div>
+
+              <div style={{
+                backgroundColor: '#1e40af20',
+                borderRadius: '8px',
+                padding: '16px',
+                border: '1px solid #3b82f6'
+              }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#3b82f6', margin: '0 0 8px 0' }}>
+                  📋 Finalidade
+                </h4>
+                <ul style={{ fontSize: '14px', color: '#e5e7eb', margin: 0, paddingLeft: '20px', lineHeight: '1.5' }}>
+                  <li>Controle interno de produtos consumidos pela equipe</li>
+                  <li>Histórico de consumo para análise gerencial</li>
+                  <li>Transparência nas operações do caixa</li>
+                  <li><strong>Não afeta o valor total do caixa</strong></li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Botão */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowInfoConsumosInternosModal(false)}
+                style={{
+                  backgroundColor: '#f97316',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#ea580c'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#f97316'}
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
