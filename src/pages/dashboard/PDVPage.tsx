@@ -2323,19 +2323,19 @@ const PDVPage: React.FC = () => {
           setValoresFiadoPorForma(valoresPorForma);
         }
 
-        // ✅ NOVO: Buscar vendas fiado para este caixa
+        // ✅ NOVO: Buscar vendas fiado para este caixa (usar tabela pdv direto)
         const { data: vendasFiadoData, error: vendasFiadoError } = await supabase
-          .from('vendas_pdv')
+          .from('pdv')
           .select(`
             id,
             valor_total,
-            cliente_nome,
+            cliente_nome:nome_cliente,
             data_venda,
-            observacoes,
+            observacoes:observacao_venda,
             status_fiscal
           `)
           .eq('caixa_id', caixaData.id)
-          .eq('tipo_pagamento', 'fiado')
+          .eq('fiado', true)
           .in('status_fiscal', ['autorizada', 'nao_fiscal'])
           .order('data_venda', { ascending: false });
 

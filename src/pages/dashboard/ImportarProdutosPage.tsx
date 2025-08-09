@@ -202,7 +202,7 @@ const ImportarProdutosPage: React.FC = () => {
   const [editingError, setEditingError] = useState<{linha: number, coluna: string} | null>(null);
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [hasEdits, setHasEdits] = useState(false);
-  const [unidadesMedida, setUnidadesMedida] = useState<Array<{id: string, nome: string}>>([]);
+  const [unidadesMedida, setUnidadesMedida] = useState<Array<{id: string, nome: string, sigla: string}>>([]);
 
 // Interface para erros de validação
 interface ValidationError {
@@ -1448,30 +1448,19 @@ interface ValidationError {
   const buscarUnidadesMedida = async () => {
     try {
       const { data: session } = await supabase.auth.getSession();
-      console.log('Session para unidades:', session?.session?.user?.user_metadata);
-
-      if (!session?.session?.user?.user_metadata?.empresa_id) {
-        console.log('Empresa ID não encontrado na sessão');
-        return;
-      }
-
-      const empresaId = session.session.user.user_metadata.empresa_id;
-      console.log('Buscando unidades para empresa:', empresaId);
+      if (!session?.session?.user?.user_metadata?.empresa_id) return;
 
       const { data, error } = await supabase
-        .from('unidades_medida')
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
+        .from('unidade_medida')
+        .select('id, nome, sigla')
+        .eq('empresa_id', session.session.user.user_metadata.empresa_id)
         .order('nome');
-
-      console.log('Resultado da busca unidades:', { data, error });
 
       if (error) {
         console.error('Erro ao buscar unidades de medida:', error);
         return;
       }
 
-      console.log('Unidades encontradas:', data?.length || 0);
       setUnidadesMedida(data || []);
     } catch (error) {
       console.error('Erro ao buscar unidades de medida:', error);
@@ -1867,7 +1856,9 @@ interface ValidationError {
                             const hasUnidadeError = importacao.log_erros.some(erro =>
                               erro.coluna === 'Unidade de Medida'
                             );
+                            console.log('Tem erro de unidade?', hasUnidadeError);
                             if (hasUnidadeError) {
+                              console.log('Buscando unidades de medida...');
                               await buscarUnidadesMedida();
                             }
 
@@ -2258,15 +2249,7 @@ interface ValidationError {
                                               </p>
 
                                               {/* Mostrar unidades de medida disponíveis se o erro for sobre unidade */}
-                                              {(() => {
-                                                console.log('Verificando condições:', {
-                                                  coluna: erro.coluna,
-                                                  isUnidadeMedida: erro.coluna === 'Unidade de Medida',
-                                                  unidadesLength: unidadesMedida.length,
-                                                  unidades: unidadesMedida
-                                                });
-                                                return erro.coluna === 'Unidade de Medida' && unidadesMedida.length > 0;
-                                              })() && (
+                                              {erro.coluna === 'Unidade de Medida' && unidadesMedida.length > 0 && (
                                                 <div className="mt-3 bg-blue-900/20 border border-blue-700/30 rounded-lg p-3">
                                                   <div className="flex items-center gap-2 mb-2">
                                                     <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
@@ -2279,9 +2262,10 @@ interface ValidationError {
                                                       <button
                                                         key={unidade.id}
                                                         onClick={() => {
+                                                          const valorParaUsar = unidade.sigla?.length === 2 ? unidade.sigla : (unidade.nome || '');
                                                           const input = document.getElementById(`edit-${erro.linha}-${erro.coluna}`) as HTMLInputElement;
                                                           if (input) {
-                                                            input.value = unidade.nome;
+                                                            input.value = valorParaUsar;
                                                             input.focus();
                                                           } else {
                                                             // Se não está editando, iniciar edição com o valor
@@ -2289,16 +2273,16 @@ interface ValidationError {
                                                             setTimeout(() => {
                                                               const newInput = document.getElementById(`edit-${erro.linha}-${erro.coluna}`) as HTMLInputElement;
                                                               if (newInput) {
-                                                                newInput.value = unidade.nome;
+                                                                newInput.value = valorParaUsar;
                                                                 newInput.focus();
                                                               }
                                                             }, 100);
                                                           }
                                                         }}
                                                         className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs transition-colors border border-blue-500/30 hover:border-blue-400/50"
-                                                        title={`Usar "${unidade.nome}"`}
+                                                        title={`Usar \"${unidade.sigla || unidade.nome}\"`}
                                                       >
-                                                        {unidade.nome}
+                                                        {unidade.sigla ? `${unidade.sigla}` : unidade.nome}
                                                       </button>
                                                     ))}
                                                   </div>
