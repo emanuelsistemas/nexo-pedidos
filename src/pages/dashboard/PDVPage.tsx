@@ -2275,7 +2275,6 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Buscar recebimentos de fiado para este caixa (se fiado estiver habilitado)
       if (pdvConfig?.fiado) {
-        console.log('💰 Buscando recebimentos de fiado para o caixa...');
         const { data: recebimentosData, error: recebimentosError } = await supabase
           .from('fiado_recebimentos')
           .select(`
@@ -2294,7 +2293,6 @@ const PDVPage: React.FC = () => {
         if (recebimentosError) {
           console.error('❌ Erro ao buscar recebimentos de fiado:', recebimentosError);
         } else {
-          console.log('✅ Recebimentos de fiado carregados:', recebimentosData?.length || 0);
           setRecebimentosFiadoCaixa(recebimentosData || []);
 
           // Calcular total dos recebimentos
@@ -2322,12 +2320,10 @@ const PDVPage: React.FC = () => {
             }
           });
 
-          console.log('💰 Valores de fiado por forma de pagamento:', valoresPorForma);
           setValoresFiadoPorForma(valoresPorForma);
         }
 
         // ✅ NOVO: Buscar vendas fiado para este caixa
-        console.log('💰 Buscando vendas fiado para o caixa...');
         const { data: vendasFiadoData, error: vendasFiadoError } = await supabase
           .from('vendas_pdv')
           .select(`
@@ -2346,7 +2342,6 @@ const PDVPage: React.FC = () => {
         if (vendasFiadoError) {
           console.error('❌ Erro ao buscar vendas fiado:', vendasFiadoError);
         } else {
-          console.log('✅ Vendas fiado carregadas:', vendasFiadoData?.length || 0);
           setVendasFiadoCaixaModal(vendasFiadoData || []);
           const totalVendasFiado = (vendasFiadoData || []).reduce((total, venda) => {
             return total + (parseFloat(venda.valor_total) || 0);
@@ -2356,7 +2351,6 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Buscar pagamentos do caixa
-      console.log('💰 Buscando pagamentos do caixa...');
       const { data: pagamentosData, error: pagamentosError } = await supabase
         .from('pagamentos_caixa')
         .select(`
@@ -2382,7 +2376,6 @@ const PDVPage: React.FC = () => {
       if (pagamentosError) {
         console.error('❌ Erro ao buscar pagamentos do caixa:', pagamentosError);
       } else {
-        console.log('✅ Pagamentos do caixa carregados:', pagamentosData?.length || 0);
         setPagamentosCaixa(pagamentosData || []);
         const totalPagamentos = (pagamentosData || []).reduce((total, pagamento) => {
           return total + (parseFloat(pagamento.valor_pagamento) || 0);
@@ -2398,34 +2391,21 @@ const PDVPage: React.FC = () => {
           formaEmpresaParaOpcaoMap[forma.id] = forma.forma_pagamento_opcao_id;
         });
 
-        console.log('🔍 DEBUG - Mapeamento formas empresa para opcao:', formaEmpresaParaOpcaoMap);
-        console.log('🔍 DEBUG - Pagamentos carregados:', pagamentosData);
-
         (pagamentosData || []).forEach(pagamento => {
-          console.log('🔍 DEBUG - Processando pagamento:', {
-            id: pagamento.id,
-            valor: pagamento.valor_pagamento,
-            formas_pagamento_empresa_id: pagamento.formas_pagamento_empresa_id
-          });
-
           const formaOpcaoId = formaEmpresaParaOpcaoMap[pagamento.formas_pagamento_empresa_id];
-          console.log('🔍 DEBUG - Forma opcao ID encontrada:', formaOpcaoId);
 
           if (formaOpcaoId) {
             if (!valoresPagamentosPorForma[formaOpcaoId]) {
               valoresPagamentosPorForma[formaOpcaoId] = 0;
             }
             valoresPagamentosPorForma[formaOpcaoId] += parseFloat(pagamento.valor_pagamento) || 0;
-          } else {
           }
         });
 
-        console.log('💰 Valores de pagamentos por forma de pagamento:', valoresPagamentosPorForma);
         setValoresPagamentosPorForma(valoresPagamentosPorForma);
       }
 
       // ✅ NOVO: Buscar sangrias do caixa
-      console.log('💰 Buscando sangrias do caixa...');
       const { data: sangriasData, error: sangriasError } = await supabase
         .from('sangrias')
         .select(`
@@ -2443,7 +2423,6 @@ const PDVPage: React.FC = () => {
       if (sangriasError) {
         console.error('❌ Erro ao buscar sangrias do caixa:', sangriasError);
       } else {
-        console.log('✅ Sangrias do caixa carregadas:', sangriasData?.length || 0);
         setSangriasCaixaModal(sangriasData || []);
         const totalSangrias = (sangriasData || []).reduce((total, sangria) => {
           return total + (parseFloat(sangria.valor) || 0);
@@ -2452,7 +2431,6 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Buscar suprimentos do caixa
-      console.log('💰 Buscando suprimentos do caixa...');
       const { data: suprimentosData, error: suprimentosError } = await supabase
         .from('suprimentos')
         .select(`
@@ -2470,7 +2448,6 @@ const PDVPage: React.FC = () => {
       if (suprimentosError) {
         console.error('❌ Erro ao buscar suprimentos do caixa:', suprimentosError);
       } else {
-        console.log('✅ Suprimentos do caixa carregados:', suprimentosData?.length || 0);
         setSuprimentosCaixaModal(suprimentosData || []);
         const totalSuprimentos = (suprimentosData || []).reduce((total, suprimento) => {
           return total + (parseFloat(suprimento.valor) || 0);
@@ -2479,7 +2456,6 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Buscar consumos internos do caixa
-      console.log('☕ Buscando consumos internos do caixa...');
       const { data: consumosInternosData, error: consumosInternosError } = await supabase
         .from('consumo_interno')
         .select(`
@@ -2498,7 +2474,6 @@ const PDVPage: React.FC = () => {
       if (consumosInternosError) {
         console.error('❌ Erro ao buscar consumos internos do caixa:', consumosInternosError);
       } else {
-        console.log('✅ Consumos internos do caixa carregados:', consumosInternosData?.length || 0);
         setConsumosInternosCaixaModal(consumosInternosData || []);
         const totalConsumosInternos = (consumosInternosData || []).reduce((total, consumo) => {
           return total + (parseFloat(consumo.valor_total) || 0);
@@ -2507,7 +2482,6 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Buscar produtos vendidos do caixa (agrupados)
-      console.log('🛒 Buscando produtos vendidos do caixa...');
       const { data: produtosVendidosData, error: produtosVendidosError } = await supabase
         .from('pdv_itens')
         .select(`
@@ -2529,7 +2503,6 @@ const PDVPage: React.FC = () => {
       if (produtosVendidosError) {
         console.error('❌ Erro ao buscar produtos vendidos do caixa:', produtosVendidosError);
       } else {
-        console.log('✅ Produtos vendidos do caixa carregados:', produtosVendidosData?.length || 0);
 
         // Agrupar produtos por nome/código
         const produtosAgrupados = (produtosVendidosData || []).reduce((acc, item) => {
@@ -2569,7 +2542,6 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Calcular valores reais das formas de pagamento baseado nas vendas do caixa
-      console.log('💰 Calculando valores reais das formas de pagamento...');
       const valoresReais: {[key: string]: {atual: number, formatado: string}} = {};
 
       if (formasData && formasData.length > 0) {
@@ -2583,7 +2555,6 @@ const PDVPage: React.FC = () => {
         if (vendasError) {
           console.error('❌ Erro ao buscar vendas do caixa:', vendasError);
         } else {
-          console.log('📊 Vendas encontradas para o caixa:', vendasCaixa?.length || 0);
 
           // Inicializar contadores para cada forma de pagamento
           // ✅ CORREÇÃO: Usar o ID da empresa como chave, não o ID da opção
@@ -2639,8 +2610,6 @@ const PDVPage: React.FC = () => {
               maximumFractionDigits: 2
             });
           });
-
-          console.log('💰 Valores calculados por forma de pagamento:', valoresReais);
         }
       }
 
@@ -3716,9 +3685,7 @@ const PDVPage: React.FC = () => {
           // Carregar dados do caixa e formas de pagamento
           await carregarDadosCaixa();
 
-          console.log('🎭 Definindo showCaixaModal = true');
           setShowCaixaModal(true);
-          console.log('🎭 showCaixaModal definido como true');
         } catch (error) {
           console.error('❌ Erro ao abrir modal do caixa:', error);
           toast.error('Erro ao abrir controle do caixa');

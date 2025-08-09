@@ -199,6 +199,9 @@ const ImportarProdutosPage: React.FC = () => {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [importacaoParaReprocessar, setImportacaoParaReprocessar] = useState<string | null>(null);
+  const [editingError, setEditingError] = useState<{linha: number, coluna: string} | null>(null);
+  const [editedValues, setEditedValues] = useState<Record<string, string>>({});
+  const [hasEdits, setHasEdits] = useState(false);
 
 // Interface para erros de validação
 interface ValidationError {
@@ -1939,25 +1942,24 @@ interface ValidationError {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/80 z-50"
             onClick={() => setShowErrorModal(false)}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl max-h-[80vh] overflow-hidden"
+              className="bg-background-card h-full w-full overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-gray-800">
+              <div className="p-6 border-b border-gray-800 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <AlertCircle className="text-red-400" size={24} />
                     <div>
-                      <h3 className="text-xl font-semibold text-white">Erros de Validação na Planilha</h3>
-                      <p className="text-gray-400">
-                        {validationErrors.length} erro{validationErrors.length !== 1 ? 's' : ''} encontrado{validationErrors.length !== 1 ? 's' : ''} - Verifique as colunas e linhas indicadas
-                      </p>
+                      <h3 className="text-xl font-semibold text-white">
+                        {validationErrors.length} Erro{validationErrors.length !== 1 ? 's' : ''} de Validação na Planilha
+                      </h3>
                     </div>
                   </div>
                   <button
@@ -1969,7 +1971,7 @@ interface ValidationError {
                 </div>
               </div>
 
-              <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="p-6 overflow-y-auto flex-1">
                 {/* Resumo dos tipos de erros */}
                 <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   {(() => {
@@ -2003,104 +2005,87 @@ interface ValidationError {
                   })()}
                 </div>
 
-                {/* Lista detalhada de erros */}
+                {/* Lista detalhada de erros agrupados por linha */}
                 <div className="space-y-4">
                   <h4 className="text-white font-medium mb-3 flex items-center gap-2">
                     <FileText size={16} />
-                    Localização Exata dos Erros na Planilha
+                    Erros Encontrados na Planilha
                   </h4>
-                  {validationErrors.map((erro, index) => (
-                    <div
-                      key={index}
-                      className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`p-1 rounded ${
-                          erro.tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
-                          erro.tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
-                          erro.tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-orange-500/20 text-orange-400'
-                        }`}>
-                          {erro.tipo === 'obrigatorio' ? <AlertCircle size={16} /> :
-                           erro.tipo === 'formato' ? <AlertTriangle size={16} /> :
-                           erro.tipo === 'tamanho' ? <FileText size={16} /> :
-                           <X size={16} />}
+                  {(() => {
+                    // Agrupar erros por linha
+                    const errosPorLinha = validationErrors.reduce((acc, erro) => {
+                      if (!acc[erro.linha]) {
+                        acc[erro.linha] = [];
+                      }
+                      acc[erro.linha].push(erro);
+                      return acc;
+                    }, {} as Record<number, ValidationError[]>);
+
+                    return Object.entries(errosPorLinha)
+                      .sort(([a], [b]) => Number(a) - Number(b))
+                      .map(([linha, erros]) => (
+                        <div
+                          key={linha}
+                          className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+                        >
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg font-mono font-semibold">
+                              Linha {linha}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              {erros.length} erro{erros.length !== 1 ? 's' : ''} encontrado{erros.length !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {erros.map((erro, index) => (
+                              <div
+                                key={index}
+                                className="bg-gray-900/30 rounded-lg p-3 border-l-4 border-l-red-400"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={`p-1.5 rounded ${
+                                    erro.tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
+                                    erro.tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
+                                    erro.tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-orange-500/20 text-orange-400'
+                                  }`}>
+                                    {erro.tipo === 'obrigatorio' ? <AlertCircle size={14} /> :
+                                     erro.tipo === 'formato' ? <AlertTriangle size={14} /> :
+                                     erro.tipo === 'tamanho' ? <FileText size={14} /> :
+                                     <X size={14} />}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <div>
+                                        <span className="text-gray-400 text-xs font-medium uppercase tracking-wide">Campo:</span>
+                                        <p className="text-white text-sm font-medium mt-1">{erro.coluna}</p>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400 text-xs font-medium uppercase tracking-wide">Problema:</span>
+                                        <p className="text-red-400 text-sm mt-1">{erro.erro}</p>
+                                      </div>
+                                    </div>
+                                    {erro.valor && (
+                                      <div className="mt-3 bg-gray-800/50 rounded px-3 py-2">
+                                        <span className="text-gray-400 text-xs font-medium uppercase tracking-wide">Valor encontrado:</span>
+                                        <p className="text-gray-300 text-sm font-mono break-all mt-1">
+                                          {erro.valor || '[vazio]'}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-sm font-mono">
-                              Coluna {(() => {
-                                // Mapear nome da coluna para número da posição
-                                const colunaParaPosicao: Record<string, number> = {
-                                  'GRUPO': 1,
-                                  'Código do Produto': 2,
-                                  'Código de Barras': 3,
-                                  'Nome do Produto': 4,
-                                  'Unidade de Medida': 5,
-                                  'Unidade fracionada': 6,
-                                  'Preço de Custo': 7,
-                                  'Preço Padrão': 8,
-                                  'Descrição Adicional': 9,
-                                  'Estoque Inicial': 10,
-                                  'Produto Alcoólico': 11,
-                                  'Este produto é Pizza?': 12,
-                                  'Matéria prima': 13,
-                                  'Produção': 14,
-                                  'NCM': 15,
-                                  'CFOP': 16,
-                                  'CSOSN/CST': 17,
-                                  'CEST': 18,
-                                  'Origem do Produto': 19,
-                                  'Alíquota ICMS (%)': 20,
-                                  'Alíquota PIS (%)': 21,
-                                  'Alíquota COFINS (%)': 22,
-                                  'Peso Líquido (kg)': 23
-                                };
-                                return colunaParaPosicao[erro.coluna] || '?';
-                              })()}
-                            </div>
-                            <div className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-sm font-mono">
-                              Linha {erro.linha}
-                            </div>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              erro.tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
-                              erro.tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
-                              erro.tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
-                              'bg-orange-500/20 text-orange-400'
-                            }`}>
-                              {erro.tipo === 'obrigatorio' ? 'Campo Obrigatório' :
-                               erro.tipo === 'formato' ? 'Formato Inválido' :
-                               erro.tipo === 'tamanho' ? 'Tamanho Inválido' :
-                               'Valor Inválido'}
-                            </span>
-                          </div>
-
-                          <div className="mb-2">
-                            <span className="text-gray-400 text-xs font-medium">CAMPO:</span>
-                            <p className="text-white text-sm font-medium">{erro.coluna}</p>
-                          </div>
-
-                          <div className="mb-3">
-                            <span className="text-gray-400 text-xs font-medium">PROBLEMA:</span>
-                            <p className="text-red-400 text-sm">{erro.erro}</p>
-                          </div>
-
-                          {erro.valor && (
-                            <div className="bg-gray-900/50 rounded px-3 py-2">
-                              <span className="text-gray-400 text-xs font-medium">VALOR ENCONTRADO:</span>
-                              <p className="text-gray-300 text-sm font-mono break-all mt-1">
-                                {erro.valor || '[vazio]'}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      ));
+                  })()}
                 </div>
               </div>
 
-              <div className="p-6 border-t border-gray-800">
+              <div className="p-6 border-t border-gray-800 flex-shrink-0">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div className="text-gray-400 text-sm">
                     <div className="flex items-center gap-2 mb-2">
