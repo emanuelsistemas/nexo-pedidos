@@ -254,7 +254,7 @@ interface ValidationError {
         }
       } catch (error) {
         console.error('Erro ao buscar dados do usuário:', error);
-        showMessage('Erro ao carregar dados do usuário', 'error');
+        showMessage('🔐 Ops! Não conseguimos carregar seus dados. Tente fazer login novamente.', 'error');
       }
     };
 
@@ -295,7 +295,7 @@ interface ValidationError {
       setIsDataReady(true);
     } catch (error) {
       console.error('Erro ao buscar importações:', error);
-      showMessage('Erro ao carregar histórico de importações', 'error');
+      showMessage('📋 Não conseguimos carregar o histórico de importações. Tente atualizar a página.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -312,14 +312,14 @@ interface ValidationError {
       ];
 
       if (!allowedTypes.includes(file.type)) {
-        showMessage('Tipo de arquivo não suportado. Use apenas .xlsx, .xls ou .csv', 'error');
+        showMessage('📄 Arquivo não suportado! Por favor, use apenas planilhas Excel (.xlsx, .xls) ou CSV (.csv)', 'error');
         return;
       }
 
       // Validar tamanho (máximo 25MB - otimizado para ~25.000 produtos)
       const maxSize = 25 * 1024 * 1024; // 25MB - limite técnico otimizado
       if (file.size > maxSize) {
-        showMessage('Arquivo muito grande. Tamanho máximo: 25MB (~25.000 produtos)', 'error');
+        showMessage('📦 Arquivo muito grande! O limite é 25MB (aproximadamente 25.000 produtos). Tente dividir em planilhas menores.', 'error');
         return;
       }
 
@@ -350,7 +350,30 @@ interface ValidationError {
 
       if (usuarioError) throw usuarioError;
 
-      // 1. Preparar dados para upload local
+      // 1. Criar registro de importação ANTES do upload para garantir que sempre temos o registro
+      const { data: importacaoData, error: importacaoError } = await supabase
+        .from('importacao_produtos')
+        .insert({
+          empresa_id: empresaId,
+          usuario_id: usuarioData.id,
+          nome_arquivo: selectedFile.name,
+          arquivo_storage_path: '', // Será preenchido após upload bem-sucedido
+          arquivo_download_url: '',
+          tamanho_arquivo: selectedFile.size,
+          status: 'processando',
+          etapa_atual: 'enviando_arquivo',
+          mensagem_atual: 'Enviando planilha para o servidor...'
+        })
+        .select('id')
+        .single();
+
+      if (importacaoError) throw importacaoError;
+      importacaoId = importacaoData.id;
+
+      // Atualizar lista imediatamente para mostrar o novo registro
+      await fetchImportacoes();
+
+      // 2. Preparar dados para upload local
       const fileExt = selectedFile.name.split('.').pop();
       const fileName = `${Date.now()}_${selectedFile.name}`;
       const localPath = `empresa_${empresaId}/${fileName}`;
@@ -382,29 +405,20 @@ interface ValidationError {
 
       const uploadResult = await uploadResponse.json();
 
-      // 2. Criar registro de importação
+      // 3. Atualizar registro com informações do upload bem-sucedido
       const downloadUrl = `/backend/public/download-planilha.php?file=${encodeURIComponent(uploadResult.filePath)}&empresa=${empresaId}`;
 
-      const { data: importacaoData, error: importacaoError } = await supabase
+      await supabase
         .from('importacao_produtos')
-        .insert({
-          empresa_id: empresaId,
-          usuario_id: usuarioData.id,
-          nome_arquivo: selectedFile.name,
-          arquivo_storage_path: uploadResult.filePath, // Caminho local retornado pelo backend
+        .update({
+          arquivo_storage_path: uploadResult.filePath,
           arquivo_download_url: downloadUrl,
-          tamanho_arquivo: selectedFile.size,
-          status: 'processando',
-          etapa_atual: 'iniciando',
-          mensagem_atual: 'Processando arquivo...'
+          etapa_atual: 'arquivo_enviado',
+          mensagem_atual: 'Arquivo enviado com sucesso, iniciando processamento...'
         })
-        .select('id')
-        .single();
+        .eq('id', importacaoId);
 
-      if (importacaoError) throw importacaoError;
-      importacaoId = importacaoData.id;
-
-      // 3. Atualizar progresso - lendo arquivo
+      // 4. Atualizar progresso - lendo arquivo
       await supabase
         .from('importacao_produtos')
         .update({
@@ -603,7 +617,7 @@ interface ValidationError {
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       setSelectedFile(null);
-      showMessage('Planilha enviada e grupos processados com sucesso!', 'success');
+      showMessage('🎉 Perfeito! Sua planilha foi importada e os grupos de produtos foram criados com sucesso!', 'success');
 
       // Recarregar histórico
       await fetchImportacoes();
@@ -634,9 +648,12 @@ interface ValidationError {
         } catch (updateError) {
           console.error('Erro ao atualizar status de erro:', updateError);
         }
+
+        // Atualizar lista para mostrar o erro registrado
+        await fetchImportacoes();
       }
 
-      showMessage(`Erro ao processar arquivo: ${error.message}`, 'error');
+      showMessage(`❌ Ops! Algo deu errado durante a importação: ${error.message}. Verifique sua planilha e tente novamente.`, 'error');
     } finally {
       setIsUploading(false);
       setIsProcessing(false);
@@ -683,10 +700,10 @@ interface ValidationError {
 
       // Atualizar lista local
       setImportacoes(prev => prev.filter(imp => imp.id !== id));
-      showMessage('Importação excluída com sucesso', 'success');
+      showMessage('🗑️ Importação removida com sucesso! O histórico foi atualizado.', 'success');
     } catch (error) {
       console.error('Erro ao excluir importação:', error);
-      showMessage('Erro ao excluir importação', 'error');
+      showMessage('❌ Não conseguimos excluir esta importação. Tente novamente em alguns instantes.', 'error');
     }
   };
 
@@ -781,15 +798,19 @@ interface ValidationError {
     }
 
     // Buscar unidades de medida cadastradas na empresa
-    const { data: unidadesExistentes, error: unidadesError } = await supabase
-      .from('unidades_medida')
-      .select('sigla')
-      .eq('empresa_id', empresaId)
-      .eq('deletado', false);
+    // COMENTADO: Tabela unidades_medida não existe ainda, aceitar qualquer unidade por enquanto
+    // const { data: unidadesExistentes, error: unidadesError } = await supabase
+    //   .from('unidades_medida')
+    //   .select('sigla')
+    //   .eq('empresa_id', empresaId)
+    //   .eq('deletado', false);
 
-    if (unidadesError) {
-      throw new Error(`Erro ao consultar unidades de medida: ${unidadesError.message}`);
-    }
+    // if (unidadesError) {
+    //   throw new Error(`Erro ao consultar unidades de medida: ${unidadesError.message}`);
+    // }
+
+    // Por enquanto, aceitar qualquer unidade de medida
+    const unidadesExistentes: any[] = [];
 
     // Criar sets com códigos existentes para busca rápida
     const codigosExistentes = new Set(
@@ -1328,7 +1349,7 @@ interface ValidationError {
       if (erros.length > 0) {
         setValidationErrors(erros);
         setShowErrorModal(true);
-        showMessage(`Reprocessamento concluído com ${erros.length} erros`, 'error');
+        showMessage(`⚠️ Reprocessamento finalizado, mas encontramos ${erros.length} erro(s). Verifique os detalhes e corrija sua planilha.`, 'error');
       } else {
         // Continuar com processamento de grupos se não há erros
         setProcessingMessage('Processando grupos...');
@@ -1346,7 +1367,7 @@ interface ValidationError {
           })
           .eq('id', importacaoId);
 
-        showMessage('Reprocessamento concluído com sucesso!', 'success');
+        showMessage('✅ Excelente! O reprocessamento foi concluído com sucesso. Todos os dados estão corretos!', 'success');
       }
 
       // Recarregar lista
@@ -1354,7 +1375,7 @@ interface ValidationError {
 
     } catch (error: any) {
       console.error('Erro ao reprocessar:', error);
-      showMessage(`Erro ao reprocessar: ${error.message}`, 'error');
+      showMessage(`❌ Falha no reprocessamento: ${error.message}. Verifique sua conexão e tente novamente.`, 'error');
     } finally {
       setIsUploading(false);
       setShowProcessingModal(false);
@@ -1522,7 +1543,7 @@ interface ValidationError {
     // Gerar e baixar arquivo Excel
     XLSX.writeFile(workbook, 'planilha_exemplo_produtos_nexo.xlsx');
 
-    showMessage('Planilha de exemplo baixada com sucesso!', 'success');
+    showMessage('📥 Perfeito! Sua planilha de exemplo foi baixada. Use-a como modelo para importar seus produtos!', 'success');
   };
 
   const renderSkeletonCards = () => {

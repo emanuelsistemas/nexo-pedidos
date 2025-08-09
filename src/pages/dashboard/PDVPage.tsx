@@ -34148,18 +34148,20 @@ const PDVPage: React.FC = () => {
                     <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>
                       R$ {(() => {
                         const valorTotal = formasPagamentoCaixa.reduce((total, forma) => {
-                          const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
-                          const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
-                          const valorPagamentos = valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] || 0;
-                          const isDinheiro = forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro');
-                          const valorSuprimento = isDinheiro ? totalSuprimentosCaixa : 0;
-                          const valorSangria = isDinheiro ? totalSangriasCaixa : 0;
-
-                          // Usar a mesma lógica dos cards individuais
-                          const valorTotalForma = valorAtual + valorFiado - valorPagamentos + valorSuprimento - valorSangria;
+                          // ✅ NOVO: Usar exatamente a mesma lógica dos cards individuais
+                          const valorTotalForma = (
+                            (valoresReaisCaixa[forma.id]?.atual || 0) +
+                            (valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0) -
+                            (valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] || 0) +
+                            (forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro') ? totalSuprimentosCaixa : 0) -
+                            (forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro') ? totalSangriasCaixa : 0)
+                          );
                           return total + valorTotalForma;
                         }, 0);
-                        return formatarValorMonetario(valorTotal.toString());
+                        return valorTotal.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        });
                       })()}
                     </span>
                   </div>
@@ -34475,7 +34477,7 @@ const PDVPage: React.FC = () => {
               {pdvConfig?.fiado && (
                 <div>
                   <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#8b5cf6' }}>
-                    💜 Vendas Fiado
+                    📋 Vendas Fiado
                   </h4>
 
                   {vendasFiadoCaixaModal.length > 0 ? (
@@ -34686,113 +34688,6 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
               </div>
-
-              {/* ✅ NOVO: Seção de Sangria */}
-              <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#dc2626' }}>
-                  📉 Sangria
-                </h4>
-
-              {sangriasCaixaModal.length > 0 ? (
-                <>
-                  {/* Total das Sangrias com botão de expand */}
-                  <div style={{
-                    backgroundColor: '#374151',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    border: '1px solid #4b5563',
-                    marginBottom: '12px',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => setSangriasExpandido(!sangriasExpandido)}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
-                        Total Sangria
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#dc2626' }}>
-                          R$ {totalSangriasCaixa.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
-                        </span>
-                        <span style={{
-                          fontSize: '12px',
-                          color: '#9ca3af',
-                          transform: sangriasExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.2s ease'
-                        }}>
-                          ▼
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Lista de Sangrias - só aparece quando expandida */}
-                  {sangriasExpandido && (
-                    <div style={{
-                      maxHeight: '200px',
-                      overflowY: 'auto',
-                      backgroundColor: '#1f2937',
-                      borderRadius: '8px',
-                      border: '1px solid #374151'
-                    }}>
-                      {sangriasCaixaModal.map((sangria, index) => (
-                        <div
-                          key={sangria.id}
-                          style={{
-                            padding: '8px 12px',
-                            borderBottom: index < sangriasCaixaModal.length - 1 ? '1px solid #374151' : 'none',
-                            fontSize: '12px'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
-                              {sangria.usuarios?.nome || 'Usuário não identificado'}
-                            </span>
-                            <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                              R$ {parseFloat(sangria.valor).toLocaleString('pt-BR', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2
-                              })}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
-                            <span>Sangria</span>
-                            <span>
-                              {new Date(sangria.data).toLocaleString('pt-BR', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                          {sangria.observacao && (
-                            <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
-                              {sangria.observacao}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{
-                  backgroundColor: '#374151',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  textAlign: 'center',
-                  color: '#9ca3af',
-                  fontSize: '14px',
-                  border: '1px solid #4b5563'
-                }}>
-                  Nenhuma sangria registrada neste caixa
-                </div>
-              )}
-              </div>
             </div>
 
             {/* ✅ NOVO: Segunda linha do grid - 3 colunas */}
@@ -34802,6 +34697,113 @@ const PDVPage: React.FC = () => {
               gap: '16px',
               marginBottom: '24px'
             }}>
+
+              {/* ✅ NOVO: Seção de Sangria */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: '#dc2626' }}>
+                  📉 Sangria
+                </h4>
+
+                {sangriasCaixaModal.length > 0 ? (
+                  <>
+                    {/* Total das Sangrias com botão de expand */}
+                    <div style={{
+                      backgroundColor: '#374151',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      border: '1px solid #4b5563',
+                      marginBottom: '12px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setSangriasExpandido(!sangriasExpandido)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb' }}>
+                          Total Sangria
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#dc2626' }}>
+                            R$ {totalSangriasCaixa.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </span>
+                          <span style={{
+                            fontSize: '12px',
+                            color: '#9ca3af',
+                            transform: sangriasExpandido ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease'
+                          }}>
+                            ▼
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de Sangrias - só aparece quando expandida */}
+                    {sangriasExpandido && (
+                      <div style={{
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        backgroundColor: '#1f2937',
+                        borderRadius: '8px',
+                        border: '1px solid #374151'
+                      }}>
+                        {sangriasCaixaModal.map((sangria, index) => (
+                          <div
+                            key={sangria.id}
+                            style={{
+                              padding: '8px 12px',
+                              borderBottom: index < sangriasCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                              fontSize: '12px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ color: '#e5e7eb', fontWeight: 'bold' }}>
+                                {sangria.usuarios?.nome || 'Usuário não identificado'}
+                              </span>
+                              <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                                R$ {parseFloat(sangria.valor).toLocaleString('pt-BR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#9ca3af' }}>
+                              <span>Sangria</span>
+                              <span>
+                                {new Date(sangria.data).toLocaleString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            {sangria.observacao && (
+                              <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+                                {sangria.observacao}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{
+                    backgroundColor: '#374151',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    textAlign: 'center',
+                    color: '#9ca3af',
+                    fontSize: '14px',
+                    border: '1px solid #4b5563'
+                  }}>
+                    Nenhuma sangria registrada neste caixa
+                  </div>
+                )}
+              </div>
 
               {/* ✅ NOVO: Seção de Suprimento */}
               <div>
@@ -35016,6 +35018,15 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
               </div>
+            </div>
+
+            {/* ✅ NOVO: Terceira linha do grid - 3 colunas */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px',
+              marginBottom: '24px'
+            }}>
 
               {/* ✅ NOVO: Seção de Produtos Vendidos */}
               <div>
@@ -35124,15 +35135,6 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
               </div>
-            </div>
-
-            {/* ✅ NOVO: Terceira linha do grid - 2 colunas para Vendas e Itens Cancelados */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '16px',
-              marginBottom: '24px'
-            }}>
 
               {/* ✅ NOVO: Seção de Vendas Canceladas */}
               <div>

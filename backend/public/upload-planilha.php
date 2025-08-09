@@ -49,9 +49,10 @@ try {
         throw new Exception('ID da empresa inválido');
     }
 
-    // Validar nome do arquivo
-    if (!preg_match('/^[a-zA-Z0-9_\-\.]+$/', $fileName)) {
-        throw new Exception('Nome do arquivo contém caracteres inválidos');
+    // Validar nome do arquivo (permitir mais caracteres, incluindo espaços)
+    // Remover apenas caracteres realmente perigosos
+    if (preg_match('/[<>:"|?*\x00-\x1f]/', $fileName)) {
+        throw new Exception('Nome do arquivo contém caracteres não permitidos');
     }
 
     // Validar extensão do arquivo
