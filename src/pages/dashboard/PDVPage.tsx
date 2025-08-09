@@ -476,6 +476,22 @@ const PDVPage: React.FC = () => {
   const [turnoAberturaCaixa, setTurnoAberturaCaixa] = useState('Manhã'); // ✅ NOVO: Campo turno
   const [caixaAberto, setCaixaAberto] = useState(false);
   const [loadingCaixa, setLoadingCaixa] = useState(false);
+  const [loadingCaixaModal, setLoadingCaixaModal] = useState(false); // ✅ NOVO: Loading específico para abertura do modal
+
+  // ✅ NOVO: Estados de loading para todos os botões do menu PDV
+  const [loadingVendasAbertas, setLoadingVendasAbertas] = useState(false);
+  const [loadingPedidos, setLoadingPedidos] = useState(false);
+  const [loadingMovimentos, setLoadingMovimentos] = useState(false);
+  const [loadingMesas, setLoadingMesas] = useState(false);
+  const [loadingComandas, setLoadingComandas] = useState(false);
+  const [loadingSangriaModal, setLoadingSangriaModal] = useState(false);
+  const [loadingSuprimentoModal, setLoadingSuprimentoModal] = useState(false);
+  const [loadingFiadosModal, setLoadingFiadosModal] = useState(false);
+  const [loadingConsumoInterno, setLoadingConsumoInterno] = useState(false);
+  const [loadingDeliveryLocal, setLoadingDeliveryLocal] = useState(false);
+  const [loadingCardapioDigital, setLoadingCardapioDigital] = useState(false);
+  const [loadingDevolucoes, setLoadingDevolucoes] = useState(false);
+  const [loadingSalvarVenda, setLoadingSalvarVenda] = useState(false);
 
   // ✅ NOVO: Estados para liberar comanda
   const [showLiberarComandaModal, setShowLiberarComandaModal] = useState(false);
@@ -3209,13 +3225,28 @@ const PDVPage: React.FC = () => {
       label: 'Vendas Abertas',
       color: 'blue',
       count: contadorVendasAbertas,
+      loading: loadingVendasAbertas, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        await carregarVendasAbertas();
-        setShowVendasAbertasModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingVendasAbertas) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingVendasAbertas(true);
+          await carregarVendasAbertas();
+          setShowVendasAbertasModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao carregar vendas abertas:', error);
+          toast.error('Erro ao carregar vendas abertas');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingVendasAbertas(false);
+        }
       }
     },
     {
@@ -3223,12 +3254,27 @@ const PDVPage: React.FC = () => {
       icon: Save,
       label: 'Salvar Venda',
       color: 'green',
-      onClick: (e?: React.MouseEvent) => {
+      loading: loadingSalvarVenda, // ✅ NOVO: Estado de loading
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        setShowSalvarVendaModal(true);
+
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingSalvarVenda) return;
+
+        try {
+          // ✅ NOVO: Ativar loading
+          setLoadingSalvarVenda(true);
+          setShowSalvarVendaModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal salvar venda:', error);
+          toast.error('Erro ao abrir modal de salvar venda');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingSalvarVenda(false);
+        }
       }
     },
     {
@@ -3518,27 +3564,38 @@ const PDVPage: React.FC = () => {
       icon: DollarSign,
       label: 'Caixa',
       color: 'green',
+      loading: loadingCaixaModal, // ✅ NOVO: Estado de loading
       onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
 
+        // ✅ NOVO: Evitar múltiplos cliques
+        if (loadingCaixaModal) return;
+
         try {
+          // ✅ NOVO: Ativar loading
+          setLoadingCaixaModal(true);
+
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
           }
+
+          // Carregar dados do caixa e formas de pagamento
+          await carregarDadosCaixa();
+
+          console.log('🎭 Definindo showCaixaModal = true');
+          setShowCaixaModal(true);
+          console.log('🎭 showCaixaModal definido como true');
         } catch (error) {
-          // Erro silencioso ao ativar fullscreen
+          console.error('❌ Erro ao abrir modal do caixa:', error);
+          toast.error('Erro ao abrir controle do caixa');
+        } finally {
+          // ✅ NOVO: Desativar loading
+          setLoadingCaixaModal(false);
         }
-
-        // Carregar dados do caixa e formas de pagamento
-        await carregarDadosCaixa();
-
-        console.log('🎭 Definindo showCaixaModal = true');
-        setShowCaixaModal(true);
-        console.log('🎭 showCaixaModal definido como true');
       }
     },
     {
@@ -21300,16 +21357,22 @@ const PDVPage: React.FC = () => {
                         <button
                           key={item.id}
                           onClick={(e) => item.onClick(e)}
+                          disabled={item.loading} // ✅ NOVO: Desabilitar quando loading
                           className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative ${
                             item.id === 'cardapio-digital' && contadorCardapio > 0
                               ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
                               : ''
-                          }`}
+                          } ${item.loading ? 'cursor-wait opacity-75' : ''}`} // ✅ NOVO: Estilo loading
                           style={{ flex: '1 1 100px', minWidth: '100px' }}
                         >
                           {/* Wrapper do ícone com contador - Compacto */}
                           <div className="relative">
-                            <IconComponent size={18} />
+                            {/* ✅ NOVO: Mostrar spinner quando loading, ícone normal quando não */}
+                            {item.loading ? (
+                              <div className="w-[18px] h-[18px] border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin"></div>
+                            ) : (
+                              <IconComponent size={18} />
+                            )}
                             {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
                             {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
                               <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">

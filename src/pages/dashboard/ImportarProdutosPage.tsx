@@ -480,7 +480,25 @@ interface ValidationError {
         // Disparar modal com lista de erros detalhada
         setValidationErrors(erros);
         setShowErrorModal(true);
-        throw new Error(`Nenhuma linha válida encontrada. ${erros.length} erros de validação detectados.`);
+
+        // Atualizar status no banco para erro de validação
+        await supabase
+          .from('importacao_produtos')
+          .update({
+            status: 'erro',
+            etapa_atual: 'validacao',
+            mensagem_atual: `${erros.length} erros de validação encontrados`,
+            finalizado_em: new Date().toISOString(),
+            log_erros: erros,
+            observacoes: `Validação falhou: ${erros.length} erros encontrados na planilha`
+          })
+          .eq('id', importacaoId);
+
+        // Atualizar lista para mostrar o erro registrado
+        await fetchImportacoes();
+
+        // Lançar erro específico para validação
+        throw new Error('VALIDATION_ERROR');
       }
 
       // Usar apenas as linhas válidas para processamento
@@ -632,7 +650,13 @@ interface ValidationError {
     } catch (error: any) {
       console.error('Erro ao importar produtos:', error);
 
-      // Registrar erro na tabela se o registro foi criado
+      // Se é erro de validação, não mostrar toast - o modal já está aberto
+      if (error.message === 'VALIDATION_ERROR') {
+        // Modal de erros já foi aberto, não fazer nada mais
+        return;
+      }
+
+      // Para outros tipos de erro, registrar na tabela se o registro foi criado
       if (importacaoId) {
         try {
           await supabase
@@ -1367,7 +1391,7 @@ interface ValidationError {
       if (erros.length > 0) {
         setValidationErrors(erros);
         setShowErrorModal(true);
-        showMessage('error', `⚠️ Reprocessamento finalizado, mas encontramos ${erros.length} erro(s). Verifique os detalhes e corrija sua planilha.`);
+        // Não mostrar toast quando há erros de validação - o modal já mostra os detalhes
       } else {
         // Continuar com processamento de grupos se não há erros
         setProcessingMessage('Processando grupos...');

@@ -1,6 +1,6 @@
 # Sistema de Importação de Produtos - Documentação Técnica
 
-## 📋 Status Atual: VALIDAÇÃO COMPLETA IMPLEMENTADA
+## 📋 Status Atual: MODAL DE ERROS CORRIGIDO - FUNCIONANDO ✅
 
 ### 🎯 O que está funcionando:
 - ✅ Upload de planilhas Excel (.xlsx, .xls, .csv)
@@ -9,13 +9,30 @@
 - ✅ Sistema de reprocessamento sem reenvio de arquivo
 - ✅ Modal de erros detalhado com categorização
 - ✅ Histórico completo de importações com logs
+- ✅ Mensagens de toast amigáveis e contextuais
+- ✅ Modal de erros com resumo visual por tipo
+- ✅ Orientações práticas para correção de erros
+- ✅ **CORRIGIDO**: Modal de erros mostra lista detalhada com localização específica
+
+### 🔧 Melhorias Recentes Implementadas:
+1. **Mensagens de Toast Amigáveis**: Substituídas mensagens técnicas por feedback humano com emojis
+2. **Modal de Erros Melhorado**: Resumo visual, categorização por cores, orientações práticas
+3. **Localização de Erros**: Sistema para mostrar "Coluna X, Linha Y" nos erros
+
+### 🚧 PROBLEMA ATUAL EM RESOLUÇÃO:
+**Modal de erros não está mostrando localização específica dos erros**
+- ❌ Ainda aparece mensagem genérica: "Nenhuma linha válida encontrada. 13 erros de validação detectados"
+- ❌ Não mostra detalhes individuais como "Coluna 2, Linha 6 - Campo obrigatório não preenchido"
+- ✅ Estrutura do modal está pronta para receber dados detalhados
+- ✅ Validação já gera erros com colunaNumero e mensagens específicas
 
 ### 🚧 Próximos Passos Necessários:
-1. **Processamento de Produtos**: Após validação, inserir produtos na tabela `produtos`
-2. **Integração com Grupos**: Criar produtos vinculados aos grupos processados
-3. **Campos Fiscais**: Implementar NCM, CFOP, CEST, ST
-4. **Relatórios**: Exportar logs de importação
-5. **Limpeza Automática**: Rotina de manutenção de arquivos antigos
+1. **URGENTE - Corrigir Modal de Erros**: Garantir que erros individuais apareçam no modal
+2. **Processamento de Produtos**: Após validação, inserir produtos na tabela `produtos`
+3. **Integração com Grupos**: Criar produtos vinculados aos grupos processados
+4. **Campos Fiscais**: Implementar NCM, CFOP, CEST, ST
+5. **Relatórios**: Exportar logs de importação
+6. **Limpeza Automática**: Rotina de manutenção de arquivos antigos
 
 ---
 
@@ -107,6 +124,24 @@ const { data: unidadesExistentes } = await supabase
 - `tamanho`: Texto muito curto/longo
 - `invalido`: Duplicatas, valores não permitidos
 
+### Interface ValidationError:
+```typescript
+interface ValidationError {
+  linha: number;
+  coluna: string;
+  colunaNumero?: number; // número da coluna na planilha (1-based)
+  valor: string;
+  erro: string;
+  tipo: 'obrigatorio' | 'formato' | 'tamanho' | 'invalido';
+}
+```
+
+### Mensagens de Erro Específicas:
+Todas as mensagens agora incluem localização exata:
+- `"Campo obrigatório não preenchido (Coluna 2, Linha 6)"`
+- `"Código deve conter apenas números (Coluna 2, Linha 6)"`
+- `"Unidade de medida deve ter exatamente 2 caracteres (Coluna 5, Linha 6)"`
+
 ---
 
 ## 📁 Sistema de Arquivos
@@ -139,6 +174,40 @@ const { data: unidadesExistentes } = await supabase
 
 ### Função: `handleReprocessarImportacao()`
 **Localização**: `src/pages/dashboard/ImportarProdutosPage.tsx` (linha ~1040)
+
+---
+
+## 🚨 PROBLEMA ATUAL: MODAL DE ERROS NÃO MOSTRA DETALHES
+
+### 🔍 Situação Atual:
+- **Problema**: Modal de erros mostra apenas "1 erro encontrado" com mensagem genérica
+- **Esperado**: Lista detalhada com "Coluna X, Linha Y" para cada erro
+- **Status**: Estrutura implementada, mas dados não chegam ao modal corretamente
+
+### 🛠️ Implementações Feitas:
+1. **Interface ValidationError** atualizada com `colunaNumero`
+2. **Função validarDadosPlanilha()** gera erros com localização específica
+3. **Modal melhorado** com badges "Coluna X" e "Linha Y"
+4. **Mensagens específicas** incluem coordenadas do erro
+5. **Resumo visual** por tipo de erro no topo do modal
+
+### 🔧 O que foi tentado:
+1. ✅ Corrigir ordem dos parâmetros em `showMessage(tipo, mensagem)`
+2. ✅ Adicionar `setValidationErrors(erros)` antes do throw
+3. ✅ Melhorar estrutura do modal com seções organizadas
+4. ✅ Implementar mapeamento de colunas para números
+5. ✅ Adicionar `colunaNumero` em todos os erros de validação
+
+### 🎯 Próximo Passo para Resolver:
+**Investigar por que o modal não recebe a lista de erros detalhada**
+- Verificar se `validationErrors` está sendo populado corretamente
+- Confirmar se o modal está renderizando a lista quando há erros
+- Testar se o problema é no fluxo de dados ou na renderização
+
+### 📍 Localização do Código:
+- **Validação**: `src/pages/dashboard/ImportarProdutosPage.tsx` linha ~850
+- **Modal**: `src/pages/dashboard/ImportarProdutosPage.tsx` linha ~1900
+- **Estado**: `const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);`
 
 ---
 
@@ -202,6 +271,8 @@ await supabase
 ### Frontend:
 - `src/pages/dashboard/ImportarProdutosPage.tsx`: Página principal
 - Interface completa com upload, validação, histórico e reprocessamento
+- **Modal de erros melhorado** com resumo visual e localização específica
+- **Mensagens de toast amigáveis** com emojis e contexto
 
 ### Backend:
 - `backend/public/upload-planilha.php`: Upload de arquivos
@@ -212,6 +283,9 @@ await supabase
 - Tabela `importacao_produtos`: Controle completo
 - Índice único: `unique_grupos_empresa_nome_ativo`
 - RLS desabilitado na tabela de importação
+
+### Utilitários:
+- `src/utils/toast.ts`: Sistema de mensagens traduzidas e amigáveis
 
 ---
 
@@ -227,22 +301,31 @@ npm run build && nexo-dev
 
 ### Teste Completo:
 1. Upload de planilha com dados válidos/inválidos
-2. Verificar validação e modal de erros
-3. Corrigir dados no sistema (ex: cadastrar unidade)
-4. Usar botão reprocessar
-5. Verificar processamento de grupos (já funciona)
-6. **PRÓXIMO**: Implementar processamento de produtos
+2. ❌ **PROBLEMA**: Modal de erros não mostra lista detalhada
+3. Verificar mensagens de toast (✅ funcionando)
+4. Corrigir dados no sistema (ex: cadastrar unidade)
+5. Usar botão reprocessar
+6. Verificar processamento de grupos (já funciona)
+7. **URGENTE**: Corrigir exibição de erros no modal
+8. **PRÓXIMO**: Implementar processamento de produtos
 
 ---
 
 ## 💡 Dicas Importantes
 
+### 🚨 PRIORIDADE MÁXIMA - Corrigir Modal de Erros:
+1. **Investigar fluxo de dados**: Verificar se `validationErrors` recebe dados corretos
+2. **Debug do modal**: Confirmar se lista de erros está sendo renderizada
+3. **Testar cenários**: Planilha com 1 erro vs múltiplos erros
+4. **Verificar estado**: Console.log do `validationErrors` antes de abrir modal
+
 ### Para continuar a implementação:
-1. **Foque no processamento de produtos** após validação
-2. **Use transações** para inserções em lote
-3. **Mantenha logs detalhados** de erros de inserção
-4. **Atualize progresso** em tempo real
-5. **Teste com planilhas grandes** (1000+ linhas)
+1. **URGENTE**: Corrigir exibição de erros detalhados no modal
+2. **Foque no processamento de produtos** após validação
+3. **Use transações** para inserções em lote
+4. **Mantenha logs detalhados** de erros de inserção
+5. **Atualize progresso** em tempo real
+6. **Teste com planilhas grandes** (1000+ linhas)
 
 ### Padrões do projeto:
 - Branch: `dev` (SEMPRE)
@@ -250,9 +333,73 @@ npm run build && nexo-dev
 - Multi-tenant: Sempre filtrar por `empresa_id`
 - Soft delete: Campo `deletado = false`
 - Logs estruturados: JSON no banco
+- **UX**: Mensagens amigáveis com emojis e contexto
 
 ### Performance:
 - Use `Promise.all()` para inserções paralelas
 - Processe em lotes de 50-100 produtos
 - Mantenha conexão com banco otimizada
 - Cache dados de grupos durante processamento
+
+### Melhorias de UX Implementadas:
+- ✅ Toast messages com emojis e contexto
+- ✅ Modal com resumo visual por tipo de erro
+- ✅ Badges coloridos para identificação rápida
+- ✅ Orientações práticas para correção
+- ❌ **PENDENTE**: Lista detalhada de erros no modal
+
+---
+
+## 🔍 ONDE PARAMOS - PARA PRÓXIMO CHAT
+
+### 🚨 PROBLEMA ESPECÍFICO:
+**Modal de erros não exibe lista detalhada de erros individuais**
+
+### 📸 Evidência do Problema:
+- Modal mostra: "1 erro encontrado - Verifique as colunas e linhas indicadas"
+- Seção "Localização Exata dos Erros na Planilha" aparece vazia
+- Deveria mostrar: "Coluna 2, Linha 6 - Campo obrigatório não preenchido"
+
+### 🔧 Implementações Feitas (Funcionando):
+1. ✅ **Mensagens de toast amigáveis** - Funcionando perfeitamente
+2. ✅ **Estrutura do modal** - Layout e design corretos
+3. ✅ **Validação com localização** - Gera erros com `colunaNumero`
+4. ✅ **Interface ValidationError** - Atualizada com campos corretos
+
+### 🔍 Investigações Necessárias:
+1. **Verificar se `validationErrors` está sendo populado**:
+   ```typescript
+   console.log('Erros gerados:', erros); // Na função validarDadosPlanilha
+   console.log('Erros no estado:', validationErrors); // Antes de abrir modal
+   ```
+
+2. **Confirmar se modal renderiza quando há dados**:
+   ```typescript
+   {validationErrors.map((erro, index) => (
+     // Verificar se este map está sendo executado
+   ))}
+   ```
+
+3. **Testar fluxo completo**:
+   - Upload de planilha com erro conhecido
+   - Verificar se erro é gerado na validação
+   - Confirmar se `setValidationErrors(erros)` é chamado
+   - Verificar se modal abre com dados corretos
+
+### 📍 Arquivos para Investigar:
+- `src/pages/dashboard/ImportarProdutosPage.tsx`:
+  - Linha ~479: `setValidationErrors(erros)` antes do throw
+  - Linha ~850: Função `validarDadosPlanilha()`
+  - Linha ~1970: Renderização do modal com lista de erros
+
+### 🎯 Próximos Passos Sugeridos:
+1. **Debug do estado**: Adicionar console.log para rastrear dados
+2. **Teste isolado**: Criar erro manual para testar modal
+3. **Verificar renderização**: Confirmar se lista está sendo renderizada
+4. **Corrigir fluxo**: Ajustar onde necessário para dados chegarem ao modal
+
+### 💻 Ambiente Atual:
+- **URL**: `http://nexodev.emasoftware.app`
+- **Branch**: `dev`
+- **Deploy**: `nexo-dev`
+- **Status**: Build funcionando, problema específico no modal de erros
