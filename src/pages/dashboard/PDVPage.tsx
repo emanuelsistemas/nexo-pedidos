@@ -34503,8 +34503,8 @@ const PDVPage: React.FC = () => {
                         height: '16px',
                         transition: 'color 0.2s ease'
                       }}
-                      onMouseEnter={(e) => e.target.style.color = '#8b5cf6'}
-                      onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+                      onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#8b5cf6'}
+                      onMouseLeave={(e) => (e.target as HTMLElement).style.color = '#9ca3af'}
                       title="Informações sobre Vendas Fiado"
                     >
                       ❓
@@ -34966,8 +34966,8 @@ const PDVPage: React.FC = () => {
                       height: '16px',
                       transition: 'color 0.2s ease'
                     }}
-                    onMouseEnter={(e) => e.target.style.color = '#f97316'}
-                    onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+                    onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#f97316'}
+                    onMouseLeave={(e) => (e.target as HTMLElement).style.color = '#9ca3af'}
                     title="Informações sobre Consumos Internos"
                   >
                     ❓
@@ -36094,8 +36094,8 @@ const PDVPage: React.FC = () => {
                   cursor: 'pointer',
                   transition: 'background-color 0.2s ease'
                 }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#7c3aed'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#8b5cf6'}
+                onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#7c3aed'}
+                onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = '#8b5cf6'}
               >
                 Entendi
               </button>
@@ -36201,8 +36201,8 @@ const PDVPage: React.FC = () => {
                   cursor: 'pointer',
                   transition: 'background-color 0.2s ease'
                 }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#ea580c'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#f97316'}
+                onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#ea580c'}
+                onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = '#f97316'}
               >
                 Entendi
               </button>

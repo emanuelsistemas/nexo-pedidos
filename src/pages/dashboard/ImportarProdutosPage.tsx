@@ -1912,9 +1912,9 @@ interface ValidationError {
                   <div className="flex items-center gap-3">
                     <AlertCircle className="text-red-400" size={24} />
                     <div>
-                      <h3 className="text-xl font-semibold text-white">Erros de Validação</h3>
+                      <h3 className="text-xl font-semibold text-white">Erros de Validação na Planilha</h3>
                       <p className="text-gray-400">
-                        {validationErrors.length} erro{validationErrors.length !== 1 ? 's' : ''} encontrado{validationErrors.length !== 1 ? 's' : ''} na planilha
+                        {validationErrors.length} erro{validationErrors.length !== 1 ? 's' : ''} encontrado{validationErrors.length !== 1 ? 's' : ''} - Verifique as colunas e linhas indicadas
                       </p>
                     </div>
                   </div>
@@ -1928,7 +1928,45 @@ interface ValidationError {
               </div>
 
               <div className="p-6 overflow-y-auto max-h-[60vh]">
+                {/* Resumo dos tipos de erros */}
+                <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {(() => {
+                    const tiposCount = validationErrors.reduce((acc, erro) => {
+                      acc[erro.tipo] = (acc[erro.tipo] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>);
+
+                    return Object.entries(tiposCount).map(([tipo, count]) => (
+                      <div key={tipo} className="bg-gray-800/30 rounded-lg p-3 text-center">
+                        <div className={`inline-flex p-2 rounded-full mb-2 ${
+                          tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
+                          tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
+                          tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-orange-500/20 text-orange-400'
+                        }`}>
+                          {tipo === 'obrigatorio' ? <AlertCircle size={16} /> :
+                           tipo === 'formato' ? <AlertTriangle size={16} /> :
+                           tipo === 'tamanho' ? <FileText size={16} /> :
+                           <X size={16} />}
+                        </div>
+                        <div className="text-white font-semibold text-lg">{count}</div>
+                        <div className="text-gray-400 text-xs">
+                          {tipo === 'obrigatorio' ? 'Campos Vazios' :
+                           tipo === 'formato' ? 'Formato Incorreto' :
+                           tipo === 'tamanho' ? 'Tamanho Incorreto' :
+                           'Valores Inválidos'}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+
+                {/* Lista detalhada de erros */}
                 <div className="space-y-4">
+                  <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+                    <FileText size={16} />
+                    Detalhes dos Erros
+                  </h4>
                   {validationErrors.map((erro, index) => (
                     <div
                       key={index}
@@ -1947,16 +1985,70 @@ interface ValidationError {
                            <X size={16} />}
                         </div>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-white font-medium">Linha {erro.linha}</span>
-                            <span className="text-gray-400">•</span>
-                            <span className="text-gray-300">{erro.coluna}</span>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-sm font-mono">
+                              Coluna {(() => {
+                                // Mapear nome da coluna para número da posição
+                                const colunaParaPosicao: Record<string, number> = {
+                                  'GRUPO': 1,
+                                  'Código do Produto': 2,
+                                  'Código de Barras': 3,
+                                  'Nome do Produto': 4,
+                                  'Unidade de Medida': 5,
+                                  'Unidade fracionada': 6,
+                                  'Preço de Custo': 7,
+                                  'Preço Padrão': 8,
+                                  'Descrição Adicional': 9,
+                                  'Estoque Inicial': 10,
+                                  'Produto Alcoólico': 11,
+                                  'Este produto é Pizza?': 12,
+                                  'Matéria prima': 13,
+                                  'Produção': 14,
+                                  'NCM': 15,
+                                  'CFOP': 16,
+                                  'CSOSN/CST': 17,
+                                  'CEST': 18,
+                                  'Origem do Produto': 19,
+                                  'Alíquota ICMS (%)': 20,
+                                  'Alíquota PIS (%)': 21,
+                                  'Alíquota COFINS (%)': 22,
+                                  'Peso Líquido (kg)': 23
+                                };
+                                return colunaParaPosicao[erro.coluna] || '?';
+                              })()}
+                            </div>
+                            <div className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-sm font-mono">
+                              Linha {erro.linha}
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              erro.tipo === 'obrigatorio' ? 'bg-red-500/20 text-red-400' :
+                              erro.tipo === 'formato' ? 'bg-yellow-500/20 text-yellow-400' :
+                              erro.tipo === 'tamanho' ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-orange-500/20 text-orange-400'
+                            }`}>
+                              {erro.tipo === 'obrigatorio' ? 'Campo Obrigatório' :
+                               erro.tipo === 'formato' ? 'Formato Inválido' :
+                               erro.tipo === 'tamanho' ? 'Tamanho Inválido' :
+                               'Valor Inválido'}
+                            </span>
                           </div>
-                          <p className="text-red-400 text-sm mb-2">{erro.erro}</p>
+
+                          <div className="mb-2">
+                            <span className="text-gray-400 text-xs font-medium">CAMPO:</span>
+                            <p className="text-white text-sm font-medium">{erro.coluna}</p>
+                          </div>
+
+                          <div className="mb-3">
+                            <span className="text-gray-400 text-xs font-medium">PROBLEMA:</span>
+                            <p className="text-red-400 text-sm">{erro.erro}</p>
+                          </div>
+
                           {erro.valor && (
                             <div className="bg-gray-900/50 rounded px-3 py-2">
-                              <span className="text-gray-400 text-xs">Valor encontrado:</span>
-                              <p className="text-gray-300 text-sm font-mono">{erro.valor}</p>
+                              <span className="text-gray-400 text-xs font-medium">VALOR ENCONTRADO:</span>
+                              <p className="text-gray-300 text-sm font-mono break-all mt-1">
+                                {erro.valor || '[vazio]'}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -1967,17 +2059,38 @@ interface ValidationError {
               </div>
 
               <div className="p-6 border-t border-gray-800">
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-400">
-                    Corrija os erros na planilha e tente importar novamente
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="text-gray-400 text-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertCircle size={16} className="text-yellow-400" />
+                      <span className="font-medium text-yellow-400">Como corrigir:</span>
+                    </div>
+                    <ul className="space-y-1 text-xs">
+                      <li>• Baixe a planilha de exemplo para ver o formato correto</li>
+                      <li>• Corrija os erros listados acima em sua planilha</li>
+                      <li>• Salve o arquivo e tente importar novamente</li>
+                    </ul>
                   </div>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => setShowErrorModal(false)}
-                  >
-                    Fechar
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setShowErrorModal(false);
+                        gerarPlanilhaExemplo();
+                      }}
+                      className="text-sm"
+                    >
+                      Baixar Exemplo
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={() => setShowErrorModal(false)}
+                    >
+                      Fechar
+                    </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>
