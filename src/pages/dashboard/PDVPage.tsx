@@ -607,6 +607,9 @@ const PDVPage: React.FC = () => {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
 
+  // ✅ NOVO: Estado para filtro de vendas canceladas
+  const [mostrarVendasCanceladas, setMostrarVendasCanceladas] = useState(true);
+
   // ✅ NOVO: Estados para modal de recebimento de fiado
   const [showRecebimentoFiadoModal, setShowRecebimentoFiadoModal] = useState(false);
   const [valorRecebimento, setValorRecebimento] = useState('');
@@ -4087,6 +4090,13 @@ const PDVPage: React.FC = () => {
     }
   }, [showFiadosModal, pesquisaClienteFiado, dataInicioFiltro, dataFimFiltro]);
 
+  // ✅ NOVO: useEffect para aplicar filtros quando vendas canceladas mudarem
+  useEffect(() => {
+    if (vendasFiadoClienteOriginal.length > 0) {
+      aplicarFiltros();
+    }
+  }, [mostrarVendasCanceladas, dataInicio, dataFim, vendasFiadoClienteOriginal]);
+
   // ✅ NOVO: useEffect para carregar formas de pagamento quando modal de recebimento abrir
   useEffect(() => {
     if (showRecebimentoFiadoModal) {
@@ -5952,36 +5962,49 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // ✅ NOVA: Função para aplicar filtro de data
-  const aplicarFiltroData = () => {
-    if (!dataInicio && !dataFim) {
-      // Se não há filtros, mostrar todos os dados
-      setVendasFiadoCliente(vendasFiadoClienteOriginal);
-      return;
+  // ✅ NOVA: Função para aplicar filtros (data + vendas canceladas)
+  const aplicarFiltros = () => {
+    let dadosFiltrados = [...vendasFiadoClienteOriginal];
+
+    // Filtro por data
+    if (dataInicio || dataFim) {
+      dadosFiltrados = dadosFiltrados.filter(item => {
+        const dataItem = new Date(item.data);
+        const inicio = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
+        const fim = dataFim ? new Date(dataFim + 'T23:59:59') : null;
+
+        if (inicio && fim) {
+          return dataItem >= inicio && dataItem <= fim;
+        } else if (inicio) {
+          return dataItem >= inicio;
+        } else if (fim) {
+          return dataItem <= fim;
+        }
+        return true;
+      });
     }
 
-    const dadosFiltrados = vendasFiadoClienteOriginal.filter(item => {
-      const dataItem = new Date(item.data);
-      const inicio = dataInicio ? new Date(dataInicio + 'T00:00:00') : null;
-      const fim = dataFim ? new Date(dataFim + 'T23:59:59') : null;
-
-      if (inicio && fim) {
-        return dataItem >= inicio && dataItem <= fim;
-      } else if (inicio) {
-        return dataItem >= inicio;
-      } else if (fim) {
-        return dataItem <= fim;
-      }
-      return true;
-    });
+    // ✅ NOVO: Filtro por vendas canceladas
+    if (!mostrarVendasCanceladas) {
+      dadosFiltrados = dadosFiltrados.filter(item => {
+        // Manter recebimentos e vendas não canceladas
+        return item.tipo === 'recebimento' || !item.cancelada;
+      });
+    }
 
     setVendasFiadoCliente(dadosFiltrados);
+  };
+
+  // ✅ NOVA: Função para aplicar filtro de data (compatibilidade)
+  const aplicarFiltroData = () => {
+    aplicarFiltros();
   };
 
   // ✅ NOVA: Função para limpar filtros
   const limparFiltros = () => {
     setDataInicio('');
     setDataFim('');
+    setMostrarVendasCanceladas(true); // ✅ NOVO: Resetar filtro de canceladas
     setVendasFiadoCliente(vendasFiadoClienteOriginal);
   };
 
@@ -26169,11 +26192,6 @@ const PDVPage: React.FC = () => {
                               <div className="text-xl font-bold text-yellow-400">
                                 R$ {saldoReal.toFixed(2).replace('.', ',')}
                               </div>
-                              {saldoReal !== clienteSelecionadoDetalhes.saldo_devedor && (
-                                <div className="text-sm text-gray-500">
-                                  (Banco: R$ {clienteSelecionadoDetalhes.saldo_devedor.toFixed(2).replace('.', ',')})
-                                </div>
-                              )}
                               {saldoReal > 0 && (
                                 <button
                                   onClick={() => setShowRecebimentoFiadoModal(true)}
@@ -26246,6 +26264,33 @@ const PDVPage: React.FC = () => {
                                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                 />
                               </div>
+                            </div>
+
+                            {/* ✅ NOVO: Filtro de Vendas Canceladas */}
+                            <div className="mt-4 pt-4 border-t border-gray-700">
+                              <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-gray-300">
+                                  Exibir vendas canceladas
+                                </label>
+                                <button
+                                  onClick={() => setMostrarVendasCanceladas(!mostrarVendasCanceladas)}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                    mostrarVendasCanceladas ? 'bg-blue-600' : 'bg-gray-600'
+                                  }`}
+                                >
+                                  <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                      mostrarVendasCanceladas ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {mostrarVendasCanceladas
+                                  ? 'Vendas canceladas são exibidas (riscadas, não contabilizadas)'
+                                  : 'Vendas canceladas estão ocultas'
+                                }
+                              </p>
                             </div>
 
                             {/* Botões */}

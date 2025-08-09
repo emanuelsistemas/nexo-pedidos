@@ -832,20 +832,16 @@ interface ValidationError {
       throw new Error(`Erro ao consultar produtos existentes: ${produtosError.message}`);
     }
 
-    // Buscar unidades de medida cadastradas na empresa
-    // COMENTADO: Tabela unidades_medida não existe ainda, aceitar qualquer unidade por enquanto
-    // const { data: unidadesExistentes, error: unidadesError } = await supabase
-    //   .from('unidades_medida')
-    //   .select('sigla')
-    //   .eq('empresa_id', empresaId)
-    //   .eq('deletado', false);
+    // Buscar unidades de medida cadastradas na empresa (case-insensitive)
+    // Tabela correta: unidade_medida
+    const { data: unidadesExistentes, error: unidadesError } = await supabase
+      .from('unidade_medida')
+      .select('sigla')
+      .eq('empresa_id', empresaId);
 
-    // if (unidadesError) {
-    //   throw new Error(`Erro ao consultar unidades de medida: ${unidadesError.message}`);
-    // }
-
-    // Por enquanto, aceitar qualquer unidade de medida
-    const unidadesExistentes: any[] = [];
+    if (unidadesError) {
+      throw new Error(`Erro ao consultar unidades de medida: ${unidadesError.message}`);
+    }
 
     // Criar sets com códigos existentes para busca rápida
     const codigosExistentes = new Set(
@@ -858,9 +854,11 @@ interface ValidationError {
         ?.map(p => p.codigo_barras.toString()) || []
     );
 
-    // Criar set com unidades de medida existentes para busca rápida
+    // Criar set com unidades de medida existentes para busca rápida (case-insensitive)
     const unidadesMedidaExistentes = new Set(
-      unidadesExistentes?.map(u => u.sigla.toUpperCase()) || []
+      (unidadesExistentes || [])
+        .filter(u => !!u?.sigla)
+        .map(u => u.sigla.toString().trim().toUpperCase())
     );
 
     // Criar sets para detectar duplicados dentro da própria planilha
@@ -1013,8 +1011,8 @@ interface ValidationError {
               });
               linhaTemErro = true;
             } else {
-              // Verificar se a unidade existe na empresa
-              if (!unidadesMedidaExistentes.has(valorString.toUpperCase())) {
+              // Verificar se a unidade existe na empresa (case-insensitive)
+              if (!unidadesMedidaExistentes.has(valorString.trim().toUpperCase())) {
                 const unidadesDisponiveis = Array.from(unidadesMedidaExistentes).sort().join(', ');
                 erros.push({
                   linha: numeroLinha,
