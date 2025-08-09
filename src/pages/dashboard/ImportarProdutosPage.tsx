@@ -2255,21 +2255,21 @@ interface ValidationError {
                               <div className="bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg font-mono font-semibold">
                                 Linha {linha}
                               </div>
-                              {produtoNomePorLinha[Number(linha)] && (
-                                <div className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs font-medium truncate max-w-[300px]">
-                                  {produtoNomePorLinha[Number(linha)]}
-                                </div>
-                              )}
                               {(() => {
                                 const cols = Array.from(new Set(erros.map((e:any) => e.colunaNumero).filter((n:any) => typeof n === 'number')));
                                 if (!cols.length) return null;
                                 const label = cols.length === 1 ? `Coluna ${cols[0]}` : `Colunas ${cols.slice(0,3).join(', ')}${cols.length>3 ? '…' : ''}`;
                                 return (
-                                  <div className="bg-amber-500/20 text-amber-300 px-2 py-1 rounded text-xs font-medium">
+                                  <div className="bg-amber-500/20 text-amber-300 px-3 py-2 rounded-lg font-mono font-semibold">
                                     {label}
                                   </div>
                                 );
                               })()}
+                              {produtoNomePorLinha[Number(linha)] && (
+                                <div className="bg-blue-500/20 text-blue-300 px-3 py-2 rounded-lg font-medium truncate max-w-[300px]">
+                                  {produtoNomePorLinha[Number(linha)]}
+                                </div>
+                              )}
                             </div>
                             <div className="text-gray-400 text-sm">
                               {erros.length} erro{erros.length !== 1 ? 's' : ''} encontrado{erros.length !== 1 ? 's' : ''}
