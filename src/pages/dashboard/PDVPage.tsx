@@ -34108,7 +34108,13 @@ const PDVPage: React.FC = () => {
                           const valorAtual = valoresReaisCaixa[forma.id]?.atual || 0;
                           const valorFiado = valoresFiadoPorForma[forma.forma_pagamento_opcao_id] || 0;
                           const valorPagamentos = valoresPagamentosPorForma[forma.forma_pagamento_opcao_id] || 0;
-                          return total + valorAtual + valorFiado + valorPagamentos;
+                          const isDinheiro = forma.forma_pagamento_opcoes?.nome?.toLowerCase().includes('dinheiro');
+                          const valorSuprimento = isDinheiro ? totalSuprimentosCaixa : 0;
+                          const valorSangria = isDinheiro ? totalSangriasCaixa : 0;
+
+                          // Usar a mesma lógica dos cards individuais
+                          const valorTotalForma = valorAtual + valorFiado - valorPagamentos + valorSuprimento - valorSangria;
+                          return total + valorTotalForma;
                         }, 0);
                         return formatarValorMonetario(valorTotal.toString());
                       })()}
