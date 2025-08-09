@@ -98,34 +98,44 @@ $supabase = new SupabaseClient($supabaseUrl, $supabaseKey);
 // Função auxiliar para requisições diretas
 function supabaseRequest($url, $method = 'GET', $data = null) {
     global $supabaseKey;
-    
+
     $headers = [
         'apikey: ' . $supabaseKey,
         'Authorization: Bearer ' . $supabaseKey,
         'Content-Type: application/json'
     ];
-    
+
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    
-    if ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-        if ($data) {
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+
+    $upper = strtoupper($method);
+    if ($upper !== 'GET') {
+        if ($upper === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+        } else {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $upper);
+        }
+        if ($data !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
         }
     }
-    
+
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if ($response === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        throw new Exception('Erro cURL: ' . $err);
+    }
     curl_close($ch);
-    
+
     if ($httpCode < 200 || $httpCode >= 300) {
         throw new Exception("Erro na requisição Supabase: HTTP {$httpCode} - {$response}");
     }
-    
+
     return json_decode($response, true);
 }
 ?>

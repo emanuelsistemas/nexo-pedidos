@@ -425,6 +425,33 @@ interface ValidationError {
         })
         .eq('id', importacaoId);
 
+      // Iniciar processamento no servidor e permitir que continue em background
+      try {
+        const procResp = await fetch('/backend/public/processar-importacao.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            importacao_id: importacaoId,
+            empresa_id: empresaId,
+            arquivo_path: uploadResult.filePath,
+          })
+        });
+
+        if (!procResp.ok) {
+          const errData = await procResp.json().catch(() => ({}));
+          throw new Error(errData.message || 'Falha ao iniciar processamento no servidor');
+        }
+
+        showMessage('info', '⏱️ Processamento iniciado no servidor. Você pode atualizar a página que continuará em segundo plano.');
+        setSelectedFile(null);
+        await fetchImportacoes();
+        return; // interrompe processamento no cliente
+      } catch (serverErr) {
+        console.error('Falha ao iniciar processamento no servidor, mantendo processamento no cliente como fallback:', serverErr);
+      }
+
+
+      // Fallback: processamento no cliente (apenas se o servidor falhar para iniciar)
       // 4. Atualizar progresso - lendo arquivo
       await supabase
         .from('importacao_produtos')
@@ -762,9 +789,9 @@ interface ValidationError {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'concluida':
-        return 'Concluída';
+        return 'Processada'; // concluída com ou sem erros (ver etapa/log)
       case 'erro':
-        return 'Erro';
+        return 'Processada com erro';
       case 'processando':
         return 'Processando';
       case 'iniciado':
@@ -1512,6 +1539,53 @@ interface ValidationError {
         })
       });
 
+      // Enviar alteração para o backend
+
+  // Remover uma linha inteira da planilha (servidor) e reprocessar
+  const removerLinhaErro = async (linha: number) => {
+    try {
+      if (!importacaoParaReprocessar) return;
+
+      const { data: importacao } = await supabase
+        .from('importacao_produtos')
+        .select('arquivo_storage_path, empresa_id')
+        .eq('id', importacaoParaReprocessar)
+        .single();
+
+      if (!importacao) {
+        showMessage('error', '❌ Importação não encontrada');
+        return;
+      }
+
+      // Confirmação (exibição simples; o modal visual será no JSX abaixo)
+      // Esta função só executa a deleção
+      const resp = await fetch('/backend/public/deletar-linha-planilha.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          arquivo_path: importacao.arquivo_storage_path,
+          linha,
+          empresa_id: importacao.empresa_id
+        }),
+      });
+
+      const result = await resp.json();
+      if (!resp.ok || !result.success) {
+        throw new Error(result.error || 'Falha ao deletar linha');
+      }
+
+      showMessage('success', `🗑️ Linha ${linha} removida. Reprocessando...`);
+
+      // Dispara reprocessamento no servidor
+      await handleReprocessarImportacao(importacaoParaReprocessar);
+    } catch (e: any) {
+      console.error('Erro ao remover linha:', e);
+      showMessage('error', `❌ Erro ao remover linha: ${e.message}`);
+    }
+  };
+
+
+
       const result = await response.json();
 
       if (result.success) {
@@ -2029,6 +2103,20 @@ interface ValidationError {
           title={deleteConfirmation.title}
           message={deleteConfirmation.message}
         />
+
+        {/* Modal de confirmação para remover linha da planilha (erros) */}
+        <DeleteConfirmation
+          isOpen={deleteConfirmation.isOpen && /^\d+$/.test(deleteConfirmation.itemId)}
+          onClose={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={async () => {
+            const linhaNum = parseInt(deleteConfirmation.itemId, 10);
+            await removerLinhaErro(linhaNum);
+            setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
+            setShowErrorModal(false);
+          }}
+          title={deleteConfirmation.title}
+          message={deleteConfirmation.message}
+        />
       </AnimatePresence>
 
       {/* Modal de Processamento */}
@@ -2085,6 +2173,20 @@ interface ValidationError {
 
               <div className="p-6 overflow-y-auto flex-1">
                 {/* Resumo dos tipos de erros */}
+                              {/* Remover linha (ícone lixeira) */}
+                              <button
+                                onClick={() => setDeleteConfirmation({
+                                  isOpen: true,
+                                  itemId: String(linha),
+                                  title: `Remover linha ${linha}`,
+                                  message: 'Essa linha será removida da planilha e a importação será reprocessada sem ela. Deseja continuar?'
+                                })}
+                                className="ml-auto text-red-400 hover:text-red-300 transition-colors"
+                                title="Remover esta linha da planilha"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+
                 <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   {(() => {
                     const tiposCount = validationErrors.reduce((acc, erro) => {
@@ -2143,6 +2245,19 @@ interface ValidationError {
                           <div className="flex items-center gap-3 mb-4">
                             <div className="bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg font-mono font-semibold">
                               Linha {linha}
+                              <button
+                                onClick={() => setDeleteConfirmation({
+                                  isOpen: true,
+                                  itemId: String(linha),
+                                  title: `Remover linha ${linha}`,
+                                  message: 'Essa linha será removida da planilha e a importação será reprocessada sem ela. Deseja continuar?'
+                                })}
+                                className="ml-auto text-red-400 hover:text-red-300 transition-colors"
+                                title="Remover esta linha da planilha"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+
                             </div>
                             <div className="text-gray-400 text-sm">
                               {erros.length} erro{erros.length !== 1 ? 's' : ''} encontrado{erros.length !== 1 ? 's' : ''}

@@ -2382,6 +2382,44 @@ const PDVPage: React.FC = () => {
           }, 0);
           setTotalVendasCanceladasCaixa(totalVendasCanceladas);
         }
+
+        // ✅ NOVO: Buscar itens cancelados (soft delete) para este caixa
+        const { data: itensCanceladosData, error: itensCanceladosError } = await supabase
+          .from('pdv_itens')
+          .select(`
+            id,
+            nome_produto,
+            quantidade,
+            valor_unitario,
+            valor_total_real_deletado,
+            valor_adicionais_deletado,
+            quantidade_adicionais_deletado,
+            deletado_em,
+            snapshot_item_deletado,
+            pdv:pdv_id (
+              id,
+              numero_venda,
+              nome_cliente,
+              caixa_id
+            ),
+            usuarios:deletado_por (
+              nome
+            )
+          `)
+          .eq('pdv.caixa_id', caixaData.id)
+          .eq('deletado', true)
+          .not('valor_total_real_deletado', 'is', null)
+          .order('deletado_em', { ascending: false });
+
+        if (itensCanceladosError) {
+          console.error('❌ Erro ao buscar itens cancelados:', itensCanceladosError);
+        } else {
+          setItensCanceladosCaixaModal(itensCanceladosData || []);
+          const totalItensCancelados = (itensCanceladosData || []).reduce((total, item) => {
+            return total + (parseFloat(item.valor_total_real_deletado) || 0);
+          }, 0);
+          setTotalItensCanceladosCaixa(totalItensCancelados);
+        }
       }
 
       // ✅ NOVO: Buscar pagamentos do caixa
@@ -5450,9 +5488,61 @@ const PDVPage: React.FC = () => {
 
       setClientesDevedores(clientesFiltrados);
 
-      // Calcular total do saldo devedor
-      const total = clientesFiltrados.reduce((acc, cliente) => acc + (cliente.saldo_devedor || 0), 0);
-      setTotalSaldoDevedor(total);
+      // ✅ NOVO: Calcular saldo real para cada cliente e total geral
+      let totalSaldoReal = 0;
+      const clientesComSaldoReal = [];
+
+      for (const cliente of clientesFiltrados) {
+        // Buscar vendas fiado do cliente (incluindo canceladas)
+        const { data: vendasCliente, error: vendasError } = await supabase
+          .from('pdv')
+          .select('valor_total, status_venda')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('cliente_id', cliente.id)
+          .eq('fiado', true);
+
+        if (!vendasError && vendasCliente) {
+          // Somar apenas vendas não canceladas
+          const totalVendasValidas = vendasCliente
+            .filter(venda => venda.status_venda !== 'cancelada')
+            .reduce((acc, venda) => acc + venda.valor_total, 0);
+
+          // Buscar recebimentos do cliente
+          const { data: recebimentos, error: recebimentosError } = await supabase
+            .from('fiado_recebimentos')
+            .select('valor_recebimento')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .eq('cliente_id', cliente.id)
+            .eq('deletado', false);
+
+          const totalRecebimentos = !recebimentosError && recebimentos
+            ? recebimentos.reduce((acc, rec) => acc + rec.valor_recebimento, 0)
+            : 0;
+
+          const saldoRealCliente = totalVendasValidas - totalRecebimentos;
+
+          // ✅ NOVO: Adicionar saldo real ao objeto do cliente
+          const clienteComSaldoReal = {
+            ...cliente,
+            saldo_real: Math.max(0, saldoRealCliente)
+          };
+
+          // Só incluir clientes com saldo real > 0
+          if (saldoRealCliente > 0) {
+            clientesComSaldoReal.push(clienteComSaldoReal);
+            totalSaldoReal += saldoRealCliente;
+          }
+        } else {
+          // Em caso de erro, manter cliente com saldo 0
+          clientesComSaldoReal.push({
+            ...cliente,
+            saldo_real: 0
+          });
+        }
+      }
+
+      setClientesDevedores(clientesComSaldoReal);
+      setTotalSaldoDevedor(totalSaldoReal);
 
     } catch (error) {
       console.error('❌ Erro inesperado ao carregar clientes devedores:', error);
@@ -26126,7 +26216,7 @@ const PDVPage: React.FC = () => {
                               </div>
                               <div className="text-right ml-4">
                                 <div className="text-xl font-bold text-yellow-400 mb-1">
-                                  R$ {cliente.saldo_devedor.toFixed(2).replace('.', ',')}
+                                  R$ {(cliente.saldo_real || 0).toFixed(2).replace('.', ',')}
                                 </div>
                                 <div className="text-xs text-gray-400">saldo devedor</div>
                               </div>
@@ -35649,18 +35739,55 @@ const PDVPage: React.FC = () => {
                         borderRadius: '8px',
                         border: '1px solid #374151'
                       }}>
-                        <div style={{
-                          padding: '16px',
-                          textAlign: 'center',
-                          color: '#9ca3af',
-                          fontSize: '14px'
-                        }}>
-                          Funcionalidade em desenvolvimento
-                          <br />
-                          <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                            Tabela de itens cancelados será implementada
-                          </span>
-                        </div>
+                        {itensCanceladosCaixaModal.map((item, index) => (
+                          <div key={item.id} style={{
+                            padding: '12px',
+                            borderBottom: index < itensCanceladosCaixaModal.length - 1 ? '1px solid #374151' : 'none',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start'
+                          }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#e5e7eb', marginBottom: '4px' }}>
+                                {item.nome_produto}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '2px' }}>
+                                Venda: #{item.pdv?.numero_venda} • Qtd: {item.quantidade}
+                              </div>
+                              {item.pdv?.nome_cliente && (
+                                <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '2px' }}>
+                                  Cliente: {item.pdv.nome_cliente}
+                                </div>
+                              )}
+                              {item.quantidade_adicionais_deletado > 0 && (
+                                <div style={{ fontSize: '11px', color: '#60a5fa', marginBottom: '2px' }}>
+                                  🍕 {item.quantidade_adicionais_deletado} adicionais (R$ {(item.valor_adicionais_deletado || 0).toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })})
+                                </div>
+                              )}
+                              <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                                {new Date(item.deletado_em).toLocaleString('pt-BR')}
+                                {item.usuarios?.nome && ` • ${item.usuarios.nome}`}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', marginLeft: '12px' }}>
+                              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#f97316' }}>
+                                R$ {(item.valor_total_real_deletado || 0).toLocaleString('pt-BR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#9ca3af' }}>
+                                Unit: R$ {(item.valor_unitario || 0).toLocaleString('pt-BR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>
