@@ -4,6 +4,7 @@ import { X, Upload, Download, FileText, Calendar, User, AlertCircle, CheckCircle
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
+import * as XLSX from 'xlsx';
 
 interface ImportacaoHistorico {
   id: string;
@@ -313,15 +314,15 @@ const ImportarProdutosPage: React.FC = () => {
   const gerarPlanilhaExemplo = () => {
     // Definir colunas baseadas no regime tributário
     const colunasGerais = [
+      'GRUPO*',
       'Código do Produto*',
       'Código de Barras',
-      'Nome do Produto*',
+      'Nome do Produto* (Evite: @#$%&*()+=[]{}|\\:";\'<>?,./)',
       'Unidade de Medida*',
       'Preço de Custo',
       'Preço Padrão*',
       'Descrição Adicional',
       'Estoque Inicial',
-      'Unidade de Medida Estoque',
       'Produto Alcoólico',
       'Este produto é Pizza?',
       'Matéria prima',
@@ -331,7 +332,8 @@ const ImportarProdutosPage: React.FC = () => {
     const colunasImpostos = [
       'NCM*',
       'CFOP*',
-      regimeTributario === 1 ? 'CSOSN*' : 'CST*',
+      regimeTributario === 1 ? 'CSOSN* (Simples Nacional)' : 'CST* (Regime Normal)',
+      'CEST (Obrigatório se CFOP = 5405)',
       'Origem do Produto',
       'Alíquota ICMS (%)',
       'Alíquota PIS (%)',
@@ -341,27 +343,28 @@ const ImportarProdutosPage: React.FC = () => {
 
     const todasColunas = [...colunasGerais, ...colunasImpostos];
 
-    // Dados de exemplo
-    const exemploGeral = [
-      'PROD001',
+    // Dados de exemplo - Linha 1 (Coca Cola)
+    const exemploGeral1 = [
+      'BEBIDAS',
+      '1',
       '7891234567890',
-      'Pizza Margherita Grande',
+      'Coca Cola Lata',
       'UN',
       '15.50',
       '35.90',
-      'Pizza tradicional com molho de tomate mussarela e manjericao',
+      '350ml',
       '0',
-      'UN',
       'false',
-      'true',
       'false',
-      'true'
+      'false',
+      'false'
     ];
 
-    const exemploImpostos = [
+    const exemploImpostos1 = [
       '19059090',
       '5102',
       regimeTributario === 1 ? '102' : '00',
+      '',
       '0',
       '18',
       '1.65',
@@ -369,28 +372,54 @@ const ImportarProdutosPage: React.FC = () => {
       '0.5'
     ];
 
-    const exemploCompleto = [...exemploGeral, ...exemploImpostos];
+    // Dados de exemplo - Linha 2 (Banana por KG)
+    const exemploGeral2 = [
+      'FRUTAS',
+      '2',
+      '7891234567891',
+      'Banana prata',
+      'KG',
+      '3.20',
+      '6.50',
+      'Banana prata fresca',
+      '0',
+      'false',
+      'false',
+      'false',
+      'false'
+    ];
 
-    // Criar CSV com separador ponto e vírgula e UTF-8 BOM para Excel
-    const csvContent = [
-      todasColunas.join(';'),
-      exemploCompleto.join(';')
-    ].join('\n');
+    const exemploImpostos2 = [
+      '08030019',
+      '5102',
+      regimeTributario === 1 ? '102' : '00',
+      '',
+      '0',
+      '18',
+      '1.65',
+      '7.6',
+      '0.2'
+    ];
 
-    // Adicionar BOM para UTF-8 (compatibilidade com Excel)
-    const BOM = '\uFEFF';
-    const csvWithBOM = BOM + csvContent;
+    const exemploCompleto1 = [...exemploGeral1, ...exemploImpostos1];
+    const exemploCompleto2 = [...exemploGeral2, ...exemploImpostos2];
 
-    // Criar e baixar arquivo
-    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `planilha_exemplo_produtos_${getRegimeTributarioText(regimeTributario).replace(/\s+/g, '_').toLowerCase()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Criar dados para Excel
+    const dadosExcel = [
+      todasColunas,
+      exemploCompleto1,
+      exemploCompleto2
+    ];
+
+    // Criar workbook e worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(dadosExcel);
+
+    // Adicionar worksheet ao workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Produtos');
+
+    // Gerar e baixar arquivo Excel
+    XLSX.writeFile(workbook, 'planilha_exemplo_produtos_nexo.xlsx');
 
     showMessage('Planilha de exemplo baixada com sucesso!', 'success');
   };
